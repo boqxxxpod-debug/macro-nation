@@ -138,6 +138,10 @@ describe("ConfigPack v1", () => {
     expect(() => parseConfigPack(forbiddenOverride)).toThrow(/override not allowed/);
   });
   it("requires a definition for every new indicator and accepts a named-input policy", () => {
+    expect(() => parseConfigPack({
+      ...SCN01_CONFIG_PACK,
+      policyRules: SCN01_CONFIG_PACK.policyRules.slice(0, -1),
+    })).toThrow(/Missing policy rule/);
     const content = {
       ...SCN01_CONFIG_PACK.content,
       indicators: [

@@ -219,6 +219,10 @@ export function parseConfigPack(
   }
 
   const policySet = new Set(pack.content.policies);
+  const ruleIds = new Set(pack.policyRules.map((rule) => rule.policyId));
+  for (const policyId of policySet) {
+    if (!ruleIds.has(policyId)) throw new Error(`Missing policy rule ${policyId}`);
+  }
   for (const rule of pack.policyRules) {
     if (!policySet.has(rule.policyId)) throw new Error(`Unknown policy ${rule.policyId}`);
     for (const input of rule.inputs ?? []) {
