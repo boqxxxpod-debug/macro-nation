@@ -17,7 +17,7 @@
     "build:web": "npm run build --workspace @macro-nation/web",
     "build:xserver": "npm run build:web && node deploy/xserver/prepare.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check package.json apps/web/package.json packages/*/package.json",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
