@@ -13,12 +13,10 @@ export function projectFacts(
     month: state.monthIndex,
     indicators: {
       realGdp: e.indices.realGdp,
-      gdpGrowth: e.metrics.realGdpGrowthAnnualized,
       inflation: e.rates.inflationAnnual,
       unemployment: e.rates.unemployment,
       policyRate: e.rates.policyRate,
       fx: e.indices.fx,
-      fxChange: e.metrics.fxGrowthMonthly,
       governmentDebtRatio: e.ratios.governmentDebtRatio,
       support: e.sentiment.support,
     },

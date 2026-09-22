@@ -49,6 +49,8 @@ describe("optional AI boundary", () => {
     expect(() => validateFreePolicy({ status: "supported", explanation: "x", candidate: { policyType: "interestRate", targetRate: "2%" } })).toThrow();
     expect(() => validateFreePolicy({ status: "supported", explanation: "x", candidate: { policyType: "fxIntervention", direction: "invented", sizeGdpShare: 0.01 } })).toThrow();
     expect(validateFreePolicy({ status: "unsupported", explanation: "対象別の税制は未対応", candidate: null }).status).toBe("unsupported");
+    expect(() => validateFreePolicy({ status: "supported", explanation: "x", candidate: { policyType: "interestRate", targetRate: 0.9 } })).toThrow(/out of bounds/);
+    expect(() => validateFreePolicy({ status: "supported", explanation: "x", candidate: { policyType: "publicWorks", sector: "transport", sizeGdpShare: 0.9 } })).toThrow(/out of bounds/);
   });
 
   it("provider failure or invalid output falls back without altering engine facts", async () => {

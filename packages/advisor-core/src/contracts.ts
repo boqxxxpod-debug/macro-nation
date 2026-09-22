@@ -1,5 +1,3 @@
-import type { PolicyParameters } from "@macro-nation/domain";
-
 /** Read-only bounded facts; AI output is never GameState or an engine command. */
 export interface CauseFact {
   readonly indicator: string;
@@ -34,9 +32,16 @@ export interface AdvisorsRequest {
 export interface FreePolicyRequest {
   readonly text: string;
 }
+/** Bounded suggestion DTO. The policy engine must still validate/preview it before commit. */
+export type FreePolicyCandidate =
+  | { readonly policyType: "interestRate"; readonly targetRate: number }
+  | { readonly policyType: "taxPackage"; readonly incomeTaxDelta: number; readonly corporateTaxDelta: number; readonly consumptionTaxDelta: number; readonly lowIncomeTransferGdpShare: number; readonly durationMonths: number }
+  | { readonly policyType: "publicWorks"; readonly sector: "transport" | "energy" | "digital" | "education" | "disasterPrevention"; readonly sizeGdpShare: number }
+  | { readonly policyType: "tariff"; readonly industryId: "agricultureResources" | "manufacturing" | "construction" | "householdServices" | "financeRealEstate" | "energyLogistics"; readonly rateDelta: number; readonly durationMonths: number }
+  | { readonly policyType: "fxIntervention"; readonly direction: "buyDomestic" | "sellDomestic"; readonly sizeGdpShare: number };
 export type FreePolicyResult =
   | { readonly status: "unsupported"; readonly explanation: string; readonly candidate: null }
-  | { readonly status: "supported"; readonly explanation: string; readonly candidate: PolicyParameters };
+  | { readonly status: "supported"; readonly explanation: string; readonly candidate: FreePolicyCandidate };
 
 export type Viewpoint = "anchor" | "newspaper" | "citizen" | "business" | "social";
 export interface NewsStory {

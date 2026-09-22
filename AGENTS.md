@@ -60,6 +60,14 @@ When two documents conflict inside the same domain, prefer the more specific spe
    - tests added/run,
    - any specification conflicts or unresolved assumptions.
 
+## Publishing changes from ChatGPT WORK
+
+- Prefer the repository's connected GitHub integration for remote writes. A workstation, local GitHub login, or user-supplied Personal Access Token is not required when the connected integration has access.
+- Before publishing, verify the repository name, default branch, current remote base, connector identity/permissions, applicable branch rules, CI workflow, and the local diff. Do not infer that branch protection is absent when the available integration cannot inspect it.
+- Use a task branch unless the repository's documented workflow says otherwise. Apply the reviewed file changes through the connected GitHub integration, create a commit, and open a pull request to the verified default branch. Keep the pull request scoped and describe any bundled, previously unmerged Issue work.
+- If local `git push` or `gh auth` is unavailable, continue with the connected GitHub integration's blob/tree/commit/ref and pull-request operations when available; do not request a pasted token. If repository access is missing, report the exact repository and missing permission, then give the owner the GitHub App repository-access path needed to grant it.
+- Do not merge automatically unless an existing repository instruction explicitly authorizes it. Report the branch, commit SHA, pull-request URL, tests, and CI result. If a connector capability is missing, state what was verified and what remains blocked.
+
 ## Economic-model guardrails
 
 - Do not change economic assumptions merely to make tests pass.

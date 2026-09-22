@@ -1,6 +1,5 @@
-import { percentRate, type PolicyParameters } from "@macro-nation/domain";
 import type {
-  Advice, AIFlags, AIProvider, AdvisorsRequest, FreePolicyRequest,
+  Advice, AIFlags, AIProvider, AdvisorsRequest, FreePolicyCandidate, FreePolicyRequest,
   FreePolicyResult, HistoryRequest, NationHistory, NewsRequest, NewsStory,
 } from "./contracts";
 import { ordinaryNews } from "./news";
@@ -21,6 +20,11 @@ function number(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("Invalid AI number");
   return value;
 }
+function bounded(value: unknown, min: number, max: number): number {
+  const parsed = number(value);
+  if (parsed < min || parsed > max) throw new Error("AI number out of bounds");
+  return parsed;
+}
 function keys(value: Record<string, unknown>, allowed: readonly string[]): void {
   if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unexpected AI fields");
 }
@@ -33,20 +37,20 @@ export function validateFreePolicy(value: unknown): FreePolicyResult {
   if (root.status === "unsupported" && root.candidate === null) return unsupported(explanation);
   if (root.status !== "supported") throw new Error("Invalid policy status");
   const candidate = record(root.candidate);
-  let result: PolicyParameters;
+  let result: FreePolicyCandidate;
   switch (candidate.policyType) {
     case "interestRate":
       keys(candidate, ["policyType", "targetRate"]);
-      result = { policyType: "interestRate", targetRate: percentRate(number(candidate.targetRate)) };
+      result = { policyType: "interestRate", targetRate: bounded(candidate.targetRate, -0.02, 0.3) };
       break;
     case "taxPackage":
       keys(candidate, ["policyType", "incomeTaxDelta", "corporateTaxDelta", "consumptionTaxDelta", "lowIncomeTransferGdpShare", "durationMonths"]);
       result = {
         policyType: "taxPackage",
-        incomeTaxDelta: percentRate(number(candidate.incomeTaxDelta)),
-        corporateTaxDelta: percentRate(number(candidate.corporateTaxDelta)),
-        consumptionTaxDelta: percentRate(number(candidate.consumptionTaxDelta)),
-        lowIncomeTransferGdpShare: percentRate(number(candidate.lowIncomeTransferGdpShare)),
+        incomeTaxDelta: bounded(candidate.incomeTaxDelta, -0.2, 0.2),
+        corporateTaxDelta: bounded(candidate.corporateTaxDelta, -0.2, 0.2),
+        consumptionTaxDelta: bounded(candidate.consumptionTaxDelta, -0.2, 0.2),
+        lowIncomeTransferGdpShare: bounded(candidate.lowIncomeTransferGdpShare, 0, 0.05),
         durationMonths: number(candidate.durationMonths),
       };
       if (result.lowIncomeTransferGdpShare < 0 || !Number.isInteger(result.durationMonths) || result.durationMonths <= 0 || result.durationMonths > 120) throw new Error("Invalid tax duration");
@@ -54,24 +58,22 @@ export function validateFreePolicy(value: unknown): FreePolicyResult {
     case "publicWorks":
       keys(candidate, ["policyType", "sector", "sizeGdpShare"]);
       if (!(["transport", "energy", "digital", "education", "disasterPrevention"] as unknown[]).includes(candidate.sector)) throw new Error("Invalid sector");
-      result = { policyType: "publicWorks", sector: candidate.sector as "transport", sizeGdpShare: percentRate(number(candidate.sizeGdpShare)) };
+      result = { policyType: "publicWorks", sector: candidate.sector as "transport" | "energy" | "digital" | "education" | "disasterPrevention", sizeGdpShare: bounded(candidate.sizeGdpShare, 0, 0.05) };
       break;
     case "tariff":
       keys(candidate, ["policyType", "industryId", "rateDelta", "durationMonths"]);
       if (!(["agricultureResources", "manufacturing", "construction", "householdServices", "financeRealEstate", "energyLogistics"] as unknown[]).includes(candidate.industryId)) throw new Error("Invalid industry");
-      result = { policyType: "tariff", industryId: candidate.industryId as "manufacturing", rateDelta: percentRate(number(candidate.rateDelta)), durationMonths: number(candidate.durationMonths) };
+      result = { policyType: "tariff", industryId: candidate.industryId as "agricultureResources" | "manufacturing" | "construction" | "householdServices" | "financeRealEstate" | "energyLogistics", rateDelta: bounded(candidate.rateDelta, -0.5, 0.5), durationMonths: number(candidate.durationMonths) };
       if (!Number.isInteger(result.durationMonths) || result.durationMonths <= 0 || result.durationMonths > 120) throw new Error("Invalid tariff duration");
       break;
     case "fxIntervention":
       keys(candidate, ["policyType", "direction", "sizeGdpShare"]);
       if (candidate.direction !== "buyDomestic" && candidate.direction !== "sellDomestic") throw new Error("Invalid direction");
-      result = { policyType: "fxIntervention", direction: candidate.direction, sizeGdpShare: percentRate(number(candidate.sizeGdpShare)) };
+      result = { policyType: "fxIntervention", direction: candidate.direction, sizeGdpShare: bounded(candidate.sizeGdpShare, 0, 0.05) };
       break;
     default:
       throw new Error("Unknown policy type");
   }
-  // Broad safety bound; the engine's current ConfigSnapshot and policy rule remain authoritative.
-  for (const v of Object.values(result)) if (typeof v === "number" && Math.abs(v) > 120) throw new Error("Policy value out of bounds");
   return { status: "supported", explanation, candidate: result };
 }
 
