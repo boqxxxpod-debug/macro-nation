@@ -1,0 +1,50 @@
+{
+  "rules": [
+    {
+      "id": "interest-rate",
+      "parameterIds": [
+        "CORE-R-001",
+        "FX-RATE-001"
+      ],
+      "lagKernelIds": [
+        "policy-transmission"
+      ],
+      "inputScale": 0.01,
+      "maxAbsoluteInput": 0.1
+    },
+    {
+      "id": "public-investment",
+      "parameterIds": [
+        "FISC-G-001",
+        "PINV-EFF-001"
+      ],
+      "lagKernelIds": [
+        "policy-transmission"
+      ],
+      "inputScale": 1,
+      "maxAbsoluteInput": 5
+    },
+    {
+      "id": "tariff",
+      "parameterIds": [
+        "TRF-PT-001"
+      ],
+      "lagKernelIds": [
+        "policy-transmission"
+      ],
+      "inputScale": 0.01,
+      "maxAbsoluteInput": 0.5
+    },
+    {
+      "id": "fx-intervention",
+      "parameterIds": [
+        "FXI-EFF-001"
+      ],
+      "lagKernelIds": [
+        "instant"
+      ],
+      "inputScale": 1,
+      "maxAbsoluteInput": 5
+    }
+  ]
+}
