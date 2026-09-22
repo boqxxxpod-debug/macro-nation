@@ -1,0 +1,34 @@
+{
+  "targets": [
+    {
+      "id": "MON-GOLD-GDP",
+      "metric": "realGdpLevelResponse",
+      "horizonMonths": 24,
+      "min": -0.013,
+      "max": -0.004,
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ]
+    },
+    {
+      "id": "MON-GOLD-U",
+      "metric": "unemploymentPointResponse",
+      "horizonMonths": 24,
+      "min": 0.0015,
+      "max": 0.005,
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ]
+    },
+    {
+      "id": "MON-GOLD-FX",
+      "metric": "fxIndexResponse",
+      "horizonMonths": 6,
+      "min": -0.015,
+      "max": -0.003,
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ]
+    }
+  ]
+}
