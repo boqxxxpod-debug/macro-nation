@@ -22,9 +22,10 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run build:web && playwright test",
+    "validate:content": "tsx scripts/validate-content/index.ts",
     "architecture:check": "node scripts/check-architecture.mjs",
     "build:smoke": "node scripts/xserver-build-smoke.mjs",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run architecture:check && npm run build && npm run build:smoke"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run validate:content && npm run architecture:check && npm run build && npm run build:smoke"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
@@ -43,6 +44,7 @@
     "globals": "^16.3.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.6.2",
+    "tsx": "^4.20.5",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.39.0",
     "vite": "^7.1.4",
