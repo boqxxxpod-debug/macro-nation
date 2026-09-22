@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SCN01_CONFIG_FILES,
   SCN01_CONFIG_PACK,
+  assertConfigCompatibility,
   assertEngineCompatibility,
   createConfigSnapshot,
   normalizeParameters,
@@ -18,6 +19,16 @@ describe("ConfigPack v1", () => {
       verifyConfigPackHashes(SCN01_CONFIG_PACK, SCN01_CONFIG_FILES),
     ).resolves.toBeUndefined();
     expect(() => assertEngineCompatibility(SCN01_CONFIG_PACK, "0.1.0")).not.toThrow();
+    expect(() =>
+      assertConfigCompatibility(SCN01_CONFIG_PACK, {
+        engineVersion: "0.1.0",
+        configSchemaVersion: "1",
+        modelVersion: "0.1.0",
+        calibrationVersion: "advanced-small-open-v1.0.0",
+        contentVersion: "1.0.0",
+        rngVersion: "xoshiro128ss-v1",
+      }),
+    ).not.toThrow();
   });
 
   it("applies defaults, calibration, then scenario overrides", () => {
@@ -25,6 +36,19 @@ describe("ConfigPack v1", () => {
       { parameterId: "EXT-GROW-001", value: 0.03 },
     ]);
     expect(values["EXT-GROW-001"]).toBe(0.025);
+  });
+
+  it("rejects incompatible versions", () => {
+    expect(() =>
+      assertConfigCompatibility(SCN01_CONFIG_PACK, {
+        engineVersion: "0.1.0",
+        configSchemaVersion: "2",
+        modelVersion: "0.1.0",
+        calibrationVersion: "advanced-small-open-v1.0.0",
+        contentVersion: "1.0.0",
+        rngVersion: "xoshiro128ss-v1",
+      }),
+    ).toThrow(/configSchemaVersion/);
   });
 
   it("rejects non-allowlisted or out-of-range overrides", () => {
