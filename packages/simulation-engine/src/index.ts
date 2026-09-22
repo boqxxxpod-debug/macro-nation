@@ -1,6 +1,7 @@
 import { FOUNDATION_DOMAIN_VERSION } from "@macro-nation/domain";
 
 export * from "./causal";
+export * from "./demand";
 export * from "./rng";
 export * from "./tick";
 export * from "./version";

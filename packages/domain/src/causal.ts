@@ -1,6 +1,13 @@
 import type { IndicatorId } from "./state";
 
 export type CausalSourceType = "policy" | "event" | "external" | "inertia" | "random";
+export type CausalMetricId =
+  | IndicatorId
+  | "consumption"
+  | "investment"
+  | "governmentConsumption"
+  | "exports"
+  | "imports";
 export type CausalConfidence = "high" | "medium" | "low";
 
 export interface CausalRef {
@@ -20,7 +27,7 @@ export type CausalDiagnostic =
   | { readonly kind: "residual"; readonly expectedDelta: number; readonly contributionDelta: number; readonly residual: number };
 
 export interface CausalContribution {
-  readonly indicatorId: IndicatorId;
+  readonly indicatorId: CausalMetricId;
   readonly beforeValue: number;
   readonly afterValue: number;
   readonly totalDelta: number;

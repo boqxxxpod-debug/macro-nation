@@ -3,7 +3,7 @@ import type {
   CausalDiagnostic,
   CausalRef,
   CausalTerm,
-  IndicatorId,
+  CausalMetricId,
 } from "@macro-nation/domain";
 
 const ABS_TOLERANCE = 1e-9;
@@ -17,12 +17,12 @@ function withinTolerance(expected: number, actual: number): boolean {
 }
 
 export class ContributionBuilder {
-  readonly indicatorId: IndicatorId;
+  readonly indicatorId: CausalMetricId;
   readonly beforeValue: number;
   #terms: CausalTerm[] = [];
   #diagnostics: CausalDiagnostic[] = [];
 
-  constructor(indicatorId: IndicatorId, beforeValue: number) {
+  constructor(indicatorId: CausalMetricId, beforeValue: number) {
     if (!Number.isFinite(beforeValue)) {
       throw new RangeError("beforeValue must be finite");
     }
@@ -129,7 +129,7 @@ export class ContributionBuilder {
 }
 
 export function createContributionBuilder(
-  indicatorId: IndicatorId,
+  indicatorId: CausalMetricId,
   beforeValue: number,
 ): ContributionBuilder {
   return new ContributionBuilder(indicatorId, beforeValue);

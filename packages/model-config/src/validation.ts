@@ -221,6 +221,22 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
     }
   }
 
+  const gdpShareIds = [
+    "GDP-SHARE-C-001",
+    "GDP-SHARE-I-001",
+    "GDP-SHARE-G-001",
+    "GDP-SHARE-X-001",
+    "GDP-SHARE-M-001",
+  ] as const;
+  const gdpShares = gdpShareIds.map((id) => definitions.get(id)?.default);
+  if (gdpShares.some((value) => value === undefined)) {
+    throw new Error("GDP share parameters are incomplete");
+  }
+  const [cShare, iShare, gShare, xShare, mShare] = gdpShares as number[];
+  if (Math.abs(cShare + iShare + gShare + xShare - mShare - 1) > 1e-10) {
+    throw new Error("GDP shares must satisfy C + I + G + X - M = 1");
+  }
+
   validateEventCycles(pack.content.events);
   validateShockModel(pack);
   return pack;
