@@ -7,7 +7,11 @@ export type CausalMetricId =
   | "investment"
   | "governmentConsumption"
   | "exports"
-  | "imports";
+  | "imports"
+  | "cpi"
+  | "importPrice"
+  | "nominalWage"
+  | "expectedInflation";
 export type CausalConfidence = "high" | "medium" | "low";
 
 export interface CausalRef {
