@@ -1,0 +1,15 @@
+{
+  "name": "@macro-nation/advisor-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@macro-nation/domain": "0.0.0"
+  }
+}
