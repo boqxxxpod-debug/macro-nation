@@ -182,6 +182,45 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
       throw new Error(`Effect curve ${name} must sum to 1`);
     }
   }
+
+  const requiredHashFiles = [
+    "coefficients.json",
+    "lagKernels.json",
+    "shockModel.json",
+    "policyRules.json",
+    "calibrationTargets.json",
+    "sources.json",
+    "content.json",
+    "balanced-v0.1.0.json",
+    "limits-v1.json",
+    "effect-curves-v1.json",
+    "standard-nation-v1.json",
+    "scn01-v1.json",
+  ] as const;
+  for (const fileName of requiredHashFiles) {
+    if (!(fileName in pack.manifest.fileHashes)) {
+      throw new Error(`Manifest is missing hash for ${fileName}`);
+    }
+  }
+
+  const definitions = new Map(pack.coefficients.map((item) => [item.parameterId, item]));
+  for (const parameterId of pack.manifest.overrideAllowlist) {
+    if (!definitions.has(parameterId)) {
+      throw new Error(`Override allowlist references unknown parameter ${parameterId}`);
+    }
+  }
+  const allowedOverrides = new Set(pack.manifest.overrideAllowlist);
+  for (const override of pack.scenario.parameterOverrides) {
+    if (!allowedOverrides.has(override.parameterId)) {
+      throw new Error(`scenario override not allowed: ${override.parameterId}`);
+    }
+    const definition = definitions.get(override.parameterId);
+    if (!definition) throw new Error(`Unknown scenario override parameter ${override.parameterId}`);
+    if (override.value < definition.min || override.value > definition.max) {
+      throw new Error(`scenario override out of range: ${override.parameterId}`);
+    }
+  }
+
   validateEventCycles(pack.content.events);
   validateShockModel(pack);
   return pack;
