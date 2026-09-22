@@ -101,13 +101,13 @@ export interface TickRngProvider {
 
 export const XOSHIRO_TICK_RNG_PROVIDER: TickRngProvider = Object.freeze({
   rngVersion: RNG_VERSION,
-  cloneBundle(bundle) {
+  cloneBundle(bundle: RngBundle) {
     return deserializeRngBundle(serializeRngBundle(bundle));
   },
-  drawUint32(bundle, streamId) {
+  drawUint32(bundle: RngBundle, streamId: string) {
     return drawUint32(bundle, streamId);
   },
-  drawFloat01(bundle, streamId) {
+  drawFloat01(bundle: RngBundle, streamId: string) {
     return drawFloat01(bundle, streamId);
   },
 });
