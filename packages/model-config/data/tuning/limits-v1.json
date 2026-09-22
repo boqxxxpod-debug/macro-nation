@@ -1,0 +1,42 @@
+{
+  "hard": {
+    "unemployment": [
+      0.02,
+      0.3
+    ],
+    "policyRate": [
+      -0.02,
+      0.3
+    ],
+    "fx": [
+      20,
+      500
+    ],
+    "score": [
+      0,
+      100
+    ],
+    "taxRate": [
+      0,
+      0.7
+    ],
+    "consumptionTax": [
+      0,
+      0.4
+    ],
+    "tariff": [
+      0,
+      1
+    ]
+  },
+  "scenarioUi": {
+    "policyRate": [
+      -0.01,
+      0.15
+    ],
+    "tariff": [
+      0,
+      0.5
+    ]
+  }
+}
