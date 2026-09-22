@@ -1,0 +1,291 @@
+{
+  "modelVersion": "0.1.0",
+  "parameters": [
+    {
+      "parameterId": "CORE-GROW-001",
+      "description": "Potential real GDP growth annual",
+      "unit": "PercentRate",
+      "default": 0.018,
+      "min": 0.005,
+      "max": 0.035,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "CORE-INF-001",
+      "description": "Inflation target annual",
+      "unit": "PercentRate",
+      "default": 0.02,
+      "min": 0.01,
+      "max": 0.04,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "CORE-U-001",
+      "description": "Natural unemployment rate",
+      "unit": "PercentRate",
+      "default": 0.05,
+      "min": 0.035,
+      "max": 0.09,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "CORE-R-001",
+      "description": "Neutral real rate annual",
+      "unit": "PercentRate",
+      "default": 0.01,
+      "min": -0.005,
+      "max": 0.03,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "CONS-Y-001",
+      "description": "Consumption income coefficient",
+      "unit": "Ratio",
+      "default": 0.6,
+      "min": 0.35,
+      "max": 0.85,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "INV-R-001",
+      "description": "Investment real rate coefficient",
+      "unit": "Ratio",
+      "default": 1.5,
+      "min": 0.7,
+      "max": 2.2,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "LAB-OKUN-001",
+      "description": "Okun coefficient",
+      "unit": "Ratio",
+      "default": 0.5,
+      "min": 0.35,
+      "max": 0.65,
+      "evidenceClass": "E",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "INF-PERS-001",
+      "description": "Inflation persistence",
+      "unit": "Ratio",
+      "default": 0.7,
+      "min": 0.5,
+      "max": 0.9,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "FX-RATE-001",
+      "description": "FX response to rate differential",
+      "unit": "PercentRate",
+      "default": -0.008,
+      "min": -0.015,
+      "max": -0.003,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "FISC-G-001",
+      "description": "Normal government spending multiplier",
+      "unit": "Ratio",
+      "default": 0.8,
+      "min": 0.5,
+      "max": 1.1,
+      "evidenceClass": "E",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "PINV-EFF-001",
+      "description": "Public investment implementation efficiency",
+      "unit": "Share01",
+      "default": 0.8,
+      "min": 0.5,
+      "max": 1,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "TRF-PT-001",
+      "description": "Tariff importer price pass through",
+      "unit": "Share01",
+      "default": 0.85,
+      "min": 0.6,
+      "max": 1,
+      "evidenceClass": "E",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "FXI-EFF-001",
+      "description": "FX intervention effect per 1 pct GDP",
+      "unit": "PercentRate",
+      "default": 0.015,
+      "min": 0.005,
+      "max": 0.02,
+      "evidenceClass": "E",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "DEBT-REPRICE-001",
+      "description": "Monthly debt repricing share",
+      "unit": "Share01",
+      "default": 0.015,
+      "min": 0.008,
+      "max": 0.03,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "TRUST-REV-001",
+      "description": "Trust penalty for policy reversal",
+      "unit": "IndexLevel",
+      "default": -1.5,
+      "min": -3,
+      "max": -0.5,
+      "evidenceClass": "G",
+      "sourceIds": [
+        "SRC-GAME-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "EXT-GROW-002",
+      "description": "External growth persistence",
+      "unit": "Share01",
+      "default": 0.8,
+      "min": 0.6,
+      "max": 0.95,
+      "evidenceClass": "C",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "tuning"
+    },
+    {
+      "parameterId": "LAB-MIN",
+      "description": "Unemployment hard minimum",
+      "unit": "PercentRate",
+      "default": 0.02,
+      "min": 0.02,
+      "max": 0.02,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    },
+    {
+      "parameterId": "LAB-MAX",
+      "description": "Unemployment hard maximum",
+      "unit": "PercentRate",
+      "default": 0.3,
+      "min": 0.3,
+      "max": 0.3,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    },
+    {
+      "parameterId": "POLICY-RATE-MIN",
+      "description": "Policy rate hard minimum",
+      "unit": "PercentRate",
+      "default": -0.02,
+      "min": -0.02,
+      "max": -0.02,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    },
+    {
+      "parameterId": "POLICY-RATE-MAX",
+      "description": "Policy rate hard maximum",
+      "unit": "PercentRate",
+      "default": 0.3,
+      "min": 0.3,
+      "max": 0.3,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    },
+    {
+      "parameterId": "FX-MIN",
+      "description": "FX index hard minimum",
+      "unit": "IndexLevel",
+      "default": 20,
+      "min": 20,
+      "max": 20,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    },
+    {
+      "parameterId": "FX-MAX",
+      "description": "FX index hard maximum",
+      "unit": "IndexLevel",
+      "default": 500,
+      "min": 500,
+      "max": 500,
+      "evidenceClass": "D",
+      "sourceIds": [
+        "SRC-ECON-V1"
+      ],
+      "rangeKind": "hard"
+    }
+  ]
+}
