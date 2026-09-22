@@ -1,7 +1,8 @@
-/**
- * Config schemas and calibrated data arrive in Issue #3.
- * Keeping this package independently exported allows model-only changes later.
- */
+export * from "./schemas";
+export * from "./loader";
+
 export const FOUNDATION_MODEL_CONFIG = Object.freeze({
-  modelVersion: "0.0.0-foundation",
+  modelVersion: "0.1.0",
+  configSchemaVersion: "1.0.0",
+  calibrationVersion: "advanced-small-open-v1.0.0",
 });
