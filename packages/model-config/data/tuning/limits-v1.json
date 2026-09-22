@@ -1,0 +1,1 @@
+{"hard":{"unemployment":[0.02,0.3],"policyRate":[-0.02,0.3],"inflationAnnual":[-0.1,0.5],"fx":[20,500],"score":[0,100],"incomeTaxRate":[0,0.7],"consumptionTaxRate":[0,0.4],"tariffRate":[0,1]},"scenarioUi":{"unemployment":[0.03,0.18],"policyRate":[-0.01,0.15],"fx":[60,180]}}
