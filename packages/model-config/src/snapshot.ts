@@ -1,4 +1,4 @@
-import type { ConfigSnapshot, SourceManifestEntry } from "@macro-nation/domain";
+import type { ConfigSnapshot, SourceManifestEntry, VersionTuple } from "@macro-nation/domain";
 import type { ParsedConfigPack } from "./schemas";
 import { normalizeParameters, type ParameterOverride } from "./validation";
 
@@ -52,6 +52,35 @@ export function assertEngineCompatibility(pack: ParsedConfigPack, engineVersion:
     compareSemver(engineVersion, pack.manifest.compatibleEngine.max) > 0
   ) {
     throw new Error(`Engine ${engineVersion} is incompatible with config pack ${pack.manifest.id}`);
+  }
+}
+
+export function assertConfigCompatibility(
+  pack: ParsedConfigPack,
+  versions: Pick<
+    VersionTuple,
+    | "engineVersion"
+    | "configSchemaVersion"
+    | "modelVersion"
+    | "calibrationVersion"
+    | "contentVersion"
+    | "rngVersion"
+  >,
+): void {
+  assertEngineCompatibility(pack, versions.engineVersion);
+  const expected = {
+    configSchemaVersion: pack.manifest.configSchemaVersion,
+    modelVersion: pack.manifest.modelVersion,
+    calibrationVersion: pack.manifest.calibrationVersion,
+    contentVersion: pack.manifest.contentVersion,
+    rngVersion: pack.manifest.rngVersion,
+  } as const;
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    if (versions[key as keyof typeof expected] !== expectedValue) {
+      throw new Error(
+        `Config compatibility mismatch for ${key}: expected ${expectedValue}, got ${versions[key as keyof typeof expected]}`,
+      );
+    }
   }
 }
 
