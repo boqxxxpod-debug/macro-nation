@@ -385,7 +385,6 @@ ADR-010: Engine/Model/Save/Content/RNGを独立Version管理。
 ADR-011: 月次を既定とするがClockConfigで時間設定を外出し。
 ADR-012: Living NationはViewModel派生でEngineへ逆流しない。
 
-
 20. 実装開始ゲート
 CodexでIssue 1へ着手する前に、次を満たす。
 ・workspace構成と依存方向がIssue 1に記載されている。
@@ -394,3 +393,16 @@ CodexでIssue 1へ着手する前に、次を満たす。
 ・NationProfileの境界がIssue 2/3に反映されている。
 ・ExpertAdvisor contractがIssue 19に反映されている。
 ・Xserver build/deploy smokeがIssue 1/30に反映されている。
+
+## 追補: 任意のAI Layer（2026-09-22）
+
+この追補は上記MVPの「外部AIなし」という初期方針を、後方互換の任意機能として拡張する。AIを有効にしない配布・オフライン利用では従来の静的PWAがそのまま動く。ゲームの完成度や保存・再現性はAIに依存しない。
+
+- **Game Core**: Domain、Simulation Engine、Model Config、政策・イベント・時計・国家ビュー・保存。GDPや物価を含む全結果、因果寄与、通常ニュースを決定する。AIへ依存しない。
+- **AI Layer**: `packages/advisor-core` に読み取り専用の `NationFacts` / `CauseFact`、AIProvider、Mock、出力検証、ニューステンプレート、ニュースキャッシュを置く。Web InfrastructureはHTTP Adapterを持つ。専門家・自由入力・特別報道・国家史は利用者操作時のみ呼び出す。
+- **サーバー境界**: ブラウザ→同一オリジンのXserver PHP `/api/ai.php`→OpenAI Responses API。サーバーにのみキーとモデルを設定する。PHP経路は任意で、ゲームの経済計算や時間進行を担当しない。
+- **データ境界**: EngineのCausalContributionから許可済み指標と最大18件の寄与を投影する。AI応答は助言・表示文または政策候補に限定し、GameState、ConfigSnapshot、TickOutputを変更しない。政策候補の確定には既存Policy Engineでの検証、プレビュー、プレイヤーの承認が必要。
+- **保存境界**: AI文はゲームの必須保存形式、command列、replay同値性に含めない。通常ニュースと決定論的国家史の基礎記録は同一seedで再現する。AI文は表示用キャッシュであり、変更時にsaveSchemaVersionを上げない。
+- **失敗境界**: Timeout、schema不一致、API制限時は機能別フォールバックを返す。通常ニュースとゲーム進行はローカルで継続する。
+
+ADR-013: 既存静的PWAを維持しつつ、任意のXserver PHP proxyで読み取り専用AI説明を提供する。外部AIは決定論的replayの対象外とし、プロンプトと単価はサーバー側の版付きデータとして管理する。

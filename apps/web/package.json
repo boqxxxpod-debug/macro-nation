@@ -11,6 +11,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@macro-nation/advisor-core": "0.0.0",
     "@macro-nation/simulation-engine": "0.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

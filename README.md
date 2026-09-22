@@ -1,5 +1,13 @@
 # MACRO NATION
 
+## Optional AI explanations
+
+The engine and ordinary news run without OpenAI, network access or an API key. The four optional operations are batched expert opinions, interpretation of a free-form policy into an **uncommitted candidate**, special economic news and post-game history. The existing UI is still a foundation shell; `AIControls` is an integration component for the upcoming policy, report and ending screens. It does not call an API on page load. `npm run dev` shows a clearly marked Mock preview with sample data; production builds omit it.
+
+Use `VITE_AI_ENABLED=true` and `VITE_AI_PROVIDER=mock` plus the desired `VITE_AI_*_ENABLED=true` flags to exercise the client with no API charges. To use OpenAI, set `VITE_AI_PROVIDER=openai` and configure the matching server flags, `AI_PROVIDER=openai`, `OPENAI_MODEL=gpt-6-luna` and `OPENAI_API_KEY` in **server-only** settings. Do not prefix secrets with `VITE_`. Build with `npm run build:xserver`. See [Xserver setup](deploy/xserver/README.md). An omitted server or key affects only optional calls.
+
+The [architecture](docs/04-architecture.md), [game specification](docs/05-game-specification.md) and [detailed design](docs/03-detailed-design.md) describe the engine/AI boundary and the `/api/ai.php` contract.
+
 Browser-based nation-management macroeconomic simulation game.
 
 Issue #1 establishes the implementation foundation: npm workspaces, a React/Vite/TypeScript PWA shell, a headless Simulation Engine boundary, Xserver deployment scaffolding, and CI quality gates.

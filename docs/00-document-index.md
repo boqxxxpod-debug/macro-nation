@@ -21,3 +21,5 @@ Always start with root `AGENTS.md`, then this index, then the documents referenc
 ## Current status
 
 The economic model parameter pack has been restored and synchronized. Codex may use `06-economic-model-parameters.md` as the calibration source of truth for economic coefficients, lag targets, parameter ranges, evidence classes, and golden-response tests.
+
+2026-09-22: `02`〜`05`と`07`の末尾に任意AI追補を追加。既存MVPの「外部AIなし」は標準・AI無効時の仕様であり、追補が有効化時の境界を定める。Google Drive原本との同期は別途必要。
