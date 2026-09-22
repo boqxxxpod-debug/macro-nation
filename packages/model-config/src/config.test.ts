@@ -6,6 +6,7 @@ import {
   assertConfigCompatibility,
   assertEngineCompatibility,
   createConfigSnapshot,
+  createSnapshotIndicatorRegistry,
   normalizeParameters,
   parseConfigPack,
   verifyConfigPackHashes,
@@ -135,5 +136,122 @@ describe("ConfigPack v1", () => {
       { parameterId: "CONS-Y-001", value: 0.7 },
     ];
     expect(() => parseConfigPack(forbiddenOverride)).toThrow(/override not allowed/);
+  });
+  it("requires a definition for every new indicator and accepts a named-input policy", () => {
+    const content = {
+      ...SCN01_CONFIG_PACK.content,
+      indicators: [
+        ...SCN01_CONFIG_PACK.content.indicators,
+        "youthUnemployment",
+      ],
+    };
+    expect(() => parseConfigPack({ ...SCN01_CONFIG_PACK, content })).toThrow(
+      /Missing indicator definition/,
+    );
+    const withIndicator = {
+      ...content,
+      textKeys: [...content.textKeys, "indicator.youthUnemployment"],
+      indicatorDefinitions: [
+        {
+          indicatorId: "youthUnemployment",
+          labelKey: "indicator.youthUnemployment",
+          unit: "PercentRate",
+          source: { kind: "statePath", path: "economy.rates.unemployment" },
+        },
+      ],
+    };
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, content: withIndicator }),
+    ).not.toThrow();
+    const policyRules = [
+      ...SCN01_CONFIG_PACK.policyRules,
+      {
+        policyId: "housing-tax",
+        policyType: "housingTax",
+        inputs: [
+          {
+            inputId: "rate",
+            labelKey: "policy.housing.rate",
+            unit: "PercentRate",
+            min: 0,
+            max: 0.2,
+            defaultValue: 0.05,
+            step: 0.01,
+          },
+        ],
+        costs: {
+          politicalCapital: 1,
+          implementationCapacity: 1,
+          foreignReserves: 0,
+          immediateBudget: 0,
+        },
+        regimeModifiers: { normal: 1 },
+        caps: { maxMonthlyDelta: 0.02 },
+      },
+    ];
+    expect(() =>
+      parseConfigPack({
+        ...SCN01_CONFIG_PACK,
+        policyRules,
+        content: {
+          ...SCN01_CONFIG_PACK.content,
+          policies: [...SCN01_CONFIG_PACK.content.policies, "housing-tax"],
+          textKeys: [
+            ...SCN01_CONFIG_PACK.content.textKeys,
+            "policy.housing.rate",
+          ],
+        },
+      }),
+    ).not.toThrow();
+    const offStep = structuredClone(policyRules);
+    offStep[offStep.length - 1]!.inputs![0]!.defaultValue = 0.055;
+    expect(() => parseConfigPack({
+      ...SCN01_CONFIG_PACK,
+      policyRules: offStep,
+      content: { ...SCN01_CONFIG_PACK.content,
+        policies: [...SCN01_CONFIG_PACK.content.policies, "housing-tax"],
+        textKeys: [...SCN01_CONFIG_PACK.content.textKeys, "policy.housing.rate"],
+      },
+    })).toThrow(/default is not on step/);
+  });
+
+  it("reads indicators from the saved snapshot, even after the published pack changes", async () => {
+    const oldSnapshot = await createConfigSnapshot(SCN01_CONFIG_PACK);
+    const oldRegistry = createSnapshotIndicatorRegistry(oldSnapshot);
+    expect(oldRegistry.definitions).toHaveLength(9);
+    const newerContent = {
+      ...SCN01_CONFIG_PACK.content,
+      indicators: [
+        ...SCN01_CONFIG_PACK.content.indicators,
+        "youthUnemployment",
+      ],
+      textKeys: [
+        ...SCN01_CONFIG_PACK.content.textKeys,
+        "indicator.youthUnemployment",
+      ],
+      indicatorDefinitions: [
+        {
+          indicatorId: "youthUnemployment",
+          labelKey: "indicator.youthUnemployment",
+          unit: "PercentRate" as const,
+          source: {
+            kind: "statePath" as const,
+            path: "economy.rates.unemployment",
+          },
+        },
+      ],
+    };
+    const newPack = parseConfigPack({
+      ...SCN01_CONFIG_PACK,
+      content: newerContent,
+    });
+    const newSnapshot = await createConfigSnapshot(newPack);
+    expect(
+      createSnapshotIndicatorRegistry(newSnapshot).definitions,
+    ).toHaveLength(10);
+    expect(
+      createSnapshotIndicatorRegistry(oldSnapshot).definitions,
+    ).toHaveLength(9);
+    expect(oldSnapshot.configHash).not.toBe(newSnapshot.configHash);
   });
 });

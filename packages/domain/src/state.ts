@@ -20,7 +20,9 @@ export const PRIMARY_INDICATOR_IDS = [
   "policyTrust",
   "support",
 ] as const;
-export type IndicatorId = (typeof PRIMARY_INDICATOR_IDS)[number];
+export type PrimaryIndicatorId = (typeof PRIMARY_INDICATOR_IDS)[number];
+/** IDs are stable across saves; additional indicators are declared in the config catalog. */
+export type IndicatorId = PrimaryIndicatorId | (string & {});
 
 export const INDUSTRY_IDS = [
   "agricultureResources",
@@ -144,12 +146,14 @@ export interface EconomyState {
   readonly external: ExternalState;
 }
 
-export type PolicyType =
+export type CorePolicyType =
   | "interestRate"
   | "taxPackage"
   | "publicWorks"
   | "tariff"
   | "fxIntervention";
+/** New policy types require a registered engine handler, not a new union member. */
+export type PolicyType = CorePolicyType | (string & {});
 export type PolicyStatus =
   | "draft"
   | "previewed"
@@ -176,6 +180,8 @@ export interface PolicyDecision {
   readonly status: PolicyStatus;
   readonly slotQuarter: number;
   readonly costs: PolicyCosts;
+  /** Optional for saves created before multi-input policy definitions. */
+  readonly inputs?: Readonly<Record<string, number>>;
   readonly reservationId?: string;
   readonly sourceCommandId: string;
   readonly expertId?: string;

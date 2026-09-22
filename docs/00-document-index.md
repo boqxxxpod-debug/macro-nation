@@ -13,6 +13,7 @@ This directory is the repository-local implementation reference for Codex. The o
 | `05-game-specification.md` | Authoritative player/game behavior | Macro_Nation_Game_Specification_v1.0 | Synced |
 | `06-economic-model-parameters.md` | Economic calibration/parameter pack | Macro_Nation_Economic_Model_Parameters_v1.0 / Model v0.1.0 | Synced |
 | `07-implementation-roadmap.md` | Issue sequencing and delivery gates | Macro_Nation_Implementation_Roadmap_v1.1 | Synced |
+| `08-extension-architecture.md` | Repository implementation contract for adding policy inputs and indicators | Repository ADR-013 supplement | Active |
 
 ## Codex reading rule
 

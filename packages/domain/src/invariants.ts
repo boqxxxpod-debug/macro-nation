@@ -7,6 +7,7 @@ export type ValidationIssueCode =
   | "INVALID_CLOCK"
   | "INVALID_VERSION"
   | "DUPLICATE_POLICY_ID"
+  | "INVALID_POLICY_INPUT"
   | "INVALID_EFFECT"
   | "DEBT_MISMATCH"
   | "RNG_INVALID";
@@ -74,6 +75,11 @@ function policyIds(issues: ValidationIssue[], groups: readonly (readonly PolicyD
         );
       }
       seen.add(policy.policyId);
+      for (const [inputId, value] of Object.entries(policy.inputs ?? {})) {
+        if (!Number.isFinite(value)) {
+          add(issues, "INVALID_POLICY_INPUT", `policies.${policy.policyId}.inputs.${inputId}`, "Policy inputs must be finite");
+        }
+      }
     }
   }
 }

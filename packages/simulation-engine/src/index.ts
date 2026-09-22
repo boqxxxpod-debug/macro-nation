@@ -3,6 +3,7 @@ import { FOUNDATION_DOMAIN_VERSION } from "@macro-nation/domain";
 export * from "./causal";
 export * from "./demand";
 export * from "./macro";
+export * from "./policy-registry";
 export * from "./fiscal-industries";
 export * from "./rng";
 export * from "./tick";

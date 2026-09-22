@@ -384,6 +384,7 @@ ADR-009: ExpertAdvisor Providerを交換可能にする。
 ADR-010: Engine/Model/Save/Content/RNGを独立Version管理。
 ADR-011: 月次を既定とするがClockConfigで時間設定を外出し。
 ADR-012: Living NationはViewModel派生でEngineへ逆流しない。
+ADR-013: 政策入力と指標は安定IDと設定定義を介して追加する。政策の実行処理は型別Registryへ明示登録し、未実装型は起動時に拒否する。指標の値は検証済みGameState参照または登録済み純粋Selectorから読み、計算式をJSONへ埋め込まない。詳細な実装契約と追加手順は `docs/08-extension-architecture.md` を参照する。
 
 
 20. 実装開始ゲート
