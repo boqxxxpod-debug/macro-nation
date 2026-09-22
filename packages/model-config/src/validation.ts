@@ -232,7 +232,7 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   if (gdpShares.some((value) => value === undefined)) {
     throw new Error("GDP share parameters are incomplete");
   }
-  const [cShare, iShare, gShare, xShare, mShare] = gdpShares as number[];
+  const [cShare, iShare, gShare, xShare, mShare] = gdpShares as [number, number, number, number, number];
   if (Math.abs(cShare + iShare + gShare + xShare - mShare - 1) > 1e-10) {
     throw new Error("GDP shares must satisfy C + I + G + X - M = 1");
   }

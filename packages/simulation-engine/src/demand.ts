@@ -54,7 +54,7 @@ function getParameters(snapshot: ConfigSnapshot): Readonly<Record<string, number
 }
 function parameter(p: Readonly<Record<string, number>>, id: DemandParameterId): number {
   const value = p[id];
-  if (!Number.isFinite(value)) throw new Error(`Missing or invalid demand parameter ${id}`);
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Missing or invalid demand parameter ${id}`);
   return value;
 }
 function annualToMonthly(rate: number): number {
