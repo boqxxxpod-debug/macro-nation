@@ -11,7 +11,14 @@ export type CausalMetricId =
   | "cpi"
   | "importPrice"
   | "nominalWage"
-  | "expectedInflation";
+  | "expectedInflation"
+  | "taxRevenue"
+  | "primarySpending"
+  | "interestPayment"
+  | "governmentDebt"
+  | "policyTrust"
+  | "politicalCapital"
+  | `industry.${string}.production`;
 export type CausalConfidence = "high" | "medium" | "low";
 
 export interface CausalRef {
