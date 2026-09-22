@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MACRO NATION">
+  <rect width="512" height="512" rx="96" fill="#1f2937"/>
+  <path d="M104 350V184l78 44 74-92 76 92 76-44v166H104Z" fill="#f6f5ef"/>
+  <path d="M150 306h212" stroke="#1f2937" stroke-width="28" stroke-linecap="round"/>
+</svg>
