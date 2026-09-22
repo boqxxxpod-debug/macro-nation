@@ -26,7 +26,7 @@ export const parameterDefinitionSchema = z
     evidenceClass: evidenceClassSchema,
     sourceIds: z.array(z.string().min(1)).min(1),
   })
-  .superRefine((value: any, ctx: any) => {
+  .superRefine((value, ctx) => {
     if (value.min > value.max) ctx.addIssue({ code: "custom", message: "min must be <= max" });
     if (value.default < value.min || value.default > value.max) {
       ctx.addIssue({ code: "custom", message: "default must be inside [min,max]" });
@@ -42,7 +42,7 @@ export const lagKernelSchema = z
     shape: z.enum(["instant", "ramp", "hump", "decay"]),
     weights: z.array(z.number().finite().nonnegative()).min(1),
   })
-  .superRefine((value: any, ctx: any) => {
+  .superRefine((value, ctx) => {
     if (!(value.start <= value.peak && value.peak <= value.end)) {
       ctx.addIssue({ code: "custom", message: "start <= peak <= end required" });
     }
@@ -86,7 +86,7 @@ export const policyRuleSchema = z
     regimeModifiers: z.record(z.string(), z.number().positive()),
     caps: z.object({ maxMonthlyDelta: z.number().nonnegative() }),
   })
-  .superRefine((value: any, ctx: any) => {
+  .superRefine((value, ctx) => {
     if (value.inputMin > value.inputMax) {
       ctx.addIssue({ code: "custom", message: "inputMin must be <= inputMax" });
     }
