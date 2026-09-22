@@ -2,8 +2,8 @@ import { FOUNDATION_DOMAIN_VERSION } from "@macro-nation/domain";
 
 export * from "./causal";
 export * from "./rng";
-
-export const ENGINE_VERSION = "0.1.0" as const;
+export * from "./tick";
+export * from "./version";
 
 export interface FoundationProbeInput {
   readonly value: number;
