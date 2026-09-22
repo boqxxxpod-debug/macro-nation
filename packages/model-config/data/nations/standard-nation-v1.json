@@ -1,0 +1,25 @@
+{
+  "nationId": "standard-nation-v1",
+  "displayNameKey": "nation.standard.name",
+  "population": 50000000,
+  "industryShares": {
+    "agricultureResources": 0.08,
+    "manufacturing": 0.22,
+    "construction": 0.08,
+    "householdServices": 0.32,
+    "financeRealEstate": 0.14,
+    "energyLogistics": 0.16
+  },
+  "initial": {
+    "realGdp": 100,
+    "cpi": 100,
+    "fx": 100,
+    "unemployment": 0.05,
+    "policyRate": 0.02,
+    "governmentDebt": 1080,
+    "foreignReserves": 300,
+    "policyTrust": 60,
+    "support": 55
+  },
+  "visualThemeKey": "standard"
+}
