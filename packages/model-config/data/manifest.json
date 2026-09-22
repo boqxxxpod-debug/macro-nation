@@ -1,0 +1,35 @@
+{
+  "configPackId": "balanced-v0.1.0-scn01",
+  "configSchemaVersion": "1.0.0",
+  "engineCompatibility": {
+    "min": "1.0.0",
+    "maxExclusive": "2.0.0"
+  },
+  "modelVersion": "0.1.0",
+  "calibrationVersion": "advanced-small-open-v1.0.0",
+  "contentVersion": "1.0.0",
+  "files": {
+    "models/balanced-v0.1.0.json": "51b1f03f0ae93b4bef8576bb671c4a662f1816bb737af6ab64cdbd41cdce3319",
+    "tuning/lagKernels.json": "0dd1135118837be392ea985c75ccfcf471fc5dbae66d1578ba7b2fdea9a59bed",
+    "tuning/shockModel.json": "741d122ea292b101b9be398d1b0eac50f45995793829e5f3e735e88a0e586b49",
+    "tuning/policyRules.json": "50eb62448615f48a7e23e3e6ad982e083863dc0f84499cde2bd11f6261f19602",
+    "tuning/calibrationTargets.json": "6587652901cd94e01e9712779145962b622c0add62f4356ee62591352c39d8a9",
+    "tuning/sources.json": "2043a095dcffe40bccfe6789a2dee0caf3a4387de929f53b9ebf75cec8e26c19",
+    "nations/standard-nation-v1.json": "febd96bcb53c6c8e9bd65183bb7f991099568de47f2d8015217fb904c64fd1ba",
+    "scenarios/scn01-v1.json": "a1ab2a75f3372bdb07fc170f75f9461c944cf63a10b0bffb9da8d7aead725f83",
+    "content/content-v1.json": "6578fc9e113f41243666854c8eca91e5bf13fe1781692dce9b394fa7735e8716",
+    "tuning/limits-v1.json": "497b9c744703310a7952f31d022e9d921459417c50106be062f3551b19114af1",
+    "tuning/effect-curves-v1.json": "d5b11f40a68a6cd86e3187cc7d1803975d868cbf7ab3cefb012a5e20adb35f92"
+  },
+  "overrideAllowlist": [
+    "parameters.CORE-GROW-001.default",
+    "parameters.CORE-INF-001.default",
+    "scenario.initialOverrides.foreignGrowthAnnual",
+    "scenario.initialOverrides.foreignRate",
+    "scenario.initialOverrides.resourcePriceIndex"
+  ],
+  "sourceManifest": [
+    "SRC-ECON-V1",
+    "SRC-GAME-V1"
+  ]
+}
