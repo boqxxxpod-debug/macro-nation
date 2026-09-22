@@ -1,0 +1,46 @@
+{
+  "factors": [
+    {
+      "id": "globalGrowth",
+      "persistence": 0.8,
+      "shockStd": 0.003
+    },
+    {
+      "id": "resourcePrice",
+      "persistence": 0.85,
+      "shockStd": 0.025
+    },
+    {
+      "id": "fxExternal",
+      "persistence": 0.6,
+      "shockStd": 0.012
+    }
+  ],
+  "correlationMatrix": [
+    [
+      1,
+      0.2,
+      -0.1
+    ],
+    [
+      0.2,
+      1,
+      0.15
+    ],
+    [
+      -0.1,
+      0.15,
+      1
+    ]
+  ],
+  "regimes": [
+    {
+      "id": "normal",
+      "multiplier": 1
+    },
+    {
+      "id": "stress",
+      "multiplier": 1.6
+    }
+  ]
+}
