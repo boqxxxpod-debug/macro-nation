@@ -40,12 +40,10 @@ describe("causal contribution builder", () => {
     const result = createContributionBuilder("fx", 100)
       .add(policy("rate"), -0.75)
       .build(99.2);
-    expect(result.contributions).toContainEqual(
-      expect.objectContaining({
-        sourceId: "reconciliation-residual",
-        delta: -0.05,
-      }),
+    const residual = result.contributions.find(
+      (item) => item.sourceId === "reconciliation-residual",
     );
+    expect(residual?.delta).toBeCloseTo(-0.05, 12);
     expect(result.diagnostics[0]?.kind).toBe("residual");
   });
 
