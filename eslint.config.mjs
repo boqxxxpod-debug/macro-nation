@@ -18,6 +18,27 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: [
+      "eslint.config.mjs",
+      "playwright.config.ts",
+      "apps/web/*.config.ts",
+      "scripts/**/*.mjs",
+      "deploy/**/*.mjs",
+    ],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    files: ["tests/e2e/**/*.{ts,tsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
+    },
+  },
+  {
     files: ["apps/web/src/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,
@@ -53,18 +74,27 @@ export default tseslint.config(
           "object": "Date",
           "property": "now",
           "message": "Simulation Engine must not read wall-clock time.",
-        }
+        },
       ],
       "no-restricted-imports": [
         "error",
         {
           "paths": [
-            { "name": "react", "message": "Simulation Engine must remain UI independent." },
-            { "name": "react-dom", "message": "Simulation Engine must remain UI independent." },
-            { "name": "dexie", "message": "Persistence belongs to a Web adapter." }
-          ]
-        }
-      ]
-    }
-  }
+            {
+              "name": "react",
+              "message": "Simulation Engine must remain UI independent.",
+            },
+            {
+              "name": "react-dom",
+              "message": "Simulation Engine must remain UI independent.",
+            },
+            {
+              "name": "dexie",
+              "message": "Persistence belongs to a Web adapter.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
