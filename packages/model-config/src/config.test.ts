@@ -115,5 +115,25 @@ describe("ConfigPack v1", () => {
     missingVersion.content = structuredClone(SCN01_CONFIG_PACK.content);
     missingVersion.manifest = { ...SCN01_CONFIG_PACK.manifest, modelVersion: "" };
     expect(() => parseConfigPack(missingVersion as never)).toThrow();
+
+    const forbiddenOverride = structuredClone({
+      manifest: SCN01_CONFIG_PACK.manifest,
+      coefficients: SCN01_CONFIG_PACK.coefficients,
+      lagKernels: SCN01_CONFIG_PACK.lagKernels,
+      shockModel: SCN01_CONFIG_PACK.shockModel,
+      policyRules: SCN01_CONFIG_PACK.policyRules,
+      calibrationTargets: SCN01_CONFIG_PACK.calibrationTargets,
+      sources: SCN01_CONFIG_PACK.sources,
+      content: SCN01_CONFIG_PACK.content,
+      model: SCN01_CONFIG_PACK.model,
+      limits: SCN01_CONFIG_PACK.limits,
+      effectCurves: SCN01_CONFIG_PACK.effectCurves,
+      nation: SCN01_CONFIG_PACK.nation,
+      scenario: SCN01_CONFIG_PACK.scenario,
+    });
+    forbiddenOverride.scenario.parameterOverrides = [
+      { parameterId: "CONS-Y-001", value: 0.7 },
+    ];
+    expect(() => parseConfigPack(forbiddenOverride)).toThrow(/override not allowed/);
   });
 });
