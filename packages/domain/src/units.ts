@@ -4,6 +4,7 @@ export type NumericUnit<Name extends string> = number & { readonly [unitBrand]: 
 
 export type PercentPoint = NumericUnit<"PercentPoint">;
 export type PercentRate = NumericUnit<"PercentRate">;
+export type Ratio = NumericUnit<"Ratio">;
 export type IndexLevel = NumericUnit<"IndexLevel">;
 export type LogIndex = NumericUnit<"LogIndex">;
 export type FlowPerMonth = NumericUnit<"FlowPerMonth">;
@@ -13,6 +14,7 @@ export type Share01 = NumericUnit<"Share01">;
 export type UnitName =
   | "PercentPoint"
   | "PercentRate"
+  | "Ratio"
   | "IndexLevel"
   | "LogIndex"
   | "FlowPerMonth"
@@ -28,6 +30,7 @@ function finite<Name extends UnitName>(value: number, name: Name): NumericUnit<N
 
 export const percentPoint = (value: number): PercentPoint => finite(value, "PercentPoint");
 export const percentRate = (value: number): PercentRate => finite(value, "PercentRate");
+export const ratio = (value: number): Ratio => finite(value, "Ratio");
 export const indexLevel = (value: number): IndexLevel => finite(value, "IndexLevel");
 export const logIndex = (value: number): LogIndex => finite(value, "LogIndex");
 export const flowPerMonth = (value: number): FlowPerMonth => finite(value, "FlowPerMonth");
