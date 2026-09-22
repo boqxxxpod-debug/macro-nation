@@ -1,0 +1,33 @@
+{
+  "id": "SCN-01",
+  "nationId": "standard-nation-v1",
+  "durationMonths": 48,
+  "clock": {
+    "simulationStep": "month",
+    "policyCycleSteps": 3,
+    "realSecondsPerStep": 300,
+    "offlineMaxSteps": 24
+  },
+  "initialOverrides": {
+    "foreignGrowthAnnual": 0.025,
+    "foreignRate": 0.025,
+    "resourcePriceIndex": 100
+  },
+  "enabledPolicyRuleIds": [
+    "interest-rate",
+    "public-investment",
+    "tariff",
+    "fx-intervention"
+  ],
+  "indicatorIds": [
+    "realGdp",
+    "inflation",
+    "unemployment",
+    "policyRate",
+    "fx",
+    "governmentDebt",
+    "foreignReserves",
+    "policyTrust",
+    "support"
+  ]
+}
