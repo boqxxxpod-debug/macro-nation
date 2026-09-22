@@ -1,0 +1,48 @@
+{
+  "contentVersion": "1.0.0",
+  "indicators": [
+    {
+      "id": "realGdp",
+      "labelKey": "indicator.realGdp"
+    },
+    {
+      "id": "inflation",
+      "labelKey": "indicator.inflation"
+    },
+    {
+      "id": "unemployment",
+      "labelKey": "indicator.unemployment"
+    },
+    {
+      "id": "policyRate",
+      "labelKey": "indicator.policyRate"
+    },
+    {
+      "id": "fx",
+      "labelKey": "indicator.fx"
+    },
+    {
+      "id": "governmentDebt",
+      "labelKey": "indicator.governmentDebt"
+    },
+    {
+      "id": "foreignReserves",
+      "labelKey": "indicator.foreignReserves"
+    },
+    {
+      "id": "policyTrust",
+      "labelKey": "indicator.policyTrust"
+    },
+    {
+      "id": "support",
+      "labelKey": "indicator.support"
+    }
+  ],
+  "policyIds": [
+    "interest-rate",
+    "public-investment",
+    "tariff",
+    "fx-intervention"
+  ],
+  "eventIds": []
+}
