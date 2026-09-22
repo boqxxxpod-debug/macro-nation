@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "id": "SRC-ECON-V1",
+      "citation": "MACRO NATION Economic Model Parameters v1.0",
+      "accessedAt": "2026-09-22",
+      "confidence": "medium",
+      "notes": "Project calibration source of truth."
+    },
+    {
+      "id": "SRC-GAME-V1",
+      "citation": "MACRO NATION Game Specification v1.0",
+      "accessedAt": "2026-09-22",
+      "confidence": "high",
+      "notes": "Gameplay-only trust and resource rules."
+    }
+  ]
+}
