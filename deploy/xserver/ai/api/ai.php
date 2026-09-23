@@ -218,8 +218,13 @@ if (!is_array($limits)) $limits = ['dayCount'=>0, 'cost'=>0, 'hours'=>[]];
 $key = $hour . ':' . $ip . ':' . $feature;
 $perHour = max(1, min(100, (int)(setting('AI_PER_IP_FEATURE_HOUR') ?: 5)));
 $daily = max(1, min(10000, (int)(setting('AI_DAILY_REQUEST_LIMIT') ?: 100)));
-$budget = max(0, (float)(setting('AI_DAILY_COST_USD') ?: 1));
-if (($limits['hours'][$key] ?? 0) >= $perHour || $limits['dayCount'] >= $daily || $limits['cost'] >= $budget) abort_ai(429, 'AI usage limit reached');
+$budgetSetting = setting('AI_DAILY_COST_USD');
+$budget = $budgetSetting === false || $budgetSetting === '' ? 1.0 : max(0.0, (float)$budgetSetting);
+if (
+    ($limits['hours'][$key] ?? 0) >= $perHour ||
+    $limits['dayCount'] >= $daily ||
+    ($provider === 'openai' && $limits['cost'] >= $budget)
+) abort_ai(429, 'AI usage limit reached');
 $limits['hours'][$key] = ($limits['hours'][$key] ?? 0) + 1;
 $limits['dayCount']++;
 if (file_put_contents($stateFile, json_encode($limits), LOCK_EX) === false) abort_ai(503, 'AI usage storage unavailable');

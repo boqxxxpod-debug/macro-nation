@@ -20,7 +20,9 @@ export const PRIMARY_INDICATOR_IDS = [
   "policyTrust",
   "support",
 ] as const;
-export type IndicatorId = (typeof PRIMARY_INDICATOR_IDS)[number];
+export type PrimaryIndicatorId = (typeof PRIMARY_INDICATOR_IDS)[number];
+/** IDs are stable across saves; additional indicators are declared in the config catalog. */
+export type IndicatorId = PrimaryIndicatorId | (string & {});
 
 export const INDUSTRY_IDS = [
   "agricultureResources",
@@ -32,7 +34,8 @@ export const INDUSTRY_IDS = [
 ] as const;
 export type IndustryId = (typeof INDUSTRY_IDS)[number];
 
-export type InfrastructureId = "transport" | "energy" | "digital" | "water" | "publicFacilities";
+export type InfrastructureId =
+  "transport" | "energy" | "digital" | "water" | "publicFacilities";
 export type RunState =
   | "running"
   | "paused"
@@ -101,6 +104,21 @@ export interface EconomyState {
     readonly expectedInflation: PercentRate;
     readonly foreignRate: PercentRate;
   };
+  /** Small deterministic history window used by lagged monthly equations. */
+  readonly memory?: {
+    readonly previousRealGdp?: IndexLevel;
+    readonly outputGrowthGapHistory?: readonly PercentRate[];
+    /** Last FX level used to book foreign-currency debt valuation. */
+    readonly previousFxIndex?: IndexLevel;
+    /** Last resource-price level used by industry production loadings. */
+    readonly previousResourcePriceIndex?: IndexLevel;
+    /** Lagged average borrowing rate used by the public-debt account. */
+    readonly effectiveDebtRateAnnual?: PercentRate;
+    /** Potential GDP before public-investment supply effects are applied. */
+    readonly baselinePotentialGdp?: IndexLevel;
+    /** Effective incremental public-capital formation by investment vintage. */
+    readonly publicCapitalFormationHistory?: readonly number[];
+  };
   readonly ratios: {
     readonly governmentDebtRatio: PercentRate;
     readonly fiscalBalanceRatio: PercentRate;
@@ -114,15 +132,20 @@ export interface EconomyState {
     readonly imports: FlowPerMonth;
     readonly taxRevenue: FlowPerMonth;
     readonly primarySpending: FlowPerMonth;
+    readonly primaryBalance?: FlowPerMonth;
     readonly interestPayment: FlowPerMonth;
+    readonly debtValuationAdjustment?: FlowPerMonth;
     readonly currentAccount: FlowPerMonth;
     readonly capitalFlow: FlowPerMonth;
+    readonly foreignReserveChange?: FlowPerMonth;
   };
   readonly stocks: {
     readonly governmentDebt: StockLevel;
     readonly domesticGovernmentDebt: StockLevel;
     readonly externalGovernmentDebt: StockLevel;
     readonly foreignReserves: StockLevel;
+    /** Additional public capital relative to the no-policy scenario, as a GDP share. */
+    readonly publicCapital: StockLevel;
   };
   readonly sentiment: {
     readonly consumerConfidence: ScorePoint;
@@ -144,12 +167,14 @@ export interface EconomyState {
   readonly external: ExternalState;
 }
 
-export type PolicyType =
+export type CorePolicyType =
   | "interestRate"
   | "taxPackage"
   | "publicWorks"
   | "tariff"
   | "fxIntervention";
+/** New policy types require a registered engine handler, not a new union member. */
+export type PolicyType = CorePolicyType | (string & {});
 export type PolicyStatus =
   | "draft"
   | "previewed"
@@ -176,6 +201,8 @@ export interface PolicyDecision {
   readonly status: PolicyStatus;
   readonly slotQuarter: number;
   readonly costs: PolicyCosts;
+  /** Optional for saves created before multi-input policy definitions. */
+  readonly inputs?: Readonly<Record<string, number>>;
   readonly reservationId?: string;
   readonly sourceCommandId: string;
   readonly expertId?: string;

@@ -74,9 +74,24 @@ export const shockModelSchema = z.object({
 export const policyRuleSchema = z
   .object({
     policyId: z.string().min(1),
-    policyType: z.enum(["interestRate", "taxPackage", "publicWorks", "tariff", "fxIntervention"]),
-    inputMin: z.number().finite(),
-    inputMax: z.number().finite(),
+    policyType: z.string().regex(/^[a-z][a-zA-Z0-9._-]*$/),
+    // Legacy single-value rules stay valid; a new policy may declare named inputs.
+    inputMin: z.number().finite().optional(),
+    inputMax: z.number().finite().optional(),
+    inputs: z
+      .array(
+        z.object({
+          inputId: z.string().regex(/^[a-z][a-zA-Z0-9._-]*$/),
+          labelKey: z.string().min(1),
+          unit: numericUnitSchema,
+          min: z.number().finite(),
+          max: z.number().finite(),
+          defaultValue: z.number().finite(),
+          step: z.number().finite().positive().optional(),
+        }),
+      )
+      .min(1)
+      .optional(),
     costs: z.object({
       politicalCapital: z.number().nonnegative(),
       implementationCapacity: z.number().nonnegative(),
@@ -87,10 +102,55 @@ export const policyRuleSchema = z
     caps: z.object({ maxMonthlyDelta: z.number().nonnegative() }),
   })
   .superRefine((value, ctx) => {
-    if (value.inputMin > value.inputMax) {
-      ctx.addIssue({ code: "custom", message: "inputMin must be <= inputMax" });
+    if (value.inputs) {
+      if (value.inputMin !== undefined || value.inputMax !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "named inputs cannot use legacy inputMin/inputMax",
+        });
+      }
+      const ids = value.inputs.map((input) => input.inputId);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({ code: "custom", message: "duplicate policy input ID" });
+      }
+      for (const input of value.inputs) {
+        if (
+          input.min > input.max ||
+          input.defaultValue < input.min ||
+          input.defaultValue > input.max
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: `invalid range for policy input ${input.inputId}`,
+          });
+        }
+        if (input.step !== undefined &&
+          Math.abs((input.defaultValue - input.min) / input.step -
+            Math.round((input.defaultValue - input.min) / input.step)) > 1e-8) {
+          ctx.addIssue({ code: "custom", message: `default is not on step for policy input ${input.inputId}` });
+        }
+      }
+    } else if (
+      value.inputMin === undefined ||
+      value.inputMax === undefined ||
+      value.inputMin > value.inputMax
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "legacy inputMin/inputMax must be present and ordered",
+      });
     }
   });
+
+export const indicatorDefinitionSchema = z.object({
+  indicatorId: z.string().regex(/^[a-z][a-zA-Z0-9._-]*$/),
+  labelKey: z.string().min(1),
+  unit: numericUnitSchema,
+  source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("statePath"), path: z.string().min(1) }),
+    z.object({ kind: z.literal("selector"), selectorId: z.string().min(1) }),
+  ]),
+});
 
 const calibrationTargetSchema = z
   .object({
@@ -144,6 +204,8 @@ export const sourceSchema = z.object({
 
 export const contentSchema = z.object({
   indicators: z.array(z.string().min(1)).min(1),
+  /** Optional extension definitions; the nine built-in indicators retain their legacy mapping. */
+  indicatorDefinitions: z.array(indicatorDefinitionSchema).optional(),
   policies: z.array(z.string().min(1)).min(1),
   events: z.array(z.object({ eventId: z.string().min(1), dependsOn: z.array(z.string()) })),
   textKeys: z.array(z.string().min(1)),
@@ -161,10 +223,19 @@ export const nationSchema = z.object({
     policyRate: z.number().min(-0.02).max(0.3),
     governmentDebt: z.number().nonnegative(),
     foreignReserves: z.number().nonnegative(),
+    publicInvestment: z.number().nonnegative(),
     policyTrust: z.number().min(0).max(100),
     support: z.number().min(0).max(100),
   }),
   industryStructure: z.record(z.string(), z.number().min(0).max(1)),
+  industryLoadings: z.record(z.string(), z.object({
+    domesticDemand: z.number().finite(),
+    productivity: z.number().finite(),
+    foreignDemand: z.number().finite(),
+    resourcePrice: z.number().finite(),
+    riskPremium: z.number().finite(),
+    weather: z.number().finite(),
+  })),
   tradeStructure: z.record(z.string(), z.number()),
   energyStructure: z.record(z.string(), z.number().min(0).max(1)),
   institutions: z.record(z.string(), z.number()),

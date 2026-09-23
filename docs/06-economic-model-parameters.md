@@ -74,7 +74,7 @@ CONS-Y-001 | incomeCoefficient | 0.60 | 0.35〜0.85 | C | 実質所得変化の�
 CONS-R-001 | realRateCoefficient | 0.45 | 0.20〜0.80 | C | 実質金利ギャップ1ppで年間消費成長を約0.45pp押し下げる初期設定。
 CONS-U-001 | unemploymentCoefficient | 0.30 | 0.10〜0.60 | C | 失業ギャップ1ppで年間消費成長を約0.30pp押し下げる。
 CONS-INF-001 | inflationConcernCoefficient | 0.15 | 0.05〜0.35 | C。
-CONS-ERR-001 | monthlyShockStd | 0.0015 | 0.0005〜0.0030 | G | 月次個別誤差。
+CONS-ERR-001 | monthlyShockStd | 0.0035 | 0.0005〜0.0050 | G | 1,000 run校正のcomponent-growth相関を満たす月次個別誤差。
 
 実質所得の符号効果は即時〜3か月、金利と失業の効果は3〜12か月へ分散可能とする。
 
@@ -96,14 +96,42 @@ INV-GAP-001 | demandOutlookCoefficient | 1.20 | 0.60〜1.80 | C。
 INV-PROD-001 | productivityCoefficient | 0.80 | 0.40〜1.20 | C。
 INV-R-001 | realRateCoefficient | 1.50 | 0.70〜2.20 | C | 金利に消費より強く反応させる。
 INV-UNC-001 | uncertaintyCoefficient | 0.80 | 0.30〜1.50 | C。
-INV-ERR-001 | monthlyShockStd | 0.0040 | 0.0015〜0.0080 | G。
+INV-ERR-001 | monthlyShockStd | 0.0015 | 0.0015〜0.0080 | G | 投資成長のGDP成長との相関を校正下限へ合わせる月次個別誤差。
 
 投資は消費より変動を大きくし、金利・不確実性ショックへの反応を強くする。
 
 6. GDP・供給・潜在成長
 
-実質GDPは需要恒等式から算出する。
-realGdp = cShare*C + iShare*I + gShare*G + xShare*X - mShare*M
+実質GDPは半構造IS型の産出gapから算出する。需要項目はGDP loadingとして分配し、compositionResidualのsigned合計を0に保つ。これにより、構成項目の直接効果を残しつつ、GDP aggregateへは一度だけ反映する。
+realRateGap = marketRate - expectedInflation - neutralRealRate
+fiscalImpulse = scheduledGovernmentConsumptionAndPublicInvestment / previousRealGdp
+realExchangeRateGap = fxIndex / cpiIndex - 1
+outputGap = clamp(
+  persistence * previousOutputGap
+  - rateCoefficient * realRateGap / 12
+  + fiscalCoefficient * fiscalImpulse
+  + foreignCoefficient * foreignGrowthGap / 12
+  + fxCoefficient * realExchangeRateGap
+  + confidenceCoefficient * confidenceGap / 12
+  + demandShock,
+  gapMin,
+  gapMax
+)
+realGdp = potentialGdp * (1 + outputGap)
+componentDelta[j] = gdpShare[j] * (realGdp - previousDemandSum) + compositionResidual[j]
+sum(sign[j] * compositionResidual[j]) = 0
+realGdp = C + I + G + X - M
+
+輸出入component growth:
+exportsGrowth = X-FOREIGN * foreignGrowthGap / 12 + X-FX * realExchangeRateGap / 12 + scheduled + shock
+importsGrowth = M-DEMAND * previousOutputGap / 12 + M-FX * realExchangeRateGap / 12 + scheduled + shock
+X-FOREIGN-001 | foreignDemandCoefficient | 0.90 | 0.20〜1.80 | C。
+X-FX-001 | realExchangeRateCoefficient | 0.35 | 0〜0.80 | C。
+X-ERR-001 | monthlyShockStd | 0.005 | 0.0015〜0.008 | G。
+M-DEMAND-001 | demandCoefficient | 0.90 | 0.20〜1.80 | C。
+M-FX-001 | realExchangeRateCoefficient | -0.25 | -0.80〜0 | C。
+M-ERR-001 | monthlyShockStd | 0.005 | 0.0015〜0.008 | G。
+現行stateに外国物価指数がないため、realExchangeRateGapは外国価格を100に固定し、名目為替指数を国内CPIで実質化して近似する。
 
 基準share:
 GDP-SHARE-C | 0.60
@@ -111,7 +139,19 @@ GDP-SHARE-I | 0.18
 GDP-SHARE-G | 0.20
 GDP-SHARE-X | 0.25
 GDP-SHARE-M | 0.23
-純合計が1.00となることをvalidationで確認する。
+純合計が1.00となることをvalidationで確認する。出力gapは-0.15〜+0.12に制限する。
+
+初期IS型パラメータ:
+IS-GAP-PERSIST-001 | outputGapPersistence | 0.98 | 0.90〜0.995 | G。
+IS-GAP-RATE-001 | realRateGapCoefficient | 0.48 | 0.15〜1.50 | G。
+IS-GAP-FISCAL-001 | fiscalImpulseCoefficient | 0.008 | 0.001〜0.04 | G。
+IS-GAP-FOREIGN-001 | foreignDemandCoefficient | 0.40 | 0.10〜0.90 | G。
+IS-GAP-FX-001 | realExchangeRateCoefficient | 0.0015 | 0.0002〜0.006 | G。
+IS-GAP-CONFIDENCE-001 | confidenceCoefficient | 0.01 | 0〜0.05 | G。
+IS-GAP-ERR-001 | monthlyDemandShockStd | 0.0042 | 0.002〜0.008 | G。
+IS-GAP-MIN-001 / IS-GAP-MAX-001 | gap bounds | -0.15 / +0.12 | range validation | G。
+
+GDP loadingは各scenarioで変更できる。GDP成長と需要項目の相関校正は、no-policy batchの12か月warmup後に前期比年率成長で測定する。実質GDP前年比、前期比年率、output gapの標準偏差も同じbatch diagnosticsから検証する。
 
 potentialGrowthAnnual =
   baselineProductivity
@@ -132,15 +172,17 @@ SUP-GAP-MAX | outputGapMax | 0.12 | hard clamp。
 
 7. 雇用とOkun関係
 
-雇用はGDP変化へ遅れて反応させる。
+雇用は潜在成長との差で測った実質GDP成長gapへ遅れて反応させる。失業率は自然失業率へ月次で部分回帰し、Okun効果は3〜9か月のkernelに分散する。
 実証アンカーとして、実質GDP成長が潜在成長を年間2pp上回ると失業率が概ね1pp低下する関係を基準にする。
+unemploymentDelta = monthlyMeanReversion * (naturalUnemployment - previousUnemployment) - okunCoefficient * laggedOutputGrowthGap / 12
 
 初期パラメータ:
-LAB-OKUN-001 | okunCoefficient | 0.50 | 0.35〜0.65 | E/C | output growth gap 1ppに対する年間失業率変化0.5pp。
+LAB-OKUN-001 | okunCoefficient | 0.47 | 0.35〜0.65 | E/C | advanced-small-openの100bp paired IRFに合わせた校正値。output growth gapは3〜9か月のhump kernelで反映する。
 LAB-LAG-001 | okunLagStartMonths | 3 | 1〜4 | C。
 LAB-LAG-002 | okunLagPeakMonths | 6 | 4〜9 | C。
 LAB-LAG-003 | okunLagEndMonths | 9 | 6〜15 | C。
 LAB-MR-001 | meanReversionToNaturalAnnual | 0.20 | 0.10〜0.35 | C。
+LAB-MR-MONTHLY-001 | monthlyMeanReversionSpeed | 0.04 | 0.01〜0.10 | C | advanced-small-openの探索値。
 LAB-MIN | unemploymentMin | 0.020 | clamp。
 LAB-MAX | unemploymentMax | 0.300 | clamp。
 
@@ -153,11 +195,10 @@ Okun効果は同月全量を反映せず、3〜9か月のhump curveに配分す�
 
 初期パラメータ:
 PX-FX-IMP-001 | fxToImportPricePassThrough1M | 0.65 | 0.50〜0.80 | E/C | 1%通貨安で輸入価格を初月約0.65%押し上げる。
-PX-FX-CPI-001 | fxToCpiPassThrough12M | 0.15 | 0.08〜0.30 | E/C | 1%通貨安に対する12か月CPI価格水準の反応。
-PX-FX-CPI-002 | highInflationMultiplier | 1.50 | 1.10〜2.00 | C | 高インフレ・期待不安定時のpass-through増幅。
-PX-FX-CPI-003 | highCredibilityMultiplier | 0.70 | 0.50〜0.90 | C。
+INF-IMPORT-001 | fxToCpiCumulativePassThrough12M | 0.05 | 0.02〜0.15 | E/C | import price水準の変化に対する12か月CPI水準の累積反応。月次inflation persistenceによる過剰な累積を補正する。
+IMP-STATE-001 | highInflationLowTrustModifier | 0.25 | 0〜0.75 | G/C | 高インフレ・低信頼時に輸入価格転嫁を強める。
 
-標準国家0.15は先進国と新興国の中間として置く。NationProfileで0.08〜0.30を中心に変更する。
+advanced-small-openの10%通貨安テストでは輸入価格が初月5〜8%、CPI価格水準が12か月で0.2〜1.5%上昇する。旧v0.1.0の0.15は本profileの固定値ではなく、許容帯の上側候補とする。
 
 8.2 国内インフレ
 inflationMonthly =
@@ -169,17 +210,15 @@ inflationMonthly =
   + randomError
 
 初期パラメータ:
-INF-PERS-001 | inflationPersistence | 0.70 | 0.50〜0.90 | C。
-INF-GAP-001 | demandPressureAnnualCoefficient | 0.20 | 0.08〜0.40 | C | output gap 1%が1年間継続した場合のインフレ押上げの初期感応度。
-INF-IMP-001 | importPriceToCpiWeight | 0.22 | 0.12〜0.35 | C。
-INF-EXP-001 | expectationWeight | 0.20 | 0.10〜0.40 | C。
-INF-ERR-001 | monthlyShockStd | 0.0008 | 0.0003〜0.0018 | G。
+INF-PERS-001 | inflationPersistence | 0.90 | 0.50〜0.90 | C。
+INF-GAP-001 | demandPressureAnnualCoefficient | 0.08 | 0.08〜0.40 | C | advanced-small-openの100bp paired IRFでCPI価格水準をgolden responseの許容帯に合わせた校正値。
+INF-WAGE-001 | wagePressureLoading | 0.08 | 0〜0.25 | C。
+INF-SUPPLY-001 | capacityPressureAnnualLoading | 0.12 | 0.02〜0.40 | G/C | 産業別生産が能力を超える場合の月次物価圧力。
+INF-ERR-001 | monthlyShockScale | 0.0018 | 0.0003〜0.0018 | G | advanced-small-openのgap×inflation相関上限に合わせた校正値。
 
-expectedInflationは前月期待、実績インフレ、target、policyTrustから適応的に更新する。
-EXP-PERS-001 | expectedInflationPersistence | 0.85 | 0.70〜0.95 | C。
-EXP-ACT-001 | actualInflationWeight | 0.10 | 0.05〜0.20 | C。
-EXP-TGT-001 | targetAnchorWeight | 0.05 | 0.02〜0.15 | C。
-信頼低下時はtargetAnchorWeightを弱める。
+expectedInflationは前月期待を0.90で保持し、残る0.10の情報部分を実績インフレ65%、目標アンカー35%へ配分する。
+EXP-PERS-001 | expectedInflationPersistence | 0.90 | 0.50〜0.98 | C。
+EXP-ANCHOR-001 | targetAnchorWeightWithinNewInformation | 0.35 | 0.10〜0.80 | C。
 
 9. 金融政策の伝達
 
@@ -187,7 +226,7 @@ EXP-TGT-001 | targetAnchorWeight | 0.05 | 0.02〜0.15 | C。
 
 市場金利:
 MON-PASS-001 | policyToMarketRatePassThrough | 0.80 | 0.60〜1.00 | C。
-MON-PASS-002 | marketRateLagMonths | 1〜3 | E/C。
+市場金利は政策金利との差の80%を月次で埋め、1〜3か月でほぼ全量を反映する。市場金利の変更は為替へ先に、需要・雇用・物価へ遅れて波及させる。
 
 100bpの予想外の利上げに対するgolden response target:
 MON-GOLD-GDP | real GDP level trough | -0.7% | 許容 -0.4〜-1.3% | peak 18〜24か月。
@@ -206,8 +245,8 @@ golden responseは「直接加算する効果」ではなく、需要・投資�
 FISC-G-001 | spendingMultiplierNormal | 0.80 | 0.50〜1.10 | E/C。
 FISC-G-002 | spendingMultiplierSlack | 1.20 | 0.80〜1.70 | E/C。
 FISC-G-003 | spendingMultiplierBoom | 0.40 | 0.10〜0.70 | E/C。
-FISC-G-004 | slackThreshold | outputGap <= -0.02 | C。
-FISC-G-005 | boomThreshold | outputGap >= +0.02 | C。
+FISC-SLACK-THRESHOLD-001 | slackThreshold | outputGap <= -0.02 | C。
+FISC-BOOM-THRESHOLD-001 | boomThreshold | outputGap >= +0.02 | C。
 
 10.2 税負担
 税変更は可処分所得・企業利益・消費価格を直接変え、その後に消費・投資を通じてGDPへ波及させる。
@@ -224,38 +263,49 @@ TAX-VAT-LAG | 1〜3か月 | C。
 
 11. 公共投資
 
-公共投資は短期需要効果と長期供給効果を別のScheduledEffectにする。
+公共投資は短期需要効果と長期供給効果を分けて計算する。需要は12か月の出力反応、供給は公共資本の形成・減耗と12〜48か月の成熟ラグを通じて反映する。
 
-実証アンカー:
-1%GDP相当の公共投資増加に対し、標準効率では同年GDP水準+0.4%程度、4年後+1.5%程度という研究を上限寄りアンカーとして採用する。
+Issue #9で確定した校正帯:
+1%GDPの標準公共投資プログラムに対し、1年目の実質GDP水準は+0.2〜+0.8%（標準値+0.4%）、4年後の潜在GDPは+0.7〜+1.6%（標準値+1.0%）を目標とする。これはゲーム内校正目標で、特定の国・研究の推計値をそのまま再現する主張ではない。
 
 ゲーム初期値:
 PINV-DEMAND-001 | sameYearOutputEffectPer1PctGdp | +0.40% | 0.20〜0.70 | E。
 PINV-SUPPLY-001 | year4PotentialGdpEffectPer1PctGdp | +1.00% | 0.50〜1.50 | C/E。
-PINV-EFF-001 | implementationEfficiencyBase | 0.80 | 0.50〜1.00 | C。
+PINV-EFF-001 | implementationEfficiencyBase | 0.70 | 0.30〜0.95 | C。
 PINV-SLACK-001 | slackDemandMultiplier | 1.25 | 1.0〜1.6 | C。
 PINV-CAP-001 | capacityOverrunThreshold | 0.80 of implementationCapacity | G。
 PINV-OVR-001 | overrunCostMultiplier | 1.20 | 1.05〜1.50 | G。
+PINV-DEBT-001 | demand/capital multiplier reduction per debt-ratio point above threshold | 0.25 | 0.05〜0.75 | G。
+PINV-SUPPLY-LAG-START-001 | supply effect starts | 12 months | 6〜24 | C/E。
+PINV-SUPPLY-LAG-END-001 | full maturity | 48 months | 36〜60 | C/E。
+SUP-DEPR-001 | monthly public-capital and capacity depreciation | 0.001 | 0.0004〜0.002 | C。
 
-短期需要effectは0〜12か月、供給effectは12〜60か月へ分散する。
-教育・防災は即効性を弱く、長期効果を強くする。道路・港湾・電力は中期効果を強くする。
+需要効果は景気の需給余力、平均輸入依存度、実施能力に応じて減衰する。需要の輸入漏出を加味し、過熱局面では通常期の政府支出multiplierに対する比率を適用する。実施能力を超える案件は能力係数で抑え、超過費用を一次支出へ記録する。
+
+公共資本は、基準シナリオの投資額を超える部分を年率GDPで割り、PINV-EFF-001と実施能力を乗じて毎月積み上げる。各月の形成額はmemoryにビンテージ別で保持し、減耗後の成熟分だけを潜在GDPへ反映する。公共資本ストックは基準シナリオとの差分として扱う。
+
+1年目の実質GDP校正targetは `PINV-GDP-12M`、4年後の潜在GDP targetは `PINV-POTENTIAL-48M` としてConfigPackに保持する。教育・防災は即効性を弱く、長期効果を強くする。道路・港湾・電力は中期効果を強くする。
 
 12. 為替・資本移動
 
 fxLogChange =
   interestDifferentialContribution
+  + riskPremiumContribution
   + currentAccountContribution
   + trustContribution
+  + expectedInflationContribution
   + speculationContribution
   + interventionContribution
   + externalFxShock
 
 初期パラメータ:
-FX-RATE-001 | 1pp domestic rate advantage, 12M cumulative FX effect | -0.8% | -0.3〜-1.5 | C。
+FX-RATE-DIFF-001 | monthly log FX response to foreign-domestic rate gap | 0.80 | 0.10〜2.00 | C。
+FX-EXPECT-001 | expected-inflation-above-target FX response | 0.25 | 0.05〜0.60 | G/C。
 FX-CA-001 | currentAccount 1%GDP surplus, 12M FX effect | -0.15% | -0.05〜-0.40 | C。
-FX-TRUST-001 | policyTrust +10 points, 12M FX effect | -0.30% | -0.10〜-0.70 | G/C。
-FX-SPEC-001 | speculationPressure max monthly effect | ±2.0% | ±0.5〜±4.0 | G。
-FX-ERR-001 | monthlyLogShockStd | 0.012 | 0.006〜0.025 | G。
+FX-TRUST-RISK-001 | policyTrust shortfall response | 0.20 | 0〜0.80 | G/C。
+RISK-DEBT-001 / RISK-TRUST-001 | debt and trust derived risk premium | 0.015 / 0.010 | ConfigPack range | G/C。
+FX-SPEC-001 | speculationPressure monthly effect | ±0.15 log units | ConfigPack range | G。
+FX-ERR-001 | monthlyLogShockScale | 0.012 | 0.006〜0.025 | G。
 
 FXは短期にrandom/external要因を大きくし、政策だけで完全制御できない設計とする。
 
@@ -297,6 +347,14 @@ TRF-RET-001 | retaliationHazardPer5ppPerQuarter | +0.02 | 0.005〜0.05 | G。
 関税を上げると、対象輸入を減らす一方で輸入価格と一部川下コストを上げることを必須とする。
 国内生産増を自動的な総GDP純増として扱わず、消費者負担・投入コスト・報復を同時に評価する。
 
+14.1 産業別生産・能力勘定
+
+産業別のGDPウェイトとloadingはNationProfileから読み、農業・資源、製造、建設、家計サービス、金融・不動産、エネルギー・物流の6部門を個別に更新する。各部門の生産には国内需要、生産性、世界需要、資源価格、risk premium、天候のloadingを適用し、各寄与を因果記録に残す。
+
+業種別loadingは `industryLoadings` に置き、国家プロフィールに合わせてConfigPackだけで変更できる。世界需要は外国成長率ギャップ、生産性はCORE-GROW-001、資源価格は前月からの資源価格変化、金利riskはDEBT-RISKから導出するpremium、天候は基準を超える災害alertを使う。
+
+重み付き産業生産と実質GDPの差は `industryAggregateResidual` として記録し、GDP合計への調整は業種別productionのreconciliation寄与として残す。雇用構成比は産業別生産成長に応じて再配分し、6業種の合計を1に正規化する。設備能力は生産調整、公共投資、生産性成長、減耗で更新する。
+
 15. 財政・政府債務
 
 taxRevenue =
@@ -310,35 +368,57 @@ primaryBalance = taxRevenue - primarySpending
 interestPayment = debtStock * effectiveDebtRateAnnual / 12
 debtNext = debtStock - primaryBalance + interestPayment
 
+為替換算による外貨建て政府債務評価差額を加え、国内債務と外貨建て債務の合計が政府債務と一致するようにする。
+
+debtValuationAdjustment = externalDebt * (fxNow / fxPrevious - 1)
+debtNext = debtStock - primaryBalance + interestPayment + debtValuationAdjustment
+
+政府債務、外貨準備、公共資本、産業別設備は毎月のstock-flow identityを満たし、各差分を因果寄与として記録する。外貨準備は経常収支と資本フローの合計で更新し、ゼロ未満にはしない。公共資本・産業設備は形成額と減耗額の寄与を記録する。
+
 市場金利変化は政府債務へ即時全量反映させず、平均満期を表すrepricingを通じて反映する。
 DEBT-REPRICE-001 | monthlyRepricingShare | 0.015 | 0.008〜0.030 | C。
 DEBT-RISK-001 | riskPremiumStartDebtRatio | 1.20 | 0.90〜1.60 | G/C。
+RISK-DEBT-001 | debt-ratio risk-premium slope | 0.015 annual rate per debt-ratio unit | 0〜0.080 | G/C。
 DEBT-RISK-002 | trustRiskPremiumSensitivity | 0.015 per 10 trust-point loss annual | 0.005〜0.030 | G/C。
 DEBT-MIN | governmentDebt | >=0 unless explicit asset-state extension is added。
+
+riskPremium = RISK-DEBT-001 * max(0, debtRatio - DEBT-RISK-001)
+            + DEBT-RISK-002 * max(0, (50 - policyTrust) / 10)
+effectiveDebtRate += DEBT-REPRICE-001 * (marketRate + riskPremium - effectiveDebtRate)
 
 16. 政策信頼・政治資本・実施能力
 
 このブロックは実証係数ではなくゲーム上の説明可能性を優先する。
 
 policyTrustDelta =
-  priceStabilityScore
-  + employmentScore
-  + consistencyScore
-  + promiseScore
-  + institutionRespectScore
+  meanReversion
+  + inflationStabilityResponse
+  + unemploymentGapResponse
+  + debtRatioResponse
   - crisisPenalty
   - reversalPenalty
 
 初期パラメータ:
 TRUST-STAB-001 | stable inflation reward | +0.10〜+0.30 point/month | G。
-TRUST-JOB-001 | unemployment deterioration penalty | -0.10 point per +0.5pp y/y | G。
+TRUST-U-001 | unemployment above natural rate response | config-driven | G/C。
+TRUST-DEBT-001 | debt ratio above anchor response | config-driven | G/C。
 TRUST-REV-001 | policy reversal within 2 quarters | -1.5 points | -0.5〜-3.0 | G。
-TRUST-CBI-001 | central bank independence violation | -3 points | -1〜-6 | G。
 TRUST-CRISIS-001 | unmanaged crisis monthly penalty | -1〜-4 | G。
-PCAP-REGEN-001 | politicalCapital monthly regeneration | +0.5 | 0.2〜1.0 | G。
+POLCAP-TRUST-001 | monthly political-capital response to trust | 0.08 | 0〜0.30 | G。
 IMPL-REGEN-001 | implementationCapacity monthly regeneration | +0.4 | 0.2〜0.8 | G。
 
-信頼は経済指標を上書きする万能変数にせず、主に為替risk premium、投資不確実性、政策コスト、イベントhazardへ弱く波及させる。
+信頼は経済指標を上書きする万能変数にせず、政府借入のrisk premiumと政治資本を通じて波及させる。予算効果を伴わない一律の信頼補正は加えない。信頼、政治資本、実施能力はそれぞれ0〜100にclampする。
+
+景況感は産出gapに対して部分調整し、消費者と企業で独立した乱数ストリームを使う。
+confidenceTarget = anchor + gapSensitivity * outputGap * 100
+confidenceNext = confidence + monthlyAdjustment * (confidenceTarget - confidence) + independentShock
+
+CONF-ANCHOR-001 | mean-reversion anchor | 50 points | 35〜65 | G。
+CONF-C-GAP-001 | consumer response per output-gap percentage point | 0.22 | 0.10〜1.20 | G。
+CONF-B-GAP-001 | business response per output-gap percentage point | 0.27 | 0.10〜1.50 | G。
+CONF-MR-MONTHLY-001 | monthly adjustment speed | 0.25 | 0.10〜0.50 | G。
+CONF-ERR-001 | monthly innovation half-range | 0.50 points | 0.10〜1.50 | G。
+consumerConfidence / businessConfidenceは0〜100にclampする。係数は相関校正用のgameplay tuningであり、実証推定値を主張しない。
 
 17. 外部環境と確率過程
 
@@ -391,7 +471,7 @@ NaN、Infinity、undefined参照はtick fail。
 20. Golden response tests
 
 20.1 金融政策
-基準状態から政策金利+100bpを一度だけ適用し、同一外部shock pathでbaselineと比較する。
+基準状態から政策金利を100bp引き上げて12か月維持し、同一seedの外部shock pathでbaselineと比較する。
 必須方向:
 3〜12か月: 投資・需要が低下方向。
 12〜24か月: GDP差が負、失業差が正。
@@ -412,7 +492,7 @@ implementationCapacity不足時は費用超過と物価圧力が大きくなる�
 20.4 為替pass-through
 一度だけ10%通貨安ショックを与える。
 import priceは初月に+5〜+8%。
-CPI price levelは12か月で+0.8〜+3.0%。
+advanced-small-open-v1.0.0ではCPI price levelは12か月で+0.2〜+1.5%とする（旧v0.1.0の+0.8〜+3.0%帯を置き換える）。
 高インフレ/低信頼presetでは標準よりpass-throughが大きい。
 
 20.5 関税
@@ -429,6 +509,13 @@ FX指数は短期に低下方向。
 外貨準備は減少。
 reserves>6か月の方がreserves<3か月より効果が強い。
 反復介入のみでは効果が逓減する。
+
+20.7 平常期の主要相関
+産出gapは持続性0.98、月次innovation scale 0.0042の決定論的AR(1) pathを与え、価格・労働ブロックを16 seedで168か月実行する。最初の24か月をwarmupとして除き、残る指標のPearson相関を測る。
+産出gap×失業率: -0.90〜-0.60。
+産出gap×年率インフレ: +0.15〜+0.55。
+産出gap×平均景況感: +0.50〜+0.85。
+相関校正はgolden responseのpaired baseline/variant比較と別の診断として扱う。産出gapの生成機構は需要ブロック側の診断で確認する。
 
 21. 自動チューニング手順
 
@@ -524,10 +611,11 @@ IMF: Integrated Policy Framework / FX intervention principles
 
 26. v0.1.0の確定事項と未確定事項
 
+以下は旧v0.1.0文書の履歴値である。現行profile `advanced-small-open-v1.0.0` では、Okun 0.47、月次物価ショック0.0018、FX→CPI累積転嫁0.05、物価持続性0.90を既定値とし、Issue #8の実証校正追補と20章の受入帯を優先する。
+
 確定:
 方向性、更新ブロック、単位。
-Okun 0.50の初期値と3〜9か月lag。
-FX→import price 0.65、FX→CPI 12M 0.15の初期値。
+当時の値はOkun 0.50、FX→import price 0.65、FX→CPI 12M 0.15。
 金融政策100bpのgolden response range。
 政府支出multiplierの景気依存。
 公共投資の短期需要と長期供給の分離。

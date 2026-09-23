@@ -76,6 +76,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),
@@ -192,6 +193,31 @@ describe("domain invariants", () => {
     );
   });
 
+  it("validates the market rate and persisted macro history", () => {
+    const valid = state();
+    const invalid: GameState = {
+      ...valid,
+      economy: {
+        ...valid.economy,
+        rates: { ...valid.economy.rates, marketRate: percentRate(0.31) },
+        memory: {
+          previousRealGdp: indexLevel(0),
+          outputGrowthGapHistory: [
+            Number.NaN as EconomyState["rates"]["unemployment"],
+          ],
+        },
+      },
+    };
+    const paths = validateState(invalid).map((item) => item.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "economy.rates.marketRate",
+        "economy.memory.previousRealGdp",
+        "economy.memory.outputGrowthGapHistory[0]",
+      ]),
+    );
+  });
+
   it("rejects duplicate lifecycle IDs and reversed effect months", () => {
     const valid = state();
     const policy = {
@@ -246,6 +272,42 @@ describe("domain invariants", () => {
     expect(canTransitionRunState("completed", "running")).toBe(false);
     expect(canTransitionRunState("failed", "paused")).toBe(false);
     expect(canTransitionRunState("awaitingEvent", "running")).toBe(true);
+  });
+
+  it("rejects a saved policy containing a non-finite new input", () => {
+    const valid = state();
+    const invalid: GameState = {
+      ...valid,
+      policies: {
+        ...valid.policies,
+        active: [
+          {
+            policyId: "p2",
+            type: "housingTax",
+            decidedMonth: 0,
+            activationMonth: 0,
+            status: "active",
+            slotQuarter: 0,
+            sourceCommandId: "c2",
+            costs: {
+              politicalCapital: 0,
+              implementationCapacity: 0,
+              foreignReserves: 0,
+              immediateBudget: 0,
+            },
+            inputs: { rate: Number.NaN },
+          },
+        ],
+      },
+    };
+    expect(validateState(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "INVALID_POLICY_INPUT",
+          path: "policies.p2.inputs.rate",
+        }),
+      ]),
+    );
   });
 
   it("treats replay config identity mismatch as a hard error", () => {

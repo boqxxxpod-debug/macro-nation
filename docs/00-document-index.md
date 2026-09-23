@@ -1,6 +1,6 @@
 # MACRO NATION — Codex document index
 
-Synced: 2026-09-22
+Synced: 2026-09-23
 
 This directory is the repository-local implementation reference for Codex. The original working documents remain in the user's private Google Drive; private Drive URLs and IDs are intentionally omitted from this public repository.
 
@@ -13,6 +13,7 @@ This directory is the repository-local implementation reference for Codex. The o
 | `05-game-specification.md` | Authoritative player/game behavior | Macro_Nation_Game_Specification_v1.0 | Synced |
 | `06-economic-model-parameters.md` | Economic calibration/parameter pack | Macro_Nation_Economic_Model_Parameters_v1.0 / Model v0.1.0 | Synced |
 | `07-implementation-roadmap.md` | Issue sequencing and delivery gates | Macro_Nation_Implementation_Roadmap_v1.1 | Synced |
+| `08-extension-architecture.md` | Repository implementation contract for adding policy inputs and indicators | Repository ADR-013 supplement | Active |
 
 ## Codex reading rule
 
@@ -22,4 +23,6 @@ Always start with root `AGENTS.md`, then this index, then the documents referenc
 
 The economic model parameter pack has been restored and synchronized. Codex may use `06-economic-model-parameters.md` as the calibration source of truth for economic coefficients, lag targets, parameter ranges, evidence classes, and golden-response tests.
 
-2026-09-22: `02`〜`05`と`07`の末尾に任意AI追補を追加。既存MVPの「外部AIなし」は標準・AI無効時の仕様であり、追補が有効化時の境界を定める。Google Drive原本との同期は別途必要。
+## Optional AI layer
+
+The AI supplements in `02-requirements.md`, `03-detailed-design.md`, `04-architecture.md`, `05-game-specification.md`, and `07-implementation-roadmap.md` describe an optional, explicitly invoked layer. Earlier no-AI requirements define the default behavior when the layer is disabled. See `packages/advisor-core` and `deploy/xserver/README.md` for implementation and deployment details.

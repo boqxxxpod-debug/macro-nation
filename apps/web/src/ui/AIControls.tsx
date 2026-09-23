@@ -50,6 +50,9 @@ export function AIControls({
   }
   return (
     <section aria-label="経済解説">
+      <p>
+        AI連携が有効な場合、選んだ機能に必要な指標・原因・入力文をAI提供元へ送信します。個人情報は入力しないでください。
+      </p>
       <h2>経済ニュース</h2>
       <h3>{story.headline}</h3>
       <p>{story.explanation}</p>

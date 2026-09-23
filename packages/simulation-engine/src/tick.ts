@@ -16,7 +16,7 @@ import {
 } from "./rng";
 import { ENGINE_VERSION } from "./version";
 
-export const TICK_STAGE_ORDER = [
+export const TICK_STAGE_ORDER_V0_1_1 = Object.freeze([
   "validateInput",
   "createContext",
   "activateReservedPolicies",
@@ -31,11 +31,22 @@ export const TICK_STAGE_ORDER = [
   "evaluateEventsCrisisCompletion",
   "reconcileCausalAndFinalizeSnapshot",
   "finalValidation",
-] as const;
+] as const);
 
-export type TickStageId = (typeof TICK_STAGE_ORDER)[number];
+export type TickStageId = (typeof TICK_STAGE_ORDER_V0_1_1)[number];
 
-export const TICK_MUTABLE_STAGE_IDS = [
+/**
+ * The explicit version key makes an Engine Version bump fail typechecking until
+ * its stage order is registered. Keep each order immutable and golden-tested.
+ */
+export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
+  "0.1.1": TICK_STAGE_ORDER_V0_1_1,
+});
+
+export const TICK_STAGE_ORDER =
+  TICK_STAGE_ORDER_BY_ENGINE_VERSION[ENGINE_VERSION];
+
+export const TICK_MUTABLE_STAGE_IDS = Object.freeze([
   "activateReservedPolicies",
   "updateExternalEnvironment",
   "collectScheduledEffects",
@@ -46,7 +57,7 @@ export const TICK_MUTABLE_STAGE_IDS = [
   "updateFxCapitalReservesTrust",
   "updateHouseholdDistributionSupportPolitics",
   "evaluateEventsCrisisCompletion",
-] as const;
+] as const);
 
 export type TickMutableStageId = (typeof TICK_MUTABLE_STAGE_IDS)[number];
 
@@ -128,6 +139,8 @@ export interface TickExtensionContext extends TickStageContext {
 export interface TickStageResult {
   readonly state: GameState;
   readonly causal?: readonly CausalContribution[];
+  /** Numeric values collected by batch/reporting callers for this tick. */
+  readonly metrics?: Readonly<Record<string, number>>;
   readonly notes?: readonly string[];
 }
 
@@ -148,7 +161,9 @@ export interface TickInput {
   readonly configSnapshot: ConfigSnapshot;
   readonly rngProvider: TickRngProvider;
   readonly handlers?: Partial<Record<TickMutableStageId, TickStageHandler>>;
-  readonly extensions?: Partial<Record<TickExtensionPoint, TickExtensionHandler>>;
+  readonly extensions?: Partial<
+    Record<TickExtensionPoint, TickExtensionHandler>
+  >;
 }
 
 export interface TickDiagnostics {
@@ -156,6 +171,7 @@ export interface TickDiagnostics {
   readonly stageTrace: readonly TickStageId[];
   readonly extensionTrace: readonly TickExtensionPoint[];
   readonly causal: readonly CausalContribution[];
+  readonly metrics: Readonly<Record<string, number>>;
   readonly notes: readonly string[];
 }
 
@@ -207,7 +223,9 @@ function clonePlain<T>(value: T): T {
   }
   if (value !== null && typeof value === "object") {
     const output: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       output[key] = clonePlain(entry);
     }
     return output as T;
@@ -273,10 +291,7 @@ function validateTickInput(input: TickInput): void {
     input.state.configSnapshot.snapshotVersion !==
     input.configSnapshot.snapshotVersion
   ) {
-    throw new TickAbort(
-      "CONFIG_MISMATCH",
-      "Config snapshot version mismatch",
-    );
+    throw new TickAbort("CONFIG_MISMATCH", "Config snapshot version mismatch");
   }
 
   const issues = validateState(input.state);
@@ -307,10 +322,7 @@ function advanceClock(state: GameState, clockConfig: ClockConfig): GameState {
   };
 }
 
-function validateTickOutput(
-  state: GameState,
-  input: TickInput,
-): void {
+function validateTickOutput(state: GameState, input: TickInput): void {
   const issues = validateState(state);
   if (issues.length > 0) {
     throw new TickAbort(
@@ -340,7 +352,9 @@ function validateTickOutput(
   } catch (error) {
     throw new TickAbort(
       "INVALID_OUTPUT_STATE",
-      error instanceof Error ? error.message : "Output config snapshot mismatch",
+      error instanceof Error
+        ? error.message
+        : "Output config snapshot mismatch",
     );
   }
 }
@@ -349,11 +363,20 @@ function applyResult(
   result: TickStageResult,
   causal: CausalContribution[],
   notes: string[],
+  metrics: Record<string, number>,
 ): GameState {
   if (!result || !result.state) {
     throw new Error("Tick stage must return a state");
   }
   if (result.causal) causal.push(...result.causal);
+  if (result.metrics) {
+    for (const [id, value] of Object.entries(result.metrics)) {
+      if (!Number.isFinite(value)) {
+        throw new Error(`Tick metric ${id} must be finite`);
+      }
+      metrics[id] = value;
+    }
+  }
   if (result.notes) notes.push(...result.notes);
   return result.state;
 }
@@ -362,6 +385,7 @@ export function tick(input: TickInput): TickResult {
   const stageTrace: TickStageId[] = [];
   const extensionTrace: TickExtensionPoint[] = [];
   const causal: CausalContribution[] = [];
+  const metrics: Record<string, number> = {};
   const notes: string[] = [];
   let currentStage: TickStageId = "validateInput";
 
@@ -370,6 +394,7 @@ export function tick(input: TickInput): TickResult {
     stageTrace: [...stageTrace],
     extensionTrace: [...extensionTrace],
     causal: [...causal],
+    metrics: { ...metrics },
     notes: [...notes],
   });
 
@@ -406,7 +431,7 @@ export function tick(input: TickInput): TickResult {
             rngProvider: input.rngProvider,
           },
         });
-        working = applyResult(result, causal, notes);
+        working = applyResult(result, causal, notes, metrics);
         extensionTrace.push(extensionPoint);
       }
     };
@@ -426,7 +451,7 @@ export function tick(input: TickInput): TickResult {
             rngProvider: input.rngProvider,
           },
         });
-        working = applyResult(result, causal, notes);
+        working = applyResult(result, causal, notes, metrics);
       }
       runExtensions(stage);
       stageTrace.push(stage);

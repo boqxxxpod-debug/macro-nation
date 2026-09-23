@@ -34,6 +34,7 @@ describe("optional AI controls", () => {
         finished
       />,
     );
+    expect(screen.getByText(/AI連携が有効な場合/)).toBeInTheDocument();
     expect(screen.getByText("物価の上昇が家計に影響")).toBeInTheDocument();
     expect(advisors).not.toHaveBeenCalled();
     expect(news).not.toHaveBeenCalled();
