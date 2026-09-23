@@ -156,6 +156,7 @@ describe("ConfigPack v1", () => {
       ...content,
       textKeys: [...content.textKeys, "indicator.youthUnemployment"],
       indicatorDefinitions: [
+        ...(content.indicatorDefinitions ?? []),
         {
           indicatorId: "youthUnemployment",
           labelKey: "indicator.youthUnemployment",
@@ -222,7 +223,9 @@ describe("ConfigPack v1", () => {
   it("reads indicators from the saved snapshot, even after the published pack changes", async () => {
     const oldSnapshot = await createConfigSnapshot(SCN01_CONFIG_PACK);
     const oldRegistry = createSnapshotIndicatorRegistry(oldSnapshot);
-    expect(oldRegistry.definitions).toHaveLength(9);
+    expect(oldRegistry.definitions).toHaveLength(
+      SCN01_CONFIG_PACK.content.indicators.length,
+    );
     const newerContent = {
       ...SCN01_CONFIG_PACK.content,
       indicators: [
@@ -234,6 +237,7 @@ describe("ConfigPack v1", () => {
         "indicator.youthUnemployment",
       ],
       indicatorDefinitions: [
+        ...(SCN01_CONFIG_PACK.content.indicatorDefinitions ?? []),
         {
           indicatorId: "youthUnemployment",
           labelKey: "indicator.youthUnemployment",
@@ -252,10 +256,10 @@ describe("ConfigPack v1", () => {
     const newSnapshot = await createConfigSnapshot(newPack);
     expect(
       createSnapshotIndicatorRegistry(newSnapshot).definitions,
-    ).toHaveLength(10);
+    ).toHaveLength(SCN01_CONFIG_PACK.content.indicators.length + 1);
     expect(
       createSnapshotIndicatorRegistry(oldSnapshot).definitions,
-    ).toHaveLength(9);
+    ).toHaveLength(SCN01_CONFIG_PACK.content.indicators.length);
     expect(oldSnapshot.configHash).not.toBe(newSnapshot.configHash);
   });
 });

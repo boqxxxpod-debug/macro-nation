@@ -14,11 +14,20 @@ import {
 import {
   ENGINE_VERSION,
   TICK_EXTENSION_POINTS,
+  TICK_MUTABLE_STAGE_IDS,
   TICK_STAGE_ORDER,
+  TICK_STAGE_ORDER_BY_ENGINE_VERSION,
+  TICK_STAGE_ORDER_V0_1_1,
   XOSHIRO_TICK_RNG_PROVIDER,
   createRngBundle,
   tick,
+  type TickExtensionPoint,
+  type TickExtensionHandler,
+  type TickMutableStageId,
+  type TickRngProvider,
+  type TickStageHandler,
 } from "./index";
+import { createContributionBuilder } from "./causal";
 
 function economy(): EconomyState {
   const industries = Object.fromEntries(
@@ -81,6 +90,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),
@@ -164,7 +174,10 @@ function state(month = 1, year = 2026, monthIndex = 0): GameState {
   };
 }
 
-function run(inputState: GameState, overrides: Partial<Parameters<typeof tick>[0]> = {}) {
+function run(
+  inputState: GameState,
+  overrides: Partial<Parameters<typeof tick>[0]> = {},
+) {
   return tick({
     state: inputState,
     expectedTickSequence: inputState.tickSequence,
@@ -176,37 +189,226 @@ function run(inputState: GameState, overrides: Partial<Parameters<typeof tick>[0
 }
 
 describe("atomic monthly tick", () => {
-  it("keeps the 14 stages fixed and returns identical output for identical input", () => {
+  it("pins the 14-stage order to Engine Version 0.1.1", () => {
+    expect(ENGINE_VERSION).toBe("0.1.1");
+    expect(TICK_STAGE_ORDER_BY_ENGINE_VERSION[ENGINE_VERSION]).toBe(
+      TICK_STAGE_ORDER_V0_1_1,
+    );
+    expect(TICK_STAGE_ORDER_BY_ENGINE_VERSION).toMatchInlineSnapshot(`
+      {
+        "0.1.1": [
+          "validateInput",
+          "createContext",
+          "activateReservedPolicies",
+          "updateExternalEnvironment",
+          "collectScheduledEffects",
+          "updateDemand",
+          "updateOutputSupplyIndustries",
+          "updatePricesLabor",
+          "updateFiscal",
+          "updateFxCapitalReservesTrust",
+          "updateHouseholdDistributionSupportPolitics",
+          "evaluateEventsCrisisCompletion",
+          "reconcileCausalAndFinalizeSnapshot",
+          "finalValidation",
+        ],
+      }
+    `);
+    expect(Object.isFrozen(TICK_STAGE_ORDER)).toBe(true);
+  });
+
+  it("returns identical output for identical input", () => {
     const input = state();
-    const first = run(input);
-    const second = run(input);
+    const updateDemand: TickStageHandler = ({ state: working }) => {
+      const contribution = createContributionBuilder("support", 55)
+        .add(
+          {
+            sourceType: "policy",
+            sourceId: "test-policy",
+            labelKey: "test.policy",
+            confidence: "high",
+          },
+          1,
+        )
+        .build();
+      return {
+        state: {
+          ...working,
+          economy: {
+            ...working.economy,
+            sentiment: {
+              ...working.economy.sentiment,
+              support: scorePoint(56),
+            },
+          },
+        },
+        causal: [contribution],
+      };
+    };
+    const overrides = { handlers: { updateDemand } };
+    const first = run(input, overrides);
+    const second = run(input, overrides);
 
     expect(first).toEqual(second);
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     expect(first.value.diagnostics.stageTrace).toEqual(TICK_STAGE_ORDER);
+    expect(first.value.diagnostics.causal).toHaveLength(1);
+    expect(first.value.state.economy.sentiment.support).toBe(56);
     expect(first.value.state.tickSequence).toBe(1);
     expect(first.value.state.monthIndex).toBe(1);
   });
 
-  it("returns the exact input state and no partial draft when a stage throws", () => {
+  it("collects finite numeric stage metrics in tick diagnostics", () => {
     const input = state();
-    const result = run(input, {
+    const collected = run(input, {
       handlers: {
-        updateDemand: ({ state: working }) => {
-          (working.economy.sentiment as { support: number }).support = 99;
-          throw new Error("demand failed");
-        },
+        updateDemand: ({ state: working }) => ({
+          state: working,
+          metrics: { "demand.realGdp": 100 },
+        }),
       },
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe("ENGINE_TICK_FAILED");
-    expect(result.error.stage).toBe("updateDemand");
-    expect(result.state).toBe(input);
-    expect(input.economy.sentiment.support).toBe(55);
-    expect(input.tickSequence).toBe(0);
+    expect(collected.ok).toBe(true);
+    if (collected.ok) {
+      expect(collected.value.diagnostics.metrics).toEqual({
+        "demand.realGdp": 100,
+      });
+    }
+
+    const invalid = run(input, {
+      handlers: {
+        updateDemand: ({ state: working }) => ({
+          state: working,
+          metrics: { "demand.invalid": Number.NaN },
+        }),
+      },
+    });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.error).toMatchObject({
+        code: "ENGINE_TICK_FAILED",
+        stage: "updateDemand",
+        message: "Tick metric demand.invalid must be finite",
+      });
+      expect(invalid.state).toBe(input);
+    }
+  });
+
+  it.each(TICK_MUTABLE_STAGE_IDS)(
+    "returns the exact input state when %s throws",
+    (failingStage: TickMutableStageId) => {
+      const input = state();
+      const before = JSON.stringify(input);
+      const result = run(input, {
+        handlers: {
+          [failingStage]: ({
+            state: working,
+          }: Parameters<TickStageHandler>[0]) => {
+            (working.economy.sentiment as { support: number }).support = 99;
+            throw new Error(`failure:${failingStage}`);
+          },
+        },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatchObject({
+        code: "ENGINE_TICK_FAILED",
+        stage: failingStage,
+        message: `failure:${failingStage}`,
+      });
+      expect(result.state).toBe(input);
+      expect(JSON.stringify(input)).toBe(before);
+      expect(input.economy.sentiment.support).toBe(55);
+    },
+  );
+
+  it.each(Object.keys(TICK_EXTENSION_POINTS) as TickExtensionPoint[])(
+    "returns the exact input state when extension %s throws",
+    (failingExtension: TickExtensionPoint) => {
+      const input = state();
+      const before = JSON.stringify(input);
+      const result = run(input, {
+        extensions: {
+          [failingExtension]: ({
+            state: working,
+          }: Parameters<TickExtensionHandler>[0]) => {
+            (working.economy.sentiment as { support: number }).support = 99;
+            throw new Error(`failure:${failingExtension}`);
+          },
+        },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatchObject({
+        code: "ENGINE_TICK_FAILED",
+        stage: TICK_EXTENSION_POINTS[failingExtension].stage,
+        message: `failure:${failingExtension}`,
+      });
+      expect(result.state).toBe(input);
+      expect(JSON.stringify(input)).toBe(before);
+    },
+  );
+
+  it("rolls back failures during input validation, context setup, and final validation", () => {
+    const invalidInput = state();
+    const invalid = run({ ...invalidInput, runState: "paused" });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.error).toMatchObject({ stage: "validateInput" });
+      expect(invalid.state.runState).toBe("paused");
+    }
+
+    const contextInput = state();
+    const brokenRngProvider: TickRngProvider = {
+      ...XOSHIRO_TICK_RNG_PROVIDER,
+      cloneBundle() {
+        throw new Error("context setup failed");
+      },
+    };
+    const contextFailure = run(contextInput, {
+      rngProvider: brokenRngProvider,
+    });
+    expect(contextFailure.ok).toBe(false);
+    if (!contextFailure.ok) {
+      expect(contextFailure.error).toMatchObject({
+        code: "ENGINE_TICK_FAILED",
+        stage: "createContext",
+        message: "context setup failed",
+      });
+      expect(contextFailure.state).toBe(contextInput);
+    }
+
+    const outputInput = state();
+    const invalidOutput = run(outputInput, {
+      extensions: {
+        reactionSnapshot: ({ state: working }) => ({
+          state: {
+            ...working,
+            economy: {
+              ...working.economy,
+              sentiment: {
+                ...working.economy.sentiment,
+                support:
+                  Number.NaN as GameState["economy"]["sentiment"]["support"],
+              },
+            },
+          },
+        }),
+      },
+    });
+    expect(invalidOutput.ok).toBe(false);
+    if (!invalidOutput.ok) {
+      expect(invalidOutput.error).toMatchObject({
+        code: "INVALID_OUTPUT_STATE",
+        stage: "finalValidation",
+      });
+      expect(invalidOutput.state).toBe(outputInput);
+      expect(outputInput.economy.sentiment.support).toBe(55);
+    }
   });
 
   it("rejects stale duplicate tick attempts", () => {
@@ -232,6 +434,32 @@ describe("atomic monthly tick", () => {
     });
     expect(result.value.state.monthIndex).toBe(12);
     expect(result.value.state.tickSequence).toBe(12);
+  });
+
+  it("accepts a replacement ConfigSnapshot through the same tick API", () => {
+    const initial = state();
+    const configSnapshot = {
+      ...initial.configSnapshot,
+      configHash: "b".repeat(64),
+      normalizedConfig: { demandCoefficient: 0.25 },
+    };
+    const input = { ...initial, configSnapshot };
+    let observedCoefficient: unknown;
+    const result = run(input, {
+      configSnapshot,
+      handlers: {
+        updateDemand: ({ state: working, context }) => {
+          observedCoefficient =
+            context.configSnapshot.normalizedConfig.demandCoefficient;
+          return { state: working };
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCoefficient).toBe(0.25);
+    if (result.ok)
+      expect(result.value.state.configSnapshot).toEqual(configSnapshot);
   });
 
   it("isolates the caller state even when a handler mutates the working draft", () => {

@@ -76,6 +76,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),
@@ -189,6 +190,31 @@ describe("domain invariants", () => {
     };
     expect(validateState(invalid).map((item) => item.code)).toEqual(
       expect.arrayContaining(["NON_FINITE", "OUT_OF_RANGE", "DEBT_MISMATCH"]),
+    );
+  });
+
+  it("validates the market rate and persisted macro history", () => {
+    const valid = state();
+    const invalid: GameState = {
+      ...valid,
+      economy: {
+        ...valid.economy,
+        rates: { ...valid.economy.rates, marketRate: percentRate(0.31) },
+        memory: {
+          previousRealGdp: indexLevel(0),
+          outputGrowthGapHistory: [
+            Number.NaN as EconomyState["rates"]["unemployment"],
+          ],
+        },
+      },
+    };
+    const paths = validateState(invalid).map((item) => item.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "economy.rates.marketRate",
+        "economy.memory.previousRealGdp",
+        "economy.memory.outputGrowthGapHistory[0]",
+      ]),
     );
   });
 

@@ -10,6 +10,7 @@ export type ValidationIssueCode =
   | "INVALID_POLICY_INPUT"
   | "INVALID_EFFECT"
   | "DEBT_MISMATCH"
+  | "INDUSTRY_EMPLOYMENT_SHARE_MISMATCH"
   | "RNG_INVALID";
 
 export interface ValidationIssue {
@@ -132,7 +133,31 @@ export function validateState(state: GameState): ValidationIssue[] {
   numberRule(issues, "economy.indices.fx", e.indices.fx, [20, 500]);
   numberRule(issues, "economy.rates.unemployment", e.rates.unemployment, [0.02, 0.3]);
   numberRule(issues, "economy.rates.policyRate", e.rates.policyRate, [-0.02, 0.3]);
+  numberRule(issues, "economy.rates.marketRate", e.rates.marketRate, [-0.02, 0.3]);
   numberRule(issues, "economy.rates.inflationAnnual", e.rates.inflationAnnual, [-0.1, 0.5]);
+  if (e.memory) {
+    if (e.memory.previousRealGdp !== undefined) {
+      numberRule(issues, "economy.memory.previousRealGdp", e.memory.previousRealGdp, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    }
+    e.memory.outputGrowthGapHistory?.forEach((value, index) =>
+      numberRule(issues, `economy.memory.outputGrowthGapHistory[${index}]`, value),
+    );
+    if (e.memory.previousFxIndex !== undefined) {
+      numberRule(issues, "economy.memory.previousFxIndex", e.memory.previousFxIndex, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    }
+    if (e.memory.previousResourcePriceIndex !== undefined) {
+      numberRule(issues, "economy.memory.previousResourcePriceIndex", e.memory.previousResourcePriceIndex, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    }
+    if (e.memory.effectiveDebtRateAnnual !== undefined) {
+      numberRule(issues, "economy.memory.effectiveDebtRateAnnual", e.memory.effectiveDebtRateAnnual);
+    }
+    if (e.memory.baselinePotentialGdp !== undefined) {
+      numberRule(issues, "economy.memory.baselinePotentialGdp", e.memory.baselinePotentialGdp, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    }
+    e.memory.publicCapitalFormationHistory?.forEach((value, index) =>
+      numberRule(issues, `economy.memory.publicCapitalFormationHistory[${index}]`, value, undefined, true),
+    );
+  }
 
   for (const [name, value] of Object.entries(e.flows)) numberRule(issues, `economy.flows.${name}`, value);
   for (const [name, value] of Object.entries(e.stocks)) numberRule(issues, `economy.stocks.${name}`, value, undefined, true);
@@ -141,6 +166,19 @@ export function validateState(state: GameState): ValidationIssue[] {
   const debtTolerance = Math.max(1e-9, Math.abs(e.stocks.governmentDebt) * 1e-9);
   if (Math.abs(parts - e.stocks.governmentDebt) > debtTolerance) {
     add(issues, "DEBT_MISMATCH", "economy.stocks.governmentDebt", "governmentDebt must equal domestic + external debt");
+  }
+
+  const industryEmploymentShare = Object.values(e.industries).reduce(
+    (sum, industry) => sum + industry.employmentShare,
+    0,
+  );
+  if (Math.abs(industryEmploymentShare - 1) > 1e-9) {
+    add(
+      issues,
+      "INDUSTRY_EMPLOYMENT_SHARE_MISMATCH",
+      "economy.industries",
+      "industry employment shares must sum to one",
+    );
   }
 
   const scores: readonly [string, number][] = [
