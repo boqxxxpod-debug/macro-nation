@@ -32,7 +32,8 @@ export const INDUSTRY_IDS = [
 ] as const;
 export type IndustryId = (typeof INDUSTRY_IDS)[number];
 
-export type InfrastructureId = "transport" | "energy" | "digital" | "water" | "publicFacilities";
+export type InfrastructureId =
+  "transport" | "energy" | "digital" | "water" | "publicFacilities";
 export type RunState =
   | "running"
   | "paused"
@@ -101,6 +102,11 @@ export interface EconomyState {
     readonly expectedInflation: PercentRate;
     readonly foreignRate: PercentRate;
   };
+  /** Small deterministic history window used by lagged monthly equations. */
+  readonly memory?: {
+    readonly previousRealGdp: IndexLevel;
+    readonly outputGrowthGapHistory: readonly PercentRate[];
+  };
   readonly ratios: {
     readonly governmentDebtRatio: PercentRate;
     readonly fiscalBalanceRatio: PercentRate;
@@ -145,11 +151,7 @@ export interface EconomyState {
 }
 
 export type PolicyType =
-  | "interestRate"
-  | "taxPackage"
-  | "publicWorks"
-  | "tariff"
-  | "fxIntervention";
+  "interestRate" | "taxPackage" | "publicWorks" | "tariff" | "fxIntervention";
 export type PolicyStatus =
   | "draft"
   | "previewed"
