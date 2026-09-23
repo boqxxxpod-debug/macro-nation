@@ -1,11 +1,14 @@
 import type { IndicatorId } from "./state";
 
-export type CausalSourceType = "policy" | "event" | "external" | "inertia" | "random";
+export type CausalSourceType =
+  "policy" | "event" | "external" | "inertia" | "random";
 export type CausalMetricId =
   | IndicatorId
   | "consumption"
   | "investment"
+  | "publicInvestment"
   | "governmentConsumption"
+  | "outputGap"
   | "exports"
   | "imports"
   | "cpi"
@@ -33,9 +36,26 @@ export interface CausalTerm extends CausalRef {
 }
 
 export type CausalDiagnostic =
-  | { readonly kind: "clamp"; readonly rawValue: number; readonly adjustedValue: number; readonly delta: number; readonly min?: number; readonly max?: number }
-  | { readonly kind: "rounding"; readonly internalValue: number; readonly displayValue: number; readonly displayDelta: number }
-  | { readonly kind: "residual"; readonly expectedDelta: number; readonly contributionDelta: number; readonly residual: number };
+  | {
+      readonly kind: "clamp";
+      readonly rawValue: number;
+      readonly adjustedValue: number;
+      readonly delta: number;
+      readonly min?: number;
+      readonly max?: number;
+    }
+  | {
+      readonly kind: "rounding";
+      readonly internalValue: number;
+      readonly displayValue: number;
+      readonly displayDelta: number;
+    }
+  | {
+      readonly kind: "residual";
+      readonly expectedDelta: number;
+      readonly contributionDelta: number;
+      readonly residual: number;
+    };
 
 export interface CausalContribution {
   readonly indicatorId: CausalMetricId;

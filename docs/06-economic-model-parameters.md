@@ -74,7 +74,7 @@ CONS-Y-001 | incomeCoefficient | 0.60 | 0.35〜0.85 | C | 実質所得変化の�
 CONS-R-001 | realRateCoefficient | 0.45 | 0.20〜0.80 | C | 実質金利ギャップ1ppで年間消費成長を約0.45pp押し下げる初期設定。
 CONS-U-001 | unemploymentCoefficient | 0.30 | 0.10〜0.60 | C | 失業ギャップ1ppで年間消費成長を約0.30pp押し下げる。
 CONS-INF-001 | inflationConcernCoefficient | 0.15 | 0.05〜0.35 | C。
-CONS-ERR-001 | monthlyShockStd | 0.0015 | 0.0005〜0.0030 | G | 月次個別誤差。
+CONS-ERR-001 | monthlyShockStd | 0.0035 | 0.0005〜0.0050 | G | 1,000 run校正のcomponent-growth相関を満たす月次個別誤差。
 
 実質所得の符号効果は即時〜3か月、金利と失業の効果は3〜12か月へ分散可能とする。
 
@@ -96,14 +96,42 @@ INV-GAP-001 | demandOutlookCoefficient | 1.20 | 0.60〜1.80 | C。
 INV-PROD-001 | productivityCoefficient | 0.80 | 0.40〜1.20 | C。
 INV-R-001 | realRateCoefficient | 1.50 | 0.70〜2.20 | C | 金利に消費より強く反応させる。
 INV-UNC-001 | uncertaintyCoefficient | 0.80 | 0.30〜1.50 | C。
-INV-ERR-001 | monthlyShockStd | 0.0040 | 0.0015〜0.0080 | G。
+INV-ERR-001 | monthlyShockStd | 0.0015 | 0.0015〜0.0080 | G | 投資成長のGDP成長との相関を校正下限へ合わせる月次個別誤差。
 
 投資は消費より変動を大きくし、金利・不確実性ショックへの反応を強くする。
 
 6. GDP・供給・潜在成長
 
-実質GDPは需要恒等式から算出する。
-realGdp = cShare*C + iShare*I + gShare*G + xShare*X - mShare*M
+実質GDPは半構造IS型の産出gapから算出する。需要項目はGDP loadingとして分配し、compositionResidualのsigned合計を0に保つ。これにより、構成項目の直接効果を残しつつ、GDP aggregateへは一度だけ反映する。
+realRateGap = marketRate - expectedInflation - neutralRealRate
+fiscalImpulse = scheduledGovernmentConsumptionAndPublicInvestment / previousRealGdp
+realExchangeRateGap = fxIndex / cpiIndex - 1
+outputGap = clamp(
+  persistence * previousOutputGap
+  - rateCoefficient * realRateGap / 12
+  + fiscalCoefficient * fiscalImpulse
+  + foreignCoefficient * foreignGrowthGap / 12
+  + fxCoefficient * realExchangeRateGap
+  + confidenceCoefficient * confidenceGap / 12
+  + demandShock,
+  gapMin,
+  gapMax
+)
+realGdp = potentialGdp * (1 + outputGap)
+componentDelta[j] = gdpShare[j] * (realGdp - previousDemandSum) + compositionResidual[j]
+sum(sign[j] * compositionResidual[j]) = 0
+realGdp = C + I + G + X - M
+
+輸出入component growth:
+exportsGrowth = X-FOREIGN * foreignGrowthGap / 12 + X-FX * realExchangeRateGap / 12 + scheduled + shock
+importsGrowth = M-DEMAND * previousOutputGap / 12 + M-FX * realExchangeRateGap / 12 + scheduled + shock
+X-FOREIGN-001 | foreignDemandCoefficient | 0.90 | 0.20〜1.80 | C。
+X-FX-001 | realExchangeRateCoefficient | 0.35 | 0〜0.80 | C。
+X-ERR-001 | monthlyShockStd | 0.005 | 0.0015〜0.008 | G。
+M-DEMAND-001 | demandCoefficient | 0.90 | 0.20〜1.80 | C。
+M-FX-001 | realExchangeRateCoefficient | -0.25 | -0.80〜0 | C。
+M-ERR-001 | monthlyShockStd | 0.005 | 0.0015〜0.008 | G。
+現行stateに外国物価指数がないため、realExchangeRateGapは外国価格を100に固定し、名目為替指数を国内CPIで実質化して近似する。
 
 基準share:
 GDP-SHARE-C | 0.60
@@ -111,7 +139,19 @@ GDP-SHARE-I | 0.18
 GDP-SHARE-G | 0.20
 GDP-SHARE-X | 0.25
 GDP-SHARE-M | 0.23
-純合計が1.00となることをvalidationで確認する。
+純合計が1.00となることをvalidationで確認する。出力gapは-0.15〜+0.12に制限する。
+
+初期IS型パラメータ:
+IS-GAP-PERSIST-001 | outputGapPersistence | 0.98 | 0.90〜0.995 | G。
+IS-GAP-RATE-001 | realRateGapCoefficient | 0.48 | 0.15〜1.50 | G。
+IS-GAP-FISCAL-001 | fiscalImpulseCoefficient | 0.008 | 0.001〜0.04 | G。
+IS-GAP-FOREIGN-001 | foreignDemandCoefficient | 0.40 | 0.10〜0.90 | G。
+IS-GAP-FX-001 | realExchangeRateCoefficient | 0.0015 | 0.0002〜0.006 | G。
+IS-GAP-CONFIDENCE-001 | confidenceCoefficient | 0.01 | 0〜0.05 | G。
+IS-GAP-ERR-001 | monthlyDemandShockStd | 0.0042 | 0.002〜0.008 | G。
+IS-GAP-MIN-001 / IS-GAP-MAX-001 | gap bounds | -0.15 / +0.12 | range validation | G。
+
+GDP loadingは各scenarioで変更できる。GDP成長と需要項目の相関校正は、no-policy batchの12か月warmup後に前期比年率成長で測定する。実質GDP前年比、前期比年率、output gapの標準偏差も同じbatch diagnosticsから検証する。
 
 potentialGrowthAnnual =
   baselineProductivity

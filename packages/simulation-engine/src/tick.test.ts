@@ -258,6 +258,43 @@ describe("atomic monthly tick", () => {
     expect(first.value.state.monthIndex).toBe(1);
   });
 
+  it("collects finite numeric stage metrics in tick diagnostics", () => {
+    const input = state();
+    const collected = run(input, {
+      handlers: {
+        updateDemand: ({ state: working }) => ({
+          state: working,
+          metrics: { "demand.realGdp": 100 },
+        }),
+      },
+    });
+
+    expect(collected.ok).toBe(true);
+    if (collected.ok) {
+      expect(collected.value.diagnostics.metrics).toEqual({
+        "demand.realGdp": 100,
+      });
+    }
+
+    const invalid = run(input, {
+      handlers: {
+        updateDemand: ({ state: working }) => ({
+          state: working,
+          metrics: { "demand.invalid": Number.NaN },
+        }),
+      },
+    });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.error).toMatchObject({
+        code: "ENGINE_TICK_FAILED",
+        stage: "updateDemand",
+        message: "Tick metric demand.invalid must be finite",
+      });
+      expect(invalid.state).toBe(input);
+    }
+  });
+
   it.each(TICK_MUTABLE_STAGE_IDS)(
     "returns the exact input state when %s throws",
     (failingStage: TickMutableStageId) => {
