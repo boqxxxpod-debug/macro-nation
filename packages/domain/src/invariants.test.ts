@@ -192,6 +192,31 @@ describe("domain invariants", () => {
     );
   });
 
+  it("validates the market rate and persisted macro history", () => {
+    const valid = state();
+    const invalid: GameState = {
+      ...valid,
+      economy: {
+        ...valid.economy,
+        rates: { ...valid.economy.rates, marketRate: percentRate(0.31) },
+        memory: {
+          previousRealGdp: indexLevel(0),
+          outputGrowthGapHistory: [
+            Number.NaN as EconomyState["rates"]["unemployment"],
+          ],
+        },
+      },
+    };
+    const paths = validateState(invalid).map((item) => item.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "economy.rates.marketRate",
+        "economy.memory.previousRealGdp",
+        "economy.memory.outputGrowthGapHistory[0]",
+      ]),
+    );
+  });
+
   it("rejects duplicate lifecycle IDs and reversed effect months", () => {
     const valid = state();
     const policy = {

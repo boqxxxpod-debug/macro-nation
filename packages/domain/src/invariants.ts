@@ -126,7 +126,14 @@ export function validateState(state: GameState): ValidationIssue[] {
   numberRule(issues, "economy.indices.fx", e.indices.fx, [20, 500]);
   numberRule(issues, "economy.rates.unemployment", e.rates.unemployment, [0.02, 0.3]);
   numberRule(issues, "economy.rates.policyRate", e.rates.policyRate, [-0.02, 0.3]);
+  numberRule(issues, "economy.rates.marketRate", e.rates.marketRate, [-0.02, 0.3]);
   numberRule(issues, "economy.rates.inflationAnnual", e.rates.inflationAnnual, [-0.1, 0.5]);
+  if (e.memory) {
+    numberRule(issues, "economy.memory.previousRealGdp", e.memory.previousRealGdp, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    e.memory.outputGrowthGapHistory.forEach((value, index) =>
+      numberRule(issues, `economy.memory.outputGrowthGapHistory[${index}]`, value),
+    );
+  }
 
   for (const [name, value] of Object.entries(e.flows)) numberRule(issues, `economy.flows.${name}`, value);
   for (const [name, value] of Object.entries(e.stocks)) numberRule(issues, `economy.stocks.${name}`, value, undefined, true);
