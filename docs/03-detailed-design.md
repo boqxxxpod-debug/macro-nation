@@ -498,9 +498,6 @@ type Condition =
   | { all: Condition[] }
   | { any: Condition[] }
   | { not: Condition }
-Warning: truncated output (original token count: 8503)
-Total output lines: 500
-
   | { metric: MetricRef; op: 'lt'|'lte'|'gt'|'gte'|'between'; value: number | [number, number] }
   | { trend: MetricRef; months: number; op: 'gt'|'lt'; value: number }
   | { activePolicy: PolicyType; minimumMonths?: number }
@@ -718,7 +715,39 @@ dangerouslySetInnerHTMLを使用しない。利用者入力のseedと表示名�
 JSON取込は5MB、文字列長、配列長、ネスト深度、数値範囲、ID形式を検証する。
 開発者画面はVITE ENABLE DEVTOOLSがtrueの開発buildだけに含め、本番routeとnavigationからコードごと除外する。
 exportファイル名は固定接頭辞と安全な日時だけで生成し、利用者文字列を直接使わない。
-依存関係のlockfileをcommitし、CIで監査する。ただし監査修正…503 tokens truncated…。
+依存関係のlockfileをcommitし、CIで監査する。ただし監査修正でengine結果を変える場合は版を更新する。
+15 エラー処理と診断設計
+15 1 エラー分類
+15 2 DomainError
+interface DomainError {
+  code: string;
+  messageKey: string;
+  severity: 'info' | 'warning' | 'recoverable' | 'fatal';
+  retryable: boolean;
+  context: Record<string, string | number | boolean>;
+  causeCode?: string;
+}
+messageKeyから利用者向け文を生成し、contextの内部値をそのままHTMLへ入れない。開発diagnosticsは端末内に直近200件をring bufferで保持し、利用者が明示的にJSONへ含める場合だけ外へ出す。seed、engineVersion、configVersion、tickSequence、commandIdは再現に必要な範囲で記録する。
+15 3 復旧
+1. current世代を検証する。
+2. 不正ならprevious世代を検証する。
+3. previousが有効ならread onlyで開き、復旧したことを通知する。
+4. 両方不正なら元データを上書きせず、JSON書き出しとslot削除の選択肢を出す。
+5. 計算例外ではreplay packageを端末内生成し、入力stateを維持する。
+6. 同じtickの自動無限再試行を避け、1回失敗後はpausedへ遷移する。
+16 テスト設計
+16 1 テスト構成
+16 2 単体テスト
+xoshiro128ssの最初の100出力をNodeとbrowserのgolden vectorで照合する。
+同じstate config rngでtick出力をdeep equal比較する。
+利上げ、税、公共事業、関税、介入の方向性とラグを独立fixtureで検証する。
+effect curveのweight合計、開始月、終了月、途中終了を検証する。
+各指標のbefore plus contributions equals afterを検証する。
+GDP構成、債務恒等式、税収内訳、準備変化を検証する。
+極端値でも有限値を保ち、NaN入力では失敗して元stateを変更しないことを検証する。
+評価5軸、最低軸cap、SからF判定の境界値を検証する。
+16 3 結合テスト
+政策draftからpreview commit reservation activation effect completion reportまでを通す。
 イベント兆候、抽選、awaitingEvent、選択、効果、cooldown、因果ログを通す。
 48または96回の逐次tickとoffline Workerの最終SaveEnvelopeをdeep equal比較する。
 各tickで保存を故意に中断し、currentかpreviousから正しいtickSequenceへ復旧する。
