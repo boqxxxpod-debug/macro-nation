@@ -245,8 +245,8 @@ golden responseは「直接加算する効果」ではなく、需要・投資�
 FISC-G-001 | spendingMultiplierNormal | 0.80 | 0.50〜1.10 | E/C。
 FISC-G-002 | spendingMultiplierSlack | 1.20 | 0.80〜1.70 | E/C。
 FISC-G-003 | spendingMultiplierBoom | 0.40 | 0.10〜0.70 | E/C。
-FISC-G-004 | slackThreshold | outputGap <= -0.02 | C。
-FISC-G-005 | boomThreshold | outputGap >= +0.02 | C。
+FISC-SLACK-THRESHOLD-001 | slackThreshold | outputGap <= -0.02 | C。
+FISC-BOOM-THRESHOLD-001 | boomThreshold | outputGap >= +0.02 | C。
 
 10.2 税負担
 税変更は可処分所得・企業利益・消費価格を直接変え、その後に消費・投資を通じてGDPへ波及させる。
@@ -263,21 +263,28 @@ TAX-VAT-LAG | 1〜3か月 | C。
 
 11. 公共投資
 
-公共投資は短期需要効果と長期供給効果を別のScheduledEffectにする。
+公共投資は短期需要効果と長期供給効果を分けて計算する。需要は12か月の出力反応、供給は公共資本の形成・減耗と12〜48か月の成熟ラグを通じて反映する。
 
-実証アンカー:
-1%GDP相当の公共投資増加に対し、標準効率では同年GDP水準+0.4%程度、4年後+1.5%程度という研究を上限寄りアンカーとして採用する。
+Issue #9で確定した校正帯:
+1%GDPの標準公共投資プログラムに対し、1年目の実質GDP水準は+0.2〜+0.8%（標準値+0.4%）、4年後の潜在GDPは+0.7〜+1.6%（標準値+1.0%）を目標とする。これはゲーム内校正目標で、特定の国・研究の推計値をそのまま再現する主張ではない。
 
 ゲーム初期値:
 PINV-DEMAND-001 | sameYearOutputEffectPer1PctGdp | +0.40% | 0.20〜0.70 | E。
 PINV-SUPPLY-001 | year4PotentialGdpEffectPer1PctGdp | +1.00% | 0.50〜1.50 | C/E。
-PINV-EFF-001 | implementationEfficiencyBase | 0.80 | 0.50〜1.00 | C。
+PINV-EFF-001 | implementationEfficiencyBase | 0.70 | 0.30〜0.95 | C。
 PINV-SLACK-001 | slackDemandMultiplier | 1.25 | 1.0〜1.6 | C。
 PINV-CAP-001 | capacityOverrunThreshold | 0.80 of implementationCapacity | G。
 PINV-OVR-001 | overrunCostMultiplier | 1.20 | 1.05〜1.50 | G。
+PINV-DEBT-001 | demand/capital multiplier reduction per debt-ratio point above threshold | 0.25 | 0.05〜0.75 | G。
+PINV-SUPPLY-LAG-START-001 | supply effect starts | 12 months | 6〜24 | C/E。
+PINV-SUPPLY-LAG-END-001 | full maturity | 48 months | 36〜60 | C/E。
+SUP-DEPR-001 | monthly public-capital and capacity depreciation | 0.001 | 0.0004〜0.002 | C。
 
-短期需要effectは0〜12か月、供給effectは12〜60か月へ分散する。
-教育・防災は即効性を弱く、長期効果を強くする。道路・港湾・電力は中期効果を強くする。
+需要効果は景気の需給余力、平均輸入依存度、実施能力に応じて減衰する。需要の輸入漏出を加味し、過熱局面では通常期の政府支出multiplierに対する比率を適用する。実施能力を超える案件は能力係数で抑え、超過費用を一次支出へ記録する。
+
+公共資本は、基準シナリオの投資額を超える部分を年率GDPで割り、PINV-EFF-001と実施能力を乗じて毎月積み上げる。各月の形成額はmemoryにビンテージ別で保持し、減耗後の成熟分だけを潜在GDPへ反映する。公共資本ストックは基準シナリオとの差分として扱う。
+
+1年目の実質GDP校正targetは `PINV-GDP-12M`、4年後の潜在GDP targetは `PINV-POTENTIAL-48M` としてConfigPackに保持する。教育・防災は即効性を弱く、長期効果を強くする。道路・港湾・電力は中期効果を強くする。
 
 12. 為替・資本移動
 
@@ -340,6 +347,14 @@ TRF-RET-001 | retaliationHazardPer5ppPerQuarter | +0.02 | 0.005〜0.05 | G。
 関税を上げると、対象輸入を減らす一方で輸入価格と一部川下コストを上げることを必須とする。
 国内生産増を自動的な総GDP純増として扱わず、消費者負担・投入コスト・報復を同時に評価する。
 
+14.1 産業別生産・能力勘定
+
+産業別のGDPウェイトとloadingはNationProfileから読み、農業・資源、製造、建設、家計サービス、金融・不動産、エネルギー・物流の6部門を個別に更新する。各部門の生産には国内需要、生産性、世界需要、資源価格、risk premium、天候のloadingを適用し、各寄与を因果記録に残す。
+
+業種別loadingは `industryLoadings` に置き、国家プロフィールに合わせてConfigPackだけで変更できる。世界需要は外国成長率ギャップ、生産性はCORE-GROW-001、資源価格は前月からの資源価格変化、金利riskはDEBT-RISKから導出するpremium、天候は基準を超える災害alertを使う。
+
+重み付き産業生産と実質GDPの差は `industryAggregateResidual` として記録し、GDP合計への調整は業種別productionのreconciliation寄与として残す。雇用構成比は産業別生産成長に応じて再配分し、6業種の合計を1に正規化する。設備能力は生産調整、公共投資、生産性成長、減耗で更新する。
+
 15. 財政・政府債務
 
 taxRevenue =
@@ -353,35 +368,46 @@ primaryBalance = taxRevenue - primarySpending
 interestPayment = debtStock * effectiveDebtRateAnnual / 12
 debtNext = debtStock - primaryBalance + interestPayment
 
+為替換算による外貨建て政府債務評価差額を加え、国内債務と外貨建て債務の合計が政府債務と一致するようにする。
+
+debtValuationAdjustment = externalDebt * (fxNow / fxPrevious - 1)
+debtNext = debtStock - primaryBalance + interestPayment + debtValuationAdjustment
+
+政府債務、外貨準備、公共資本、産業別設備は毎月のstock-flow identityを満たし、各差分を因果寄与として記録する。外貨準備は経常収支と資本フローの合計で更新し、ゼロ未満にはしない。公共資本・産業設備は形成額と減耗額の寄与を記録する。
+
 市場金利変化は政府債務へ即時全量反映させず、平均満期を表すrepricingを通じて反映する。
 DEBT-REPRICE-001 | monthlyRepricingShare | 0.015 | 0.008〜0.030 | C。
 DEBT-RISK-001 | riskPremiumStartDebtRatio | 1.20 | 0.90〜1.60 | G/C。
+RISK-DEBT-001 | debt-ratio risk-premium slope | 0.015 annual rate per debt-ratio unit | 0〜0.080 | G/C。
 DEBT-RISK-002 | trustRiskPremiumSensitivity | 0.015 per 10 trust-point loss annual | 0.005〜0.030 | G/C。
 DEBT-MIN | governmentDebt | >=0 unless explicit asset-state extension is added。
+
+riskPremium = RISK-DEBT-001 * max(0, debtRatio - DEBT-RISK-001)
+            + DEBT-RISK-002 * max(0, (50 - policyTrust) / 10)
+effectiveDebtRate += DEBT-REPRICE-001 * (marketRate + riskPremium - effectiveDebtRate)
 
 16. 政策信頼・政治資本・実施能力
 
 このブロックは実証係数ではなくゲーム上の説明可能性を優先する。
 
 policyTrustDelta =
-  priceStabilityScore
-  + employmentScore
-  + consistencyScore
-  + promiseScore
-  + institutionRespectScore
+  meanReversion
+  + inflationStabilityResponse
+  + unemploymentGapResponse
+  + debtRatioResponse
   - crisisPenalty
   - reversalPenalty
 
 初期パラメータ:
 TRUST-STAB-001 | stable inflation reward | +0.10〜+0.30 point/month | G。
-TRUST-JOB-001 | unemployment deterioration penalty | -0.10 point per +0.5pp y/y | G。
+TRUST-U-001 | unemployment above natural rate response | config-driven | G/C。
+TRUST-DEBT-001 | debt ratio above anchor response | config-driven | G/C。
 TRUST-REV-001 | policy reversal within 2 quarters | -1.5 points | -0.5〜-3.0 | G。
-TRUST-CBI-001 | central bank independence violation | -3 points | -1〜-6 | G。
 TRUST-CRISIS-001 | unmanaged crisis monthly penalty | -1〜-4 | G。
-PCAP-REGEN-001 | politicalCapital monthly regeneration | +0.5 | 0.2〜1.0 | G。
+POLCAP-TRUST-001 | monthly political-capital response to trust | 0.08 | 0〜0.30 | G。
 IMPL-REGEN-001 | implementationCapacity monthly regeneration | +0.4 | 0.2〜0.8 | G。
 
-信頼は経済指標を上書きする万能変数にせず、主に為替risk premium、投資不確実性、政策コスト、イベントhazardへ弱く波及させる。
+信頼は経済指標を上書きする万能変数にせず、政府借入のrisk premiumと政治資本を通じて波及させる。予算効果を伴わない一律の信頼補正は加えない。信頼、政治資本、実施能力はそれぞれ0〜100にclampする。
 
 景況感は産出gapに対して部分調整し、消費者と企業で独立した乱数ストリームを使う。
 confidenceTarget = anchor + gapSensitivity * outputGap * 100

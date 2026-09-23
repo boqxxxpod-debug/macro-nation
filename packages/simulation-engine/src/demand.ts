@@ -48,6 +48,16 @@ const PARAMETER_IDS = [
   "IS-GAP-ERR-001",
   "IS-GAP-MIN-001",
   "IS-GAP-MAX-001",
+  "FISC-G-001",
+  "FISC-G-003",
+  "FISC-SLACK-THRESHOLD-001",
+  "FISC-BOOM-THRESHOLD-001",
+  "PINV-DEMAND-001",
+  "PINV-SLACK-001",
+  "PINV-CAP-001",
+  "PINV-DEBT-001",
+  "DEBT-RISK-001",
+  "PINV-DEMAND-HORIZON-001",
   "GDP-SHARE-C-001",
   "GDP-SHARE-I-001",
   "GDP-SHARE-G-001",
@@ -214,6 +224,42 @@ function annualToMonthly(rate: number): number {
   if (rate <= -1)
     throw new RangeError("annual rate must be greater than -100%");
   return Math.pow(1 + rate, 1 / 12) - 1;
+}
+
+function persistenceSum(persistence: number, horizon: number): number {
+  if (
+    !Number.isFinite(persistence) ||
+    persistence < 0 ||
+    persistence >= 1 ||
+    !Number.isInteger(horizon) ||
+    horizon <= 0
+  ) {
+    throw new RangeError("Public-investment response calibration is invalid");
+  }
+  let total = 0;
+  for (let month = 0; month < horizon; month += 1) {
+    total += persistence ** month;
+  }
+  return total;
+}
+
+function configuredBaselinePublicInvestment(
+  snapshot: ConfigSnapshot,
+  fallback: number,
+): number {
+  const nation = snapshot.normalizedConfig.nation;
+  if (!nation || typeof nation !== "object" || Array.isArray(nation)) {
+    return fallback;
+  }
+  const initial = (nation as { readonly initial?: unknown }).initial;
+  if (!initial || typeof initial !== "object" || Array.isArray(initial)) {
+    return fallback;
+  }
+  const value = (initial as { readonly publicInvestment?: unknown })
+    .publicInvestment;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : fallback;
 }
 
 function macroSource(
@@ -480,7 +526,10 @@ export function updateDemandAndGdp(input: DemandInput): DemandOutput {
   const g0 = e.flows.governmentConsumption;
   const x0 = e.flows.exports;
   const m0 = e.flows.imports;
-  const publicInvestment0 = e.flows.publicInvestment;
+  const publicInvestment0 = configuredBaselinePublicInvestment(
+    input.configSnapshot,
+    e.flows.publicInvestment,
+  );
   const cError =
     Math.sqrt(3) * parameter(p, "CONS-ERR-001") * (2 * cDraw.value - 1);
   const iError =
@@ -704,15 +753,12 @@ export function updateDemandAndGdp(input: DemandInput): DemandOutput {
     },
   ];
 
-  const fiscalTerms = [
-    ...scheduledTerms(
-      input.effects,
-      input.monthIndex,
-      "economy.flows.governmentConsumption",
-      g0,
-    ),
-    ...publicInvestmentTerms,
-  ];
+  const governmentFiscalTerms = scheduledTerms(
+    input.effects,
+    input.monthIndex,
+    "economy.flows.governmentConsumption",
+    g0,
+  );
   const gapMinimum = parameter(p, "IS-GAP-MIN-001");
   const gapMaximum = parameter(p, "IS-GAP-MAX-001");
   if (gapMinimum <= -1 || gapMinimum >= gapMaximum) {
@@ -731,11 +777,59 @@ export function updateDemandAndGdp(input: DemandInput): DemandOutput {
     macroSource("IS-GAP-RATE-001"),
     (-parameter(p, "IS-GAP-RATE-001") * realRateGap) / 12,
   );
-  for (const term of fiscalTerms) {
+  for (const term of governmentFiscalTerms) {
     outputGapBuilder.add(
       term.source,
       parameter(p, "IS-GAP-FISCAL-001") *
         (term.delta / Math.max(gdpBefore, 1e-9)),
+    );
+  }
+  const demandHorizon = parameter(p, "PINV-DEMAND-HORIZON-001");
+  const persistenceResponse = persistenceSum(
+    parameter(p, "IS-GAP-PERSIST-001"),
+    demandHorizon,
+  );
+  const importDependency = Object.values(e.industries).reduce(
+    (sum, industry) =>
+      sum + industry.employmentShare * industry.importDependency,
+    0,
+  );
+  const slackThreshold = parameter(p, "FISC-SLACK-THRESHOLD-001");
+  const boomThreshold = parameter(p, "FISC-BOOM-THRESHOLD-001");
+  const publicInvestmentRegimeMultiplier =
+    outputGapBefore <= slackThreshold
+      ? parameter(p, "PINV-SLACK-001")
+      : outputGapBefore >= boomThreshold
+        ? parameter(p, "FISC-G-003") / parameter(p, "FISC-G-001")
+        : parameter(p, "FISC-G-001");
+  for (const term of publicInvestmentTerms) {
+    const projectLoad =
+      (Math.max(0, term.delta) / Math.max(gdpBefore, 1e-9)) * 100;
+    const availableCapacity =
+      e.institutions.implementationCapacity * parameter(p, "PINV-CAP-001");
+    const capacityFactor =
+      projectLoad > 0 && projectLoad > availableCapacity
+        ? availableCapacity / projectLoad
+        : 1;
+    const debtFactor = Math.max(
+      0,
+      1 -
+        parameter(p, "PINV-DEBT-001") *
+          Math.max(
+            0,
+            e.ratios.governmentDebtRatio - parameter(p, "DEBT-RISK-001"),
+          ),
+    );
+    outputGapBuilder.add(
+      term.source,
+      ((parameter(p, "PINV-DEMAND-001") *
+        (term.delta / Math.max(gdpBefore, 1e-9))) /
+        0.01 /
+        persistenceResponse) *
+        publicInvestmentRegimeMultiplier *
+        (1 - importDependency) *
+        capacityFactor *
+        debtFactor,
     );
   }
   outputGapBuilder.add(

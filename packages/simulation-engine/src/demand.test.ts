@@ -79,6 +79,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),
@@ -157,12 +158,25 @@ function snapshot(
         "IS-GAP-ERR-001": 0,
         "IS-GAP-MIN-001": -0.15,
         "IS-GAP-MAX-001": 0.12,
+        "FISC-G-001": 0.8,
+        "FISC-G-003": 0.4,
+        "FISC-SLACK-THRESHOLD-001": -0.02,
+        "FISC-BOOM-THRESHOLD-001": 0.02,
+        "PINV-DEMAND-001": 0.004,
+        "PINV-SLACK-001": 1.25,
+        "PINV-CAP-001": 0.8,
+        "PINV-DEBT-001": 0.25,
+        "DEBT-RISK-001": 1.2,
+        "PINV-DEMAND-HORIZON-001": 12,
         "GDP-SHARE-C-001": 0.6,
         "GDP-SHARE-I-001": 0.18,
         "GDP-SHARE-G-001": 0.2,
         "GDP-SHARE-X-001": 0.25,
         "GDP-SHARE-M-001": 0.23,
         ...overrides,
+      },
+      nation: {
+        initial: { publicInvestment: 4 },
       },
     },
   };
@@ -173,11 +187,12 @@ function run(
   config = snapshot(),
   effects: readonly ScheduledEffect[] = [],
   rng = createRngBundle("demand-test"),
+  monthIndex = 0,
 ) {
   return updateDemandAndGdp({
     economy: state,
     effects,
-    monthIndex: 0,
+    monthIndex,
     configSnapshot: config,
     rng,
     rngProvider: XOSHIRO_TICK_RNG_PROVIDER,
@@ -326,6 +341,52 @@ describe("demand and GDP block", () => {
     expect(foreignShock).toBeGreaterThan(base);
     expect(fxShock).toBeGreaterThan(base);
     expect(confidenceShock).toBeGreaterThan(base);
+  });
+
+  it("calibrates a twelve-month 1% GDP public-investment program to the year-one response band", () => {
+    const parameters = snapshot({
+      "IS-GAP-PERSIST-001": 0.98,
+      "IS-GAP-FISCAL-001": 0,
+      "PINV-DEMAND-001": 0.004,
+    });
+    const program: ScheduledEffect = {
+      ...effect("economy.flows.publicInvestment", 1),
+      endMonth: 11,
+      weights: Array(12).fill(1),
+      totalWeight: 12,
+    };
+    const seed = createRngBundle("public-investment-irf");
+    let baseline = economy();
+    let variant = economy();
+    for (let month = 0; month < 12; month += 1) {
+      baseline = run(baseline, parameters, [], seed, month).economy;
+      variant = run(variant, parameters, [program], seed, month).economy;
+    }
+    const response = variant.indices.realGdp / baseline.indices.realGdp - 1;
+    expect(response).toBeGreaterThanOrEqual(0.002);
+    expect(response).toBeLessThanOrEqual(0.008);
+    expect(response).toBeCloseTo(0.00256, 4);
+    expect(variant.flows.publicInvestment).toBe(5);
+  });
+
+  it("reduces public-investment demand response above the configured debt threshold", () => {
+    const state = economy();
+    const highDebt: EconomyState = {
+      ...state,
+      ratios: { ...state.ratios, governmentDebtRatio: percentRate(2) },
+    };
+    const investmentEffect = effect("economy.flows.publicInvestment", 1);
+    const normalBase = run(state).economy.indices.realGdp;
+    const normalProgram = run(state, snapshot(), [investmentEffect]).economy
+      .indices.realGdp;
+    const highDebtBase = run(highDebt).economy.indices.realGdp;
+    const highDebtProgram = run(highDebt, snapshot(), [investmentEffect])
+      .economy.indices.realGdp;
+
+    expect(normalProgram - normalBase).toBeGreaterThan(0);
+    expect(highDebtProgram - highDebtBase).toBeLessThan(
+      normalProgram - normalBase,
+    );
   });
 
   it("keeps component effects from being counted twice in aggregate GDP", () => {

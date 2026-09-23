@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PRIMARY_INDICATOR_IDS, type ParameterDefinition } from "@macro-nation/domain";
+import { INDUSTRY_IDS, PRIMARY_INDICATOR_IDS, type ParameterDefinition } from "@macro-nation/domain";
 import {
   calibrationTargetsSchema,
   contentSchema,
@@ -171,6 +171,17 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   if (pack.scenario.nationId !== pack.nation.nationId) {
     throw new Error("Scenario nationId does not match loaded NationProfile");
   }
+  const expectedIndustryKeys = [...INDUSTRY_IDS].sort();
+  if (Object.keys(pack.nation.industryStructure).sort().join(",") !== expectedIndustryKeys.join(",")) {
+    throw new Error("NationProfile must define exactly the six supported industries");
+  }
+  const industryShareTotal = Object.values(pack.nation.industryStructure).reduce((sum, value) => sum + value, 0);
+  if (Math.abs(industryShareTotal - 1) > 1e-10) {
+    throw new Error("NationProfile industry shares must sum to one");
+  }
+  if (Object.keys(pack.nation.industryLoadings).sort().join(",") !== expectedIndustryKeys.join(",")) {
+    throw new Error("NationProfile must define loadings for all six industries");
+  }
   for (const [name, range] of Object.entries(pack.limits.hard) as [string, [number, number]][]) {
     if (range[0] > range[1]) throw new Error(`Invalid hard limit ${name}`);
   }
@@ -204,6 +215,16 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   }
 
   const definitions = new Map(pack.coefficients.map((item) => [item.parameterId, item]));
+  const publicInvestmentLagStart = definitions.get("PINV-SUPPLY-LAG-START-001")?.default;
+  const publicInvestmentLagEnd = definitions.get("PINV-SUPPLY-LAG-END-001")?.default;
+  if (publicInvestmentLagStart === undefined || publicInvestmentLagEnd === undefined || publicInvestmentLagStart >= publicInvestmentLagEnd) {
+    throw new Error("Public-investment supply lag must satisfy start < end");
+  }
+  for (const targetId of ["PINV-GDP-12M", "PINV-POTENTIAL-48M"]) {
+    if (!pack.calibrationTargets.irf.some((target) => target.targetId === targetId)) {
+      throw new Error(`Missing public-investment calibration target ${targetId}`);
+    }
+  }
   for (const parameterId of pack.manifest.overrideAllowlist) {
     if (!definitions.has(parameterId)) {
       throw new Error(`Override allowlist references unknown parameter ${parameterId}`);

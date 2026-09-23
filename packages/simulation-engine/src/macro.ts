@@ -4,6 +4,7 @@ import {
   logIndex,
   percentRate,
   scorePoint,
+  stockLevel,
   type CausalContribution,
   type CausalMetricId,
   type CausalRef,
@@ -551,6 +552,7 @@ export function updatePricesLabor(input: MacroInput): MacroOutput {
         businessConfidence: scorePoint(businessConfidence.value),
       },
       memory: {
+        ...e.memory,
         previousRealGdp: indexLevel(e.indices.realGdp),
         outputGrowthGapHistory: outputGrowthGapHistory.map(percentRate),
       },
@@ -632,13 +634,41 @@ export function updateFx(input: MacroInput): MacroOutput {
   const capitalFlow = flowPerMonth(
     (e.rates.marketRate - e.rates.foreignRate) * e.indices.realGdp,
   );
+  const reserveChangeTerms = [
+    {
+      source: source("reserve-current-account", "external"),
+      delta: e.flows.currentAccount,
+    },
+    {
+      source: source("reserve-capital-flow", "external"),
+      delta: capitalFlow,
+    },
+    ...activeEffects(
+      input.effects,
+      input.monthIndex,
+      "economy.flows.foreignReserveChange",
+      e.flows.foreignReserveChange ?? 0,
+    ),
+  ];
+  const reserves = build(
+    "foreignReserves",
+    e.stocks.foreignReserves,
+    reserveChangeTerms,
+    0,
+  );
+  const foreignReserveChange = reserves.value - e.stocks.foreignReserves;
   return {
     rng,
-    causal: [fx.causal],
+    causal: [fx.causal, reserves.causal],
     economy: {
       ...e,
       indices: { ...e.indices, fx: indexLevel(fx.value) },
-      flows: { ...e.flows, capitalFlow },
+      flows: {
+        ...e.flows,
+        capitalFlow,
+        foreignReserveChange: flowPerMonth(foreignReserveChange),
+      },
+      stocks: { ...e.stocks, foreignReserves: stockLevel(reserves.value) },
       external: { ...e.external, fxShockLogIndex: logIndex(logChange) },
     },
   };
