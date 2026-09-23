@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { INDUSTRY_IDS, PRIMARY_INDICATOR_IDS, type ParameterDefinition } from "@macro-nation/domain";
+import {
+  INDUSTRY_IDS,
+  CORE_INDICATOR_DEFINITIONS,
+  PRIMARY_INDICATOR_IDS,
+  createIndicatorRegistry,
+  type IndicatorDefinition,
+  type IndicatorSelector,
+  type ConfigSnapshot,
+  type ParameterDefinition,
+} from "@macro-nation/domain";
 import {
   calibrationTargetsSchema,
   contentSchema,
@@ -20,6 +29,32 @@ import {
 
 function unique(values: readonly string[], label: string): void {
   if (new Set(values).size !== values.length) throw new Error(`Duplicate ${label} ID`);
+}
+
+/** Use the saved content snapshot on resume, never the newest downloaded pack. */
+export function createSnapshotIndicatorRegistry(
+  snapshot: ConfigSnapshot,
+  selectors: Readonly<Record<string, IndicatorSelector>> = {},
+) {
+  const content = contentSchema.parse(snapshot.normalizedConfig.content);
+  const definitions = [
+    ...CORE_INDICATOR_DEFINITIONS,
+    ...(content.indicatorDefinitions ?? []),
+  ] as IndicatorDefinition[];
+  const registry = createIndicatorRegistry(definitions, selectors);
+  const listed = new Set(content.indicators);
+  if (
+    listed.size !== content.indicators.length ||
+    registry.definitions.some(
+      (definition) => !listed.has(definition.indicatorId),
+    ) ||
+    listed.size !== registry.definitions.length
+  ) {
+    throw new Error(
+      "Snapshot indicator catalog does not match content indicator IDs",
+    );
+  }
+  return registry;
 }
 
 function positiveDefinite(matrix: readonly (readonly number[])[]): boolean {
@@ -96,7 +131,10 @@ function validateEventCycles(events: readonly { eventId: string; dependsOn: read
   events.forEach((event) => visit(event.eventId));
 }
 
-export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
+export function parseConfigPack(
+  input: ConfigPackInput,
+  indicatorSelectors: Readonly<Record<string, IndicatorSelector>> = {},
+): ParsedConfigPack {
   const pack: ParsedConfigPack = {
     manifest: manifestSchema.parse(input.manifest),
     coefficients: z.array(parameterDefinitionSchema).parse(input.coefficients) as ParameterDefinition[],
@@ -118,6 +156,7 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   unique(pack.policyRules.map((item) => item.policyId), "policy rule");
   unique(pack.sources.map((item) => item.sourceId), "source");
   unique(pack.content.indicators, "indicator");
+  unique(pack.content.indicatorDefinitions?.map((item) => item.indicatorId) ?? [], "indicator definition");
   unique(pack.content.policies, "policy");
   unique(pack.content.events.map((item: { eventId: string }) => item.eventId), "event");
 
@@ -139,6 +178,36 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   for (const id of PRIMARY_INDICATOR_IDS) {
     if (!indicatorSet.has(id)) throw new Error(`Missing primary indicator ${id}`);
   }
+  const coreIds = new Set<string>(PRIMARY_INDICATOR_IDS);
+  for (const definition of pack.content.indicatorDefinitions ?? []) {
+    if (coreIds.has(definition.indicatorId)) {
+      throw new Error(
+        `Core indicator cannot be redefined: ${definition.indicatorId}`,
+      );
+    }
+    if (!indicatorSet.has(definition.indicatorId)) {
+      throw new Error(
+        `Unlisted indicator definition ${definition.indicatorId}`,
+      );
+    }
+    if (!pack.content.textKeys.includes(definition.labelKey)) {
+      throw new Error(`Missing indicator label ${definition.labelKey}`);
+    }
+  }
+  const indicatorRegistry = createIndicatorRegistry(
+    [
+      ...CORE_INDICATOR_DEFINITIONS,
+      ...(pack.content.indicatorDefinitions ?? []),
+    ] as IndicatorDefinition[],
+    indicatorSelectors,
+  );
+  const definedIds = new Set(
+    indicatorRegistry.definitions.map((item) => item.indicatorId),
+  );
+  for (const id of pack.content.indicators) {
+    if (!definedIds.has(id))
+      throw new Error(`Missing indicator definition ${id}`);
+  }
   for (const target of pack.calibrationTargets.irf) {
     if (!indicatorSet.has(target.indicatorId)) {
       throw new Error(`Unknown calibration indicator ${target.indicatorId}`);
@@ -151,8 +220,17 @@ export function parseConfigPack(input: ConfigPackInput): ParsedConfigPack {
   }
 
   const policySet = new Set(pack.content.policies);
+  const ruleIds = new Set(pack.policyRules.map((rule) => rule.policyId));
+  for (const policyId of policySet) {
+    if (!ruleIds.has(policyId)) throw new Error(`Missing policy rule ${policyId}`);
+  }
   for (const rule of pack.policyRules) {
     if (!policySet.has(rule.policyId)) throw new Error(`Unknown policy ${rule.policyId}`);
+    for (const input of rule.inputs ?? []) {
+      if (!pack.content.textKeys.includes(input.labelKey)) {
+        throw new Error(`Missing policy input label ${input.labelKey}`);
+      }
+    }
   }
   for (const id of pack.scenario.enabledPolicies) {
     if (!policySet.has(id)) throw new Error(`Scenario references missing policy ${id}`);

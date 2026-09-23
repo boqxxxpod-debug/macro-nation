@@ -274,6 +274,42 @@ describe("domain invariants", () => {
     expect(canTransitionRunState("awaitingEvent", "running")).toBe(true);
   });
 
+  it("rejects a saved policy containing a non-finite new input", () => {
+    const valid = state();
+    const invalid: GameState = {
+      ...valid,
+      policies: {
+        ...valid.policies,
+        active: [
+          {
+            policyId: "p2",
+            type: "housingTax",
+            decidedMonth: 0,
+            activationMonth: 0,
+            status: "active",
+            slotQuarter: 0,
+            sourceCommandId: "c2",
+            costs: {
+              politicalCapital: 0,
+              implementationCapacity: 0,
+              foreignReserves: 0,
+              immediateBudget: 0,
+            },
+            inputs: { rate: Number.NaN },
+          },
+        ],
+      },
+    };
+    expect(validateState(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "INVALID_POLICY_INPUT",
+          path: "policies.p2.inputs.rate",
+        }),
+      ]),
+    );
+  });
+
   it("treats replay config identity mismatch as a hard error", () => {
     expect(() =>
       assertReproducibleConfig(
