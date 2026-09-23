@@ -305,8 +305,27 @@ replay(log: ReplayPackage): Result<ReplayOutput, ReplayError>
 13. 因果寄与を照合し、月次snapshotと新しい乱数状態を確定する。
 14. 最終検証に成功した場合だけTickOutputを返す。失敗時は入力stateを保持してENGINE_TICK_FAILEDを返す。
 7 3 基本計算
-年間率はannualRateToMonthlyで月率へ変換する。内部では小数を使用し、画面でのみ丸める。需要構成は基準シェアを持つ指数として更新し、実質GDPは構成要素の恒等式から再計算する。
+年間率はannualRateToMonthlyで月率へ変換する。内部では小数を使用し、画面でのみ丸める。需要項目はGDP loadingと構成残差から更新し、実質GDPは潜在GDPと産出gapから算出する。需要項目と実質GDPは常に会計恒等式で一致させる。
 monthlyRate = pow(1 + annualRate, 1 / 12) - 1
+realRateGap = marketRate - expectedInflation - neutralRealRate
+fiscalImpulse = (scheduledGovernmentConsumption + scheduledPublicInvestment) / previousRealGdp
+realExchangeRateGap = fxIndex / cpiIndex - 1
+confidenceGap = (consumerConfidence + businessConfidence - 100) / 100
+outputGap = clamp(
+  outputGapPersistence * previousOutputGap
+  - realRateCoefficient * realRateGap / 12
+  + fiscalCoefficient * fiscalImpulse
+  + foreignDemandCoefficient * foreignGrowthGap / 12
+  + exchangeRateCoefficient * realExchangeRateGap
+  + confidenceCoefficient * confidenceGap / 12
+  + demandShock,
+  outputGapMin,
+  outputGapMax
+)
+realGdp = potentialGdp * (1 + outputGap)
+componentDelta[j] = gdpShare[j] * (realGdp - previousDemandSum) + compositionResidual[j]
+sum(sign[j] * compositionResidual[j]) = 0
+realGdp = C + I + G + X - M
 consumptionGrowth =
   baselineConsumption
   + incomeCoefficient * realIncomeGrowth
@@ -325,13 +344,18 @@ investmentGrowth =
   + corporateTaxEffects
   + scheduledEffects
   + randomError
-realGdp =
-  cShare * consumption
-  + iShare * investment
-  + gShare * governmentConsumption
-  + xShare * exports
-  - mShare * imports
-初期の構成シェアは消費0.60、投資0.18、政府0.20、輸出0.25、輸入0.23とし、純合計を1.00にする。各シナリオで変更できる。指数更新はpreviousValue × 1 + growthとし、各growth要因をpreviousValue倍することで寄与度を厳密に合計できる。
+exportsGrowth =
+  foreignDemandCoefficient * foreignGrowthGap / 12
+  + exchangeRateCoefficient * realExchangeRateGap / 12
+  + scheduledEffects
+  + randomError
+importsGrowth =
+  demandCoefficient * previousOutputGap / 12
+  + exchangeRateCoefficient * realExchangeRateGap / 12
+  + scheduledEffects
+  + randomError
+初期のGDP loadingは消費0.60、投資0.18、政府0.20、輸出0.25、輸入0.23とし、C+I+G+X-Mの純合計を1.00にする。各シナリオで変更できる。realExchangeRateGapは現行stateに外国物価指数がないため、外国価格を100に固定した為替指数をCPIで実質化する。構成項目の成長、外需、金利等の寄与をcompositionResidualへ分け、signed residualの合計をゼロにすることで、直接効果をIS式へ二重計上せず項目構成には残す。残差の尺度は各項目を非負に保つ範囲で選ぶ。すべての項目deltaとGDP deltaにCausalContributionを発行し、寄与合計を検証する。
+月次batch diagnosticsは産出gap、実質GDP前年比・前期比年率、各需要項目の成長率とGDP成長への寄与、因果source別寄与を集計する。成長率相関の校正判定は、12か月warmup後の前期比年率系列で行う。
 7 4 供給 物価 雇用
 potentialGrowth =
   baselineProductivity
