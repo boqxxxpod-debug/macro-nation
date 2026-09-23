@@ -90,6 +90,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),

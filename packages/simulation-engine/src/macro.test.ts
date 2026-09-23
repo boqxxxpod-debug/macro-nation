@@ -52,7 +52,17 @@ const PARAMETERS: Readonly<Record<string, number>> = {
   "FX-SPEC-001": 0.15,
   "FX-ERR-001": 0,
   "RISK-DEBT-001": 0.015,
-  "RISK-TRUST-001": 0.01,
+  "DEBT-RISK-001": 1.2,
+  "DEBT-RISK-002": 0.015,
+  "FISC-G-001": 0.8,
+  "FISC-G-003": 0.4,
+  "FISC-SLACK-THRESHOLD-001": -0.02,
+  "FISC-BOOM-THRESHOLD-001": 0.02,
+  "PINV-DEMAND-001": 0.004,
+  "PINV-SLACK-001": 1.25,
+  "PINV-CAP-001": 0.8,
+  "PINV-DEBT-001": 0.25,
+  "PINV-DEMAND-HORIZON-001": 12,
   "CONS-BASE-001": 0.015,
   "CONS-Y-001": 0.6,
   "CONS-R-001": 0.45,
@@ -173,6 +183,7 @@ function economy(): EconomyState {
       domesticGovernmentDebt: stockLevel(800),
       externalGovernmentDebt: stockLevel(280),
       foreignReserves: stockLevel(300),
+      publicCapital: stockLevel(0),
     },
     sentiment: {
       consumerConfidence: scorePoint(50),
@@ -524,7 +535,8 @@ describe("prices, employment, expectations and FX", () => {
           indices: {
             ...state.indices,
             realGdp: indexLevel(
-              state.memory!.previousRealGdp * Math.pow(1.018, 1 / 12),
+              (state.memory?.previousRealGdp ?? state.indices.realGdp) *
+                Math.pow(1.018, 1 / 12),
             ),
           },
         };
@@ -667,5 +679,25 @@ describe("prices, employment, expectations and FX", () => {
     );
     expect(second).toEqual(first);
     expect(first.rng.streams["error.fx"]?.drawCount).toBe(1);
+  });
+
+  it("reconciles foreign reserves to the current-account and capital-flow balance", () => {
+    const initial = economy();
+    const result = updateFx(input(initial));
+    const reserveDelta =
+      result.economy.stocks.foreignReserves - initial.stocks.foreignReserves;
+
+    expect(result.economy.flows.foreignReserveChange).toBeCloseTo(
+      reserveDelta,
+      10,
+    );
+    expect(reserveDelta).toBeCloseTo(
+      initial.flows.currentAccount + result.economy.flows.capitalFlow,
+      10,
+    );
+    expect(
+      result.causal.find((item) => item.indicatorId === "foreignReserves")
+        ?.totalDelta,
+    ).toBeCloseTo(reserveDelta, 10);
   });
 });

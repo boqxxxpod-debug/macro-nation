@@ -21,10 +21,19 @@ export type CausalMetricId =
   | "taxRevenue"
   | "primarySpending"
   | "interestPayment"
+  | "primaryBalance"
+  | "debtValuationAdjustment"
   | "governmentDebt"
+  | "publicCapital"
+  | "foreignReserves"
+  | "implementationCapacity"
+  | "industryAggregateResidual"
   | "policyTrust"
   | "politicalCapital"
-  | `industry.${string}.production`;
+  | `industry.${string}.production`
+  | `industry.${string}.capacity`
+  | `industry.${string}.employment`
+  | `industry.${string}.importDependency`;
 export type CausalConfidence = "high" | "medium" | "low";
 
 export interface CausalRef {
