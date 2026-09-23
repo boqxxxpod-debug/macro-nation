@@ -1,7 +1,7 @@
 import {
   flowPerMonth,indexLevel,logIndex,percentRate,
   type CausalContribution,type CausalMetricId,type CausalRef,type ConfigSnapshot,
-  type EconomyState,type GameState,type RngBundle,type ScheduledEffect,
+  type EconomyState,type RngBundle,type ScheduledEffect,
 } from "@macro-nation/domain";
 import { createContributionBuilder } from "./causal";
 import type { TickRngProvider,TickStageHandler } from "./tick";

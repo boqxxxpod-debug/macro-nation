@@ -16,7 +16,7 @@ import {
 } from "./rng";
 import { ENGINE_VERSION } from "./version";
 
-export const TICK_STAGE_ORDER = [
+export const TICK_STAGE_ORDER_V0_1_1 = Object.freeze([
   "validateInput",
   "createContext",
   "activateReservedPolicies",
@@ -31,11 +31,22 @@ export const TICK_STAGE_ORDER = [
   "evaluateEventsCrisisCompletion",
   "reconcileCausalAndFinalizeSnapshot",
   "finalValidation",
-] as const;
+] as const);
 
-export type TickStageId = (typeof TICK_STAGE_ORDER)[number];
+export type TickStageId = (typeof TICK_STAGE_ORDER_V0_1_1)[number];
 
-export const TICK_MUTABLE_STAGE_IDS = [
+/**
+ * The explicit version key makes an Engine Version bump fail typechecking until
+ * its stage order is registered. Keep each order immutable and golden-tested.
+ */
+export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
+  "0.1.1": TICK_STAGE_ORDER_V0_1_1,
+});
+
+export const TICK_STAGE_ORDER =
+  TICK_STAGE_ORDER_BY_ENGINE_VERSION[ENGINE_VERSION];
+
+export const TICK_MUTABLE_STAGE_IDS = Object.freeze([
   "activateReservedPolicies",
   "updateExternalEnvironment",
   "collectScheduledEffects",
@@ -46,7 +57,7 @@ export const TICK_MUTABLE_STAGE_IDS = [
   "updateFxCapitalReservesTrust",
   "updateHouseholdDistributionSupportPolitics",
   "evaluateEventsCrisisCompletion",
-] as const;
+] as const);
 
 export type TickMutableStageId = (typeof TICK_MUTABLE_STAGE_IDS)[number];
 
