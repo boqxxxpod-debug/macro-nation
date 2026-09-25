@@ -46,6 +46,7 @@ export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
   "0.1.4": TICK_STAGE_ORDER_V0_1_1,
   "0.1.5": TICK_STAGE_ORDER_V0_1_1,
   "0.1.6": TICK_STAGE_ORDER_V0_1_1,
+  "0.1.7": TICK_STAGE_ORDER_V0_1_1,
 });
 
 export const TICK_STAGE_ORDER =

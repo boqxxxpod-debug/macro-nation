@@ -49,6 +49,14 @@ const draft: PolicyDraft = {
 };
 
 describe("paired policy preview", () => {
+  it("previews a paused policy meeting without advancing the saved game", () => {
+    const paused: GameState = { ...state, runState: "paused" };
+    const result = previewPolicy({ state: paused, draft, horizonMonths: 12 });
+    expect(result.irf.policyRate).toHaveLength(12);
+    expect(result.stateHash).toBe(policyStateHash(paused));
+    expect(paused.runState).toBe("paused");
+    expect(paused.monthIndex).toBe(0);
+  });
   it("runs 12/60-month IRFs without touching live state or RNG and is repeatable", () => {
     const original = JSON.stringify(state);
     const input = { state, draft };

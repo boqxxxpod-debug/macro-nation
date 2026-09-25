@@ -282,6 +282,20 @@ export interface RngBundle {
 export interface HistoryIndex {
   readonly snapshotMonths: readonly number[];
   readonly lastReviewMonth?: number;
+  /** Compact, saved monthly values and causes for the report screen. */
+  readonly reports?: readonly MonthlyReportSnapshot[];
+}
+
+export interface MonthlyReportSnapshot {
+  readonly monthIndex: number;
+  readonly values: Readonly<Record<string, number>>;
+  readonly topCauses: readonly {
+    readonly indicatorId: string;
+    readonly sourceType: string;
+    readonly sourceId: string;
+    readonly labelKey: string;
+    readonly delta: number;
+  }[];
 }
 
 export interface ConfigSnapshot extends ConfigIdentity {

@@ -189,8 +189,8 @@ function run(
 }
 
 describe("atomic monthly tick", () => {
-  it("pins the 14-stage order to Engine Version 0.1.6", () => {
-    expect(ENGINE_VERSION).toBe("0.1.6");
+  it("pins the 14-stage order to Engine Version 0.1.7", () => {
+    expect(ENGINE_VERSION).toBe("0.1.7");
     expect(TICK_STAGE_ORDER_BY_ENGINE_VERSION[ENGINE_VERSION]).toBe(
       TICK_STAGE_ORDER_V0_1_1,
     );
@@ -277,6 +277,22 @@ describe("atomic monthly tick", () => {
           "finalValidation",
         ],
         "0.1.6": [
+          "validateInput",
+          "createContext",
+          "activateReservedPolicies",
+          "updateExternalEnvironment",
+          "collectScheduledEffects",
+          "updateDemand",
+          "updateOutputSupplyIndustries",
+          "updatePricesLabor",
+          "updateFiscal",
+          "updateFxCapitalReservesTrust",
+          "updateHouseholdDistributionSupportPolitics",
+          "evaluateEventsCrisisCompletion",
+          "reconcileCausalAndFinalizeSnapshot",
+          "finalValidation",
+        ],
+        "0.1.7": [
           "validateInput",
           "createContext",
           "activateReservedPolicies",
