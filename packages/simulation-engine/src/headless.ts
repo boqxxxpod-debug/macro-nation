@@ -25,12 +25,15 @@ import {
   tick,
   type TickDiagnostics,
   type TickMutableStageId,
+  type TickRngProvider,
   type TickStageHandler,
 } from "./tick";
 
 export interface NoPolicyRunInput {
   readonly initialState: GameState;
   readonly tickCount: number;
+  /** Preview can provide fixed shock quantiles without changing the live RNG. */
+  readonly rngProvider?: TickRngProvider;
   /** Set false for large seed batches that only need final indicators and failures. */
   readonly collectTrace?: boolean;
   readonly onTick?: (record: HeadlessTickRecord) => void;
@@ -721,7 +724,7 @@ function runHeadless(
       expectedTickSequence: state.tickSequence,
       clockConfig: state.clock.config,
       configSnapshot: state.configSnapshot,
-      rngProvider: XOSHIRO_TICK_RNG_PROVIDER,
+      rngProvider: input.rngProvider ?? XOSHIRO_TICK_RNG_PROVIDER,
       handlers: NO_POLICY_HANDLERS,
     });
     if (!result.ok) {
