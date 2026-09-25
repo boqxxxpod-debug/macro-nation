@@ -122,6 +122,7 @@ function activeEffects(
       source: {
         sourceType: effect.sourceType,
         sourceId: effect.sourceId,
+        effectId: effect.effectId,
         labelKey: effect.labelKey,
         confidence: "high",
       },

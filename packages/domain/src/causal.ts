@@ -39,6 +39,8 @@ export type CausalConfidence = "high" | "medium" | "low";
 export interface CausalRef {
   readonly sourceType: CausalSourceType;
   readonly sourceId: string;
+  /** ScheduledEffect ID when this term comes from the effect queue. */
+  readonly effectId?: string;
   readonly labelKey: string;
   readonly confidence: CausalConfidence;
 }

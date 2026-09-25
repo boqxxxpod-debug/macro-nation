@@ -30,7 +30,7 @@ interface NoPolicyGoldenFixture {
 
 const goldenFixture = JSON.parse(
   readFileSync(
-    new URL("./fixtures/scn01-no-policy-golden-v3.json", import.meta.url),
+    new URL("./fixtures/scn01-no-policy-golden-v4.json", import.meta.url),
     "utf8",
   ),
 ) as NoPolicyGoldenFixture;

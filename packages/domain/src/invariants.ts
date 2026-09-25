@@ -154,6 +154,12 @@ export function validateState(state: GameState): ValidationIssue[] {
     if (e.memory.baselinePotentialGdp !== undefined) {
       numberRule(issues, "economy.memory.baselinePotentialGdp", e.memory.baselinePotentialGdp, [Number.MIN_VALUE, Number.MAX_VALUE]);
     }
+    if (e.memory.completedPolicyPotential !== undefined) {
+      numberRule(issues, "economy.memory.completedPolicyPotential", e.memory.completedPolicyPotential, undefined, true);
+    }
+    if (e.memory.appliedPolicyPotential !== undefined) {
+      numberRule(issues, "economy.memory.appliedPolicyPotential", e.memory.appliedPolicyPotential, undefined, true);
+    }
     e.memory.publicCapitalFormationHistory?.forEach((value, index) =>
       numberRule(issues, `economy.memory.publicCapitalFormationHistory[${index}]`, value, undefined, true),
     );

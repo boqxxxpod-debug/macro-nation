@@ -12,7 +12,7 @@ import {
 } from "@macro-nation/simulation-engine";
 
 const fixturePath =
-  "packages/simulation-engine/src/fixtures/scn01-no-policy-golden-v3.json";
+  "packages/simulation-engine/src/fixtures/scn01-no-policy-golden-v4.json";
 const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 const pack = await loadSCN01ConfigPack();
 const configSnapshot = await createConfigSnapshot(

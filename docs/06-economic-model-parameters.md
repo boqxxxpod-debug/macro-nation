@@ -543,6 +543,12 @@ Engine v0.1.3 / Config v0.1.1で、同一seed・同一shock streamのbaselineと
 
 旧Model v0.1.0のGolden fixtureは保持し、v0.1.1を別fixtureとした。LAB-OKUN-001は0.47→0.54（金融政策の失業率24か月差を帯域内へ）、PINV-DEMAND-001は0.004→0.007（公共投資の12か月GDP差を帯域内へ）、FXI-EFF-001は旧標準0.015→0.006（実証校正追補の標準へ）とした。政策効果はConfigの非負・総和1のkernelとeffect specで表し、FXIのピーク後半減は4か月である。経済式、評価閾値、旧fixtureはこの調整で変更していない。
 
+21.2 Model v0.1.2 公共資本供給ラグの接続
+
+Engine v0.1.4では、公共事業の12/36/84か月kernelを潜在GDPへ累積適用するScheduledEffectとして接続した。発動後の短期公共投資flowが形成する直接資本は既存のビンテージ供給計算から除き、政策以外の資本形成のみを同経路に残すため、同一支出の供給効果を二重計上しない。資本stockには全形成額を記録する。kernel終了後は成熟した供給水準をmemoryへ持ち越し、85か月目に効果が消えない。effectIdとpolicyIdは潜在GDPの因果寄与へ残す。
+
+16 seedのpaired IRFでは、1%GDP公共事業の48か月潜在GDP差は+0.796%で目標帯域内。12か月GDP差と他の政策ゲートはv0.1.1から変わらず合格した。旧v1〜v3 Golden fixtureは保持し、v4をModel v0.1.2用に追加する。
+
 22. Config実装例
 
 model:
