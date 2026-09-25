@@ -92,3 +92,17 @@ VITE_BASE_PATH=/macro-nation/ XSERVER_BASE_PATH=/macro-nation/ npm run build:xse
 The deploy helper writes the SPA fallback `.htaccess` into `apps/web/dist/`.
 
 See `deploy/xserver/README.md` and the specifications under `docs/`.
+
+## GitHub Pages preview
+
+The playable browser-only game can be published at
+`https://boqxxxpod-debug.github.io/macro-nation/`. Enable GitHub Pages with
+**GitHub Actions** as its publishing source in the repository's Settings → Pages.
+The `Deploy GitHub Pages` workflow builds and deploys on pushes to `main` or
+when run manually. It uses the `/macro-nation/` base path and a `404.html`
+fallback for direct visits to game routes. It intentionally does not include
+the Xserver PHP API; optional OpenAI explanations remain disabled. Saves are
+local to the browser and origin, so an Xserver save will not appear on Pages.
+
+To inspect the artifact locally, run
+`VITE_BASE_PATH=/macro-nation/ VITE_AI_ENABLED=false npm run build:pages`.

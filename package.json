@@ -15,6 +15,7 @@
     "dev": "npm run dev --workspace @macro-nation/web",
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build --workspace @macro-nation/web",
+    "build:pages": "npm run build:web && node deploy/pages/prepare.mjs",
     "build:xserver": "npm run build:web && node deploy/xserver/prepare.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check package.json apps/web/package.json packages/*/package.json",
