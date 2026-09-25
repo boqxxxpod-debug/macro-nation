@@ -262,7 +262,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
     const rngProvider = quantileProvider(scenario);
     const base = checked(
       runPolicyHeadless({
-        initialState: input.state,
+        initialState: { ...input.state, runState: "running" },
         tickCount: horizonMonths,
         rngProvider,
       }),
@@ -272,7 +272,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
         ? base
         : checked(
             runPolicyHeadless({
-              initialState: variant,
+              initialState: { ...variant, runState: "running" },
               tickCount: horizonMonths,
               rngProvider,
             }),
