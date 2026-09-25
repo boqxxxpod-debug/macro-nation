@@ -4,6 +4,7 @@ node_modules/
 coverage/
 playwright-report/
 test-results/
+artifacts/headless/
 .DS_Store
 .env
 .env.*

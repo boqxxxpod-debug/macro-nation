@@ -36,6 +36,22 @@ npm install
 npm run dev
 ```
 
+## Headless SCN-01 simulation
+
+Run the no-policy SCN-01 baseline from Node with the same monthly engine used by the app:
+
+```bash
+npm run simulate -- --ticks 48 --seed baseline-48
+npm run simulate -- --ticks 96 --seed baseline-96
+npm run simulate:batch:10
+npm run simulate:1000
+npm run simulate -- --replay artifacts/headless/48x1-baseline-48/replay-package.json
+```
+
+The runner writes `summary.json`, `strategy.csv`, `invariant-failures.json`, `run-failures.json`, and a self-contained `replay-package.json` to `artifacts/headless/` by default. Pass `--out <directory>` to choose another output location. The 1,000-run command executes 96 monthly ticks per seed and exits with a failure status if any seed fails. CI smoke uses the fixed golden seed to check the runner; `simulate:batch:10` and `simulate:1000` check behavior across distinct seeds.
+
+The current ConfigPack does not define initial tax/spending bases, external-debt share, or sector import exposure. The runner therefore starts with a balanced primary budget, domestically held public debt, and the configured aggregate import share for each sector; these are explicit bootstrap defaults, not empirical calibration claims.
+
 ## Verify the entire foundation
 
 From a clean checkout, the project can install dependencies and run all non-browser quality gates with one command:

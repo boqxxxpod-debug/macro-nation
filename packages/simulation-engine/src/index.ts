@@ -1,6 +1,7 @@
 import { FOUNDATION_DOMAIN_VERSION } from "@macro-nation/domain";
 
 export * from "./causal";
+export * from "./headless";
 export * from "./demand";
 export * from "./macro";
 export * from "./policy-registry";
