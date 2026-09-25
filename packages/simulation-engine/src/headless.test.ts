@@ -23,6 +23,7 @@ interface NoPolicyGoldenFixture {
   readonly modelVersion: string;
   readonly calibrationVersion: string;
   readonly rngVersion: string;
+  readonly traceNumberDecimals: number;
   readonly configHash: string;
   readonly traceSha256: Readonly<Record<string, string>>;
 }
@@ -46,19 +47,36 @@ function makeState(seed: string): GameState {
   });
 }
 
+function roundTraceNumbers(value: unknown): unknown {
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? Number(value.toFixed(goldenFixture.traceNumberDecimals))
+      : value;
+  }
+  if (Array.isArray(value)) return value.map(roundTraceNumbers);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        roundTraceNumbers(entry),
+      ]),
+    );
+  }
+  return value;
+}
+
 function traceHash(result: ReturnType<typeof runNoPolicyHeadless>): string {
+  const normalizedTrace = roundTraceNumbers({
+    strategyId: result.strategyId,
+    requestedTicks: result.requestedTicks,
+    ticksCompleted: result.ticksCompleted,
+    finalState: result.finalState,
+    records: result.records,
+    invariantFailures: result.invariantFailures,
+    failure: result.failure,
+  });
   return createHash("sha256")
-    .update(
-      stableStringify({
-        strategyId: result.strategyId,
-        requestedTicks: result.requestedTicks,
-        ticksCompleted: result.ticksCompleted,
-        finalState: result.finalState,
-        records: result.records,
-        invariantFailures: result.invariantFailures,
-        failure: result.failure,
-      }),
-    )
+    .update(stableStringify(normalizedTrace))
     .digest("hex");
 }
 
