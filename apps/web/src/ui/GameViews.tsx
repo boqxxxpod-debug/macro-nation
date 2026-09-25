@@ -9,7 +9,7 @@ import {
   type PreviewOutput,
 } from "../application/policy-view";
 import { createBrowserAIService } from "../infrastructure/ai";
-import { display, label } from "./game-format";
+import { describeCause, display, label } from "./game-format";
 
 const CARD_KEYS = [
   "realHouseholdIncome",
@@ -24,7 +24,10 @@ export function Home({ state }: { state: GameState }) {
   const latest = reports.at(-1);
   const prior = reports.at(-2);
   const e = state.economy;
-  const crisis = e.rates.inflationAnnual >= 0.08 || e.rates.unemployment >= 0.1;
+  const crisis =
+    state.runState === "crisisStopped" ||
+    e.rates.inflationAnnual >= 0.08 ||
+    e.rates.unemployment >= 0.1;
   const cards = CARD_KEYS.map((id) => ({
     id,
     current:
@@ -65,6 +68,22 @@ export function Home({ state }: { state: GameState }) {
     .slice(0, 3);
   return (
     <>
+      {state.monthIndex < 12 && state.learningMode === "learning" && (
+        <section className="panel tutorial" aria-label="4四半期チュートリアル">
+          <h3>はじめの4四半期・第{Math.floor(state.monthIndex / 3) + 1}回</h3>
+          <p>
+            {
+              [
+                "まず政策会議で案を比較し、確定するか何もしないか選びましょう。",
+                "数か月進め、前月比と3行報告を確認しましょう。",
+                "別の政策を試算し、12か月の副作用と費用を比べましょう。",
+                "レポートで最大の変化要因を確認し、次の判断に備えましょう。",
+              ][Math.floor(state.monthIndex / 3)]
+            }
+          </p>
+          <p>この案内は説明だけです。計算は通常の月次Engineで進みます。</p>
+        </section>
+      )}
       <p className={crisis ? "crisis" : "quiet"} role="status">
         {crisis
           ? "危機警告：物価または雇用が危険域です。"
@@ -88,7 +107,7 @@ export function Home({ state }: { state: GameState }) {
             <li>
               最大の寄与：
               {latest?.topCauses[0]
-                ? `${label(latest.topCauses[0].indicatorId)}の${latest.topCauses[0].sourceType === "policy" ? "政策" : "経済環境"}要因`
+                ? `${label(latest.topCauses[0].indicatorId)}には${describeCause(latest.topCauses[0], state)}`
                 : "大きな変化は確認されていません"}
               。
             </li>
@@ -200,15 +219,8 @@ export function Report({ state }: { state: GameState }) {
           <ol>
             {latest.topCauses.slice(0, 3).map((cause, index) => (
               <li key={index}>
-                {label(cause.indicatorId)}：
-                {cause.sourceType === "policy"
-                  ? "政策"
-                  : cause.sourceType === "external"
-                    ? "外部環境"
-                    : cause.sourceType === "random"
-                      ? "変動"
-                      : "経済の慣性"}
-                （{cause.sourceId}）、寄与 {cause.delta > 0 ? "+" : ""}
+                {label(cause.indicatorId)}：{describeCause(cause, state)}、寄与{" "}
+                {cause.delta > 0 ? "+" : ""}
                 {cause.delta.toFixed(2)}
               </li>
             ))}

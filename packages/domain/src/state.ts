@@ -325,6 +325,7 @@ export interface GameState {
   readonly scenarioId: ScenarioId;
   readonly difficulty: Difficulty;
   readonly durationMode?: DurationMode;
+  readonly learningMode?: "casual" | "standard" | "learning";
   readonly monthIndex: number;
   readonly tickSequence: number;
   readonly runState: RunState;

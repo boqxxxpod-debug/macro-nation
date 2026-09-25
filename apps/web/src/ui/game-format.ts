@@ -1,4 +1,4 @@
-import type { GameState } from "@macro-nation/domain";
+import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
 
 export const LABELS: Record<string, string> = {
   "interest-rate": "政策金利",
@@ -25,3 +25,43 @@ export const display = (id: string, value: number) =>
     : value.toFixed(1);
 export const period = (state: GameState) =>
   `${Math.floor(state.monthIndex / 12) + 1}年目 ${(state.monthIndex % 12) + 1}月`;
+
+export function describeCause(
+  cause: MonthlyReportSnapshot["topCauses"][number],
+  state: GameState,
+): string {
+  if (cause.sourceType === "policy") {
+    const policy = [
+      ...state.policies.active,
+      ...state.policies.reserved,
+      ...state.policies.completed,
+    ].find((item) => item.policyId === cause.sourceId);
+    const ruleId =
+      policy?.type === "interestRate"
+        ? "interest-rate"
+        : policy?.type === "taxPackage"
+          ? "tax-package"
+          : policy?.type === "publicWorks"
+            ? "public-works"
+            : policy?.type === "fxIntervention"
+              ? "fx-intervention"
+              : policy?.type;
+    return policy ? `${label(ruleId ?? "")}の政策` : "過去の政策";
+  }
+  if (cause.sourceType === "random" || cause.sourceId.startsWith("error."))
+    return "月ごとの偶発的な変動";
+  if (/fx|reserve|import|external|world|resource/.test(cause.sourceId))
+    return "為替・貿易などの外部環境";
+  if (/industry|productiv|capacity|public-investment/.test(cause.sourceId))
+    return "産業の生産力と投資";
+  if (/debt|fiscal|tax|spending/.test(cause.sourceId))
+    return "税収・支出と債務";
+  if (/inflation|price|wage/.test(cause.sourceId)) return "物価と賃金の動き";
+  if (/confidence|trust|support/.test(cause.sourceId))
+    return "家計や企業の信頼感";
+  if (/unemployment|okun|employment/.test(cause.sourceId))
+    return "雇用と成長のつながり";
+  return cause.sourceType === "external"
+    ? "外部環境"
+    : "前月から続く経済の動き";
+}

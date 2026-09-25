@@ -66,6 +66,7 @@ export async function createGame(
   repository: GameRepository,
   seed: string,
   slotId: GameState["slotId"] = 1,
+  learningMode: NonNullable<GameState["learningMode"]> = "learning",
 ): Promise<GameState> {
   const pack = await loadSCN01ConfigPack();
   const configSnapshot = await createConfigSnapshot(
@@ -91,6 +92,9 @@ export async function createGame(
   const state: GameState = {
     ...initial,
     runState: "paused",
+    difficulty: "intro",
+    durationMode: "short",
+    learningMode,
     history: {
       ...initial.history,
       reports: [reportSnapshot(initial)],
@@ -107,16 +111,34 @@ export async function advanceMonth(
 ): Promise<GameState> {
   const state = await repository.load(slotId);
   if (!state) throw new Error("保存済みのゲームがありません");
-  if (state.runState === "completed" || state.runState === "failed")
-    throw new Error("このゲームは終了しています");
+  if (
+    state.runState === "completed" ||
+    state.runState === "failed" ||
+    state.runState === "crisisStopped"
+  )
+    throw new Error("終了または危機停止中です。危機対応後に再開してください");
   const result = runPolicyHeadless({
     initialState: { ...state, runState: "running" },
     tickCount: 1,
   });
   if (result.failure) throw new Error(result.failure.message);
+  const rules = firstPlayableRules(state);
+  const critical = criticalCondition(result.finalState, rules.crisis);
+  const priorCritical = state.crisisCounters.unresolved ?? 0;
+  const runState = critical
+    ? priorCritical >= rules.unresolvedCrisisMonthsToFail
+      ? "failed"
+      : "crisisStopped"
+    : result.finalState.monthIndex >= rules.durationMonths
+      ? "completed"
+      : "paused";
   const next: GameState = {
     ...result.finalState,
-    runState: "paused",
+    runState,
+    crisisCounters: {
+      ...state.crisisCounters,
+      unresolved: critical ? priorCritical + 1 : 0,
+    },
     history: {
       ...result.finalState.history,
       snapshotMonths: [
@@ -134,6 +156,111 @@ export async function advanceMonth(
   };
   await repository.save(policyStateHash(state), next);
   return next;
+}
+
+interface PlayRules {
+  readonly durationMonths: number;
+  readonly crisis: {
+    readonly inflationAnnual: number;
+    readonly unemployment: number;
+    readonly supportBelow: number;
+    readonly foreignReservesBelow: number;
+  };
+  readonly unresolvedCrisisMonthsToFail: number;
+}
+
+export function firstPlayableRules(state: GameState): PlayRules {
+  const scenario = state.configSnapshot.normalizedConfig.scenario as {
+    durationMonths: number;
+    firstPlayable: Omit<PlayRules, "durationMonths">;
+  };
+  if (!scenario?.firstPlayable)
+    throw new Error("シナリオの終了・危機条件がありません");
+  return { durationMonths: scenario.durationMonths, ...scenario.firstPlayable };
+}
+
+function criticalCondition(
+  state: GameState,
+  thresholds: PlayRules["crisis"],
+): boolean {
+  const e = state.economy;
+  return (
+    e.rates.inflationAnnual >= thresholds.inflationAnnual ||
+    e.rates.unemployment >= thresholds.unemployment ||
+    e.sentiment.support < thresholds.supportBelow ||
+    e.stocks.foreignReserves < thresholds.foreignReservesBelow
+  );
+}
+
+/** An explicit choice is saved before another month may run. */
+export async function resumeCrisis(
+  repository: GameRepository,
+  slotId: GameState["slotId"],
+): Promise<GameState> {
+  const state = await repository.load(slotId);
+  if (!state || state.runState !== "crisisStopped")
+    throw new Error("再開できる危機がありません");
+  const next: GameState = { ...state, runState: "paused" };
+  await repository.save(policyStateHash(state), next);
+  return next;
+}
+
+export interface EndingResult {
+  readonly axes: Readonly<
+    Record<
+      "living" | "growth" | "stability" | "sustainability" | "trust",
+      number
+    >
+  >;
+  readonly score: number;
+  readonly rank: "S" | "A" | "B" | "C" | "D" | "F";
+}
+
+export function evaluateEnding(state: GameState): EndingResult {
+  const first = state.history.reports?.[0];
+  const e = state.economy;
+  const clip = (value: number) => Math.max(0, Math.min(100, value));
+  const living = clip(
+    50 +
+      (e.indices.realHouseholdIncome /
+        (first?.values.realHouseholdIncome || 100) -
+        1) *
+        100,
+  );
+  const growth = clip(
+    50 + (e.indices.realGdp / (first?.values.realGdp || 100) - 1) * 100,
+  );
+  const stability = clip(
+    100 -
+      Math.abs(e.rates.inflationAnnual - 0.02) * 500 -
+      e.rates.unemployment * 200,
+  );
+  const sustainability = clip(100 - e.ratios.governmentDebtRatio * 40);
+  const trust = clip(e.sentiment.policyTrust);
+  const axes = { living, growth, stability, sustainability, trust };
+  const weighted =
+    living * 0.3 +
+    growth * 0.25 +
+    stability * 0.2 +
+    sustainability * 0.15 +
+    trust * 0.1;
+  const score = Math.min(weighted, 60 + Math.min(...Object.values(axes)) * 0.4);
+  return {
+    axes,
+    score,
+    rank:
+      state.runState === "failed"
+        ? "F"
+        : score >= 90
+          ? "S"
+          : score >= 75
+            ? "A"
+            : score >= 60
+              ? "B"
+              : score >= 45
+                ? "C"
+                : "D",
+  };
 }
 
 export async function confirmPolicy(

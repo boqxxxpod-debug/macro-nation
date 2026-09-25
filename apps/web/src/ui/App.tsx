@@ -11,19 +11,23 @@ import {
   browserGameRepository,
   confirmPolicy,
   createGame,
+  resumeCrisis,
   type GameRepository,
 } from "../application/game-service";
 import { PreviewClient } from "../infrastructure/preview-client";
 import { AIPreview } from "../devtools/AIPreview";
 import { Home, PolicyForm, Preview, Report } from "./GameViews";
+import { Ending } from "./Ending";
+import { migrateFirstPlayableSave } from "../application/save-migration";
 import { label, period } from "./game-format";
 
-type Route = "home" | "policies" | "preview" | "report";
+type Route = "home" | "policies" | "preview" | "report" | "ending";
 function routeFromLocation(): Route {
   const path = window.location.pathname;
   if (path.endsWith("/policies/preview")) return "preview";
   if (path.endsWith("/policies")) return "policies";
   if (path.endsWith("/report")) return "report";
+  if (path.endsWith("/ending")) return "ending";
   return "home";
 }
 
@@ -50,6 +54,9 @@ export function App({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [startSeed, setStartSeed] = useState("");
+  const [learningMode, setLearningMode] =
+    useState<NonNullable<GameState["learningMode"]>>("learning");
 
   useEffect(() => {
     let active = true;
@@ -59,6 +66,9 @@ export function App({
     }
     void repository
       .load(1)
+      .then(async (saved) =>
+        saved ? migrateFirstPlayableSave(repository, saved) : null,
+      )
       .then((saved) => {
         if (active) {
           setState(saved);
@@ -103,7 +113,9 @@ export function App({
           ? "game/1/policies"
           : next === "preview"
             ? "game/1/policies/preview"
-            : "game/1/report";
+            : next === "report"
+              ? "game/1/report"
+              : "game/1/ending";
     window.history[replace ? "replaceState" : "pushState"](
       {},
       "",
@@ -129,7 +141,12 @@ export function App({
   }
   async function start() {
     if (!repository) throw new Error("この端末では保存機能を利用できません");
-    const created = await createGame(repository, seedFactory());
+    const created = await createGame(
+      repository,
+      startSeed.trim() || seedFactory(),
+      1,
+      learningMode,
+    );
     setState(created);
     navigate("home");
   }
@@ -184,6 +201,30 @@ export function App({
           <p>
             政策を選び、1か月ずつ進めて国の変化を確かめます。端末内に自動保存します。
           </p>
+          <p>入門難易度・4年間（48か月）。初めの4四半期は操作を案内します。</p>
+          <label>
+            学習案内
+            <select
+              value={learningMode}
+              onChange={(event) =>
+                setLearningMode(
+                  event.target.value as NonNullable<GameState["learningMode"]>,
+                )
+              }
+            >
+              <option value="learning">表示する</option>
+              <option value="standard">短く表示する</option>
+            </select>
+          </label>
+          <label>
+            再現用seed（任意）
+            <input
+              value={startSeed}
+              maxLength={80}
+              placeholder="未入力なら自動生成"
+              onChange={(event) => setStartSeed(event.target.value)}
+            />
+          </label>
           <button
             className="primary"
             disabled={busy || !repository}
@@ -196,7 +237,17 @@ export function App({
       ) : (
         <>
           <nav className="nav" aria-label="ゲーム画面">
-            {(["home", "policies", "report"] as const).map((id) => (
+            {(
+              [
+                "home",
+                "policies",
+                "report",
+                ...(state.runState === "completed" ||
+                state.runState === "failed"
+                  ? ["ending" as const]
+                  : []),
+              ] as const
+            ).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -211,7 +262,9 @@ export function App({
                   ? "ホーム"
                   : id === "policies"
                     ? "政策会議"
-                    : "レポート"}
+                    : id === "report"
+                      ? "レポート"
+                      : "終了評価"}
               </button>
             ))}
           </nav>
@@ -224,10 +277,55 @@ export function App({
               <>
                 <h2 tabIndex={-1}>国家ホーム</h2>
                 <Home state={state} />
+                {state.runState === "crisisStopped" && (
+                  <section className="panel crisis">
+                    <h3>緊急会議</h3>
+                    <p>
+                      危機条件に達したため進行を停止しました。政策会議で対策を検討し、明示的に再開してください。次の月も危機が続くと失敗になります。
+                    </p>
+                    <button onClick={() => navigate("policies")}>
+                      緊急政策を検討する
+                    </button>{" "}
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void action(async () => {
+                          const resumed = await resumeCrisis(
+                            repository!,
+                            state.slotId,
+                          );
+                          setState(resumed);
+                          setNotice(
+                            "危機対応を保存し、再開できる状態になりました。",
+                          );
+                        })
+                      }
+                    >
+                      危機対応を確認して再開
+                    </button>
+                  </section>
+                )}
+                {(state.runState === "completed" ||
+                  state.runState === "failed") && (
+                  <section className="panel">
+                    <h3>運営の終了</h3>
+                    <button
+                      className="primary"
+                      onClick={() => navigate("ending")}
+                    >
+                      終了評価を見る
+                    </button>
+                  </section>
+                )}
                 <div className="actions">
                   <button
                     className="primary"
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      state.runState === "crisisStopped" ||
+                      state.runState === "completed" ||
+                      state.runState === "failed"
+                    }
                     onClick={() =>
                       void action(async () => {
                         const saved = await advanceMonth(
@@ -236,6 +334,11 @@ export function App({
                         );
                         setState(saved);
                         setNotice(`${period(saved)}まで進み、保存しました。`);
+                        if (
+                          saved.runState === "completed" ||
+                          saved.runState === "failed"
+                        )
+                          navigate("ending");
                       })
                     }
                   >
@@ -319,6 +422,17 @@ export function App({
               <>
                 <h2 tabIndex={-1}>経済レポート</h2>
                 <Report state={state} />
+              </>
+            )}
+            {route === "ending" && (
+              <>
+                <h2 tabIndex={-1}>終了評価</h2>
+                {state.runState === "completed" ||
+                state.runState === "failed" ? (
+                  <Ending state={state} onReport={() => navigate("report")} />
+                ) : (
+                  <p>48か月の終了後に評価を表示します。</p>
+                )}
               </>
             )}
           </div>

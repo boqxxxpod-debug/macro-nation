@@ -19,6 +19,9 @@ describe("ConfigPack v1", () => {
   it("validates the standard SCN-01 fixture and hashes", async () => {
     expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.2");
     expect(SCN01_CONFIG_PACK.scenario.clock.policyCycleSteps).toBe(3);
+    expect(SCN01_CONFIG_PACK.scenario.firstPlayable.tutorialQuarters).toBe(4);
+    expect(SCN01_CONFIG_PACK.scenario.durationMonths).toBe(48);
+    expect(SCN01_CONFIG_PACK.manifest.configVersion).toBe("0.1.3");
     await expect(
       verifyConfigPackHashes(SCN01_CONFIG_PACK, SCN01_CONFIG_FILES),
     ).resolves.toBeUndefined();
