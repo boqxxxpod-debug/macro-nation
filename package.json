@@ -30,6 +30,11 @@
     "simulate:smoke": "npm run simulate -- --ticks 96 --runs 1 --seed issue-10-no-policy-golden-v1 --out /tmp/macro-nation-headless-ci",
     "simulate:batch:10": "npm run simulate -- --ticks 96 --runs 10 --seed scn01-ci --out /tmp/macro-nation-headless-batch-10",
     "simulate:1000": "npm run simulate -- --ticks 96 --runs 1000 --seed scn01-no-policy-1000 --out artifacts/headless/1000x96",
+    "calibration:irf": "vite-node --script scripts/calibration.ts irf",
+    "calibration:moments": "vite-node --script scripts/calibration.ts moments",
+    "calibration:diff": "vite-node --script scripts/calibration.ts diff",
+    "calibration:report": "vite-node --script scripts/calibration.ts report",
+    "golden:refresh": "vite-node --script scripts/generate-golden.ts",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run simulate:smoke && npm run validate-content && npm run architecture:check && npm run build && npm run build:smoke"
   },
   "devDependencies": {

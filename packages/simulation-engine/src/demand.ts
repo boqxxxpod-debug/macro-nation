@@ -895,6 +895,14 @@ export function updateDemandAndGdp(input: DemandInput): DemandOutput {
     },
     Math.sqrt(3) * parameter(p, "IS-GAP-ERR-001") * (2 * gapDraw.value - 1),
   );
+  for (const term of scheduledTerms(
+    input.effects,
+    input.monthIndex,
+    "economy.indices.outputGap",
+    outputGapBefore,
+  )) {
+    outputGapBuilder.add(term.source, term.delta);
+  }
   outputGapBuilder.clamp(gapMinimum, gapMaximum);
   const outputGapCausal = outputGapBuilder.build();
   const outputGapAfter = outputGapCausal.afterValue;

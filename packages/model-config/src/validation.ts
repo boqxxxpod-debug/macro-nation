@@ -28,7 +28,8 @@ import {
 } from "./schemas";
 
 function unique(values: readonly string[], label: string): void {
-  if (new Set(values).size !== values.length) throw new Error(`Duplicate ${label} ID`);
+  if (new Set(values).size !== values.length)
+    throw new Error(`Duplicate ${label} ID`);
 }
 
 /** Use the saved content snapshot on resume, never the newest downloaded pack. */
@@ -100,7 +101,8 @@ function validateShockModel(pack: ParsedConfigPack): void {
       }
     }
   }
-  if (!positiveDefinite(correlation)) throw new Error("Correlation matrix must be positive definite");
+  if (!positiveDefinite(correlation))
+    throw new Error("Correlation matrix must be positive definite");
   for (let i = 0; i < n; i += 1) {
     for (let j = 0; j < n; j += 1) {
       let reconstructed = 0;
@@ -114,7 +116,9 @@ function validateShockModel(pack: ParsedConfigPack): void {
   }
 }
 
-function validateEventCycles(events: readonly { eventId: string; dependsOn: readonly string[] }[]): void {
+function validateEventCycles(
+  events: readonly { eventId: string; dependsOn: readonly string[] }[],
+): void {
   const byId = new Map(events.map((event) => [event.eventId, event]));
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -137,11 +141,15 @@ export function parseConfigPack(
 ): ParsedConfigPack {
   const pack: ParsedConfigPack = {
     manifest: manifestSchema.parse(input.manifest),
-    coefficients: z.array(parameterDefinitionSchema).parse(input.coefficients) as ParameterDefinition[],
+    coefficients: z
+      .array(parameterDefinitionSchema)
+      .parse(input.coefficients) as ParameterDefinition[],
     lagKernels: z.array(lagKernelSchema).parse(input.lagKernels),
     shockModel: shockModelSchema.parse(input.shockModel),
     policyRules: z.array(policyRuleSchema).parse(input.policyRules),
-    calibrationTargets: calibrationTargetsSchema.parse(input.calibrationTargets),
+    calibrationTargets: calibrationTargetsSchema.parse(
+      input.calibrationTargets,
+    ),
     sources: z.array(sourceSchema).parse(input.sources),
     content: contentSchema.parse(input.content),
     model: modelSchema.parse(input.model),
@@ -151,32 +159,54 @@ export function parseConfigPack(
     scenario: scenarioSchema.parse(input.scenario),
   };
 
-  unique(pack.coefficients.map((item) => item.parameterId), "parameter");
-  unique(pack.lagKernels.map((item) => item.kernelId), "lag kernel");
-  unique(pack.policyRules.map((item) => item.policyId), "policy rule");
-  unique(pack.sources.map((item) => item.sourceId), "source");
+  unique(
+    pack.coefficients.map((item) => item.parameterId),
+    "parameter",
+  );
+  unique(
+    pack.lagKernels.map((item) => item.kernelId),
+    "lag kernel",
+  );
+  unique(
+    pack.policyRules.map((item) => item.policyId),
+    "policy rule",
+  );
+  unique(
+    pack.sources.map((item) => item.sourceId),
+    "source",
+  );
   unique(pack.content.indicators, "indicator");
-  unique(pack.content.indicatorDefinitions?.map((item) => item.indicatorId) ?? [], "indicator definition");
+  unique(
+    pack.content.indicatorDefinitions?.map((item) => item.indicatorId) ?? [],
+    "indicator definition",
+  );
   unique(pack.content.policies, "policy");
-  unique(pack.content.events.map((item: { eventId: string }) => item.eventId), "event");
+  unique(
+    pack.content.events.map((item: { eventId: string }) => item.eventId),
+    "event",
+  );
 
   const sourceIds = new Set(pack.sources.map((item) => item.sourceId));
   const referencedSources = new Set<string>();
   for (const coefficient of pack.coefficients) {
     for (const sourceId of coefficient.sourceIds) {
       if (!sourceIds.has(sourceId)) {
-        throw new Error(`Missing source ${sourceId} for ${coefficient.parameterId}`);
+        throw new Error(
+          `Missing source ${sourceId} for ${coefficient.parameterId}`,
+        );
       }
       referencedSources.add(sourceId);
     }
   }
   for (const sourceId of sourceIds) {
-    if (!referencedSources.has(sourceId)) throw new Error(`Orphan source ${sourceId}`);
+    if (!referencedSources.has(sourceId))
+      throw new Error(`Orphan source ${sourceId}`);
   }
 
   const indicatorSet = new Set(pack.content.indicators);
   for (const id of PRIMARY_INDICATOR_IDS) {
-    if (!indicatorSet.has(id)) throw new Error(`Missing primary indicator ${id}`);
+    if (!indicatorSet.has(id))
+      throw new Error(`Missing primary indicator ${id}`);
   }
   const coreIds = new Set<string>(PRIMARY_INDICATOR_IDS);
   for (const definition of pack.content.indicatorDefinitions ?? []) {
@@ -222,10 +252,26 @@ export function parseConfigPack(
   const policySet = new Set(pack.content.policies);
   const ruleIds = new Set(pack.policyRules.map((rule) => rule.policyId));
   for (const policyId of policySet) {
-    if (!ruleIds.has(policyId)) throw new Error(`Missing policy rule ${policyId}`);
+    if (!ruleIds.has(policyId))
+      throw new Error(`Missing policy rule ${policyId}`);
   }
   for (const rule of pack.policyRules) {
-    if (!policySet.has(rule.policyId)) throw new Error(`Unknown policy ${rule.policyId}`);
+    if (!policySet.has(rule.policyId))
+      throw new Error(`Unknown policy ${rule.policyId}`);
+    const kernels = new Set(pack.lagKernels.map((kernel) => kernel.kernelId));
+    for (const effect of rule.effectSpecs ?? []) {
+      if (!kernels.has(effect.kernelId)) {
+        throw new Error(
+          `Unknown policy kernel ${effect.kernelId} for ${rule.policyId}`,
+        );
+      }
+      if (
+        effect.targetPath === "economy.indices.outputGap" &&
+        effect.operation !== "addDelta"
+      ) {
+        throw new Error("Output-gap policy effects must be additive");
+      }
+    }
     for (const input of rule.inputs ?? []) {
       if (!pack.content.textKeys.includes(input.labelKey)) {
         throw new Error(`Missing policy input label ${input.labelKey}`);
@@ -233,11 +279,15 @@ export function parseConfigPack(
     }
   }
   for (const id of pack.scenario.enabledPolicies) {
-    if (!policySet.has(id)) throw new Error(`Scenario references missing policy ${id}`);
+    if (!policySet.has(id))
+      throw new Error(`Scenario references missing policy ${id}`);
   }
-  const eventSet = new Set(pack.content.events.map((item: { eventId: string }) => item.eventId));
+  const eventSet = new Set(
+    pack.content.events.map((item: { eventId: string }) => item.eventId),
+  );
   for (const id of pack.scenario.enabledEvents) {
-    if (!eventSet.has(id)) throw new Error(`Scenario references missing event ${id}`);
+    if (!eventSet.has(id))
+      throw new Error(`Scenario references missing event ${id}`);
   }
 
   if (
@@ -250,24 +300,47 @@ export function parseConfigPack(
     throw new Error("Scenario nationId does not match loaded NationProfile");
   }
   const expectedIndustryKeys = [...INDUSTRY_IDS].sort();
-  if (Object.keys(pack.nation.industryStructure).sort().join(",") !== expectedIndustryKeys.join(",")) {
-    throw new Error("NationProfile must define exactly the six supported industries");
+  if (
+    Object.keys(pack.nation.industryStructure).sort().join(",") !==
+    expectedIndustryKeys.join(",")
+  ) {
+    throw new Error(
+      "NationProfile must define exactly the six supported industries",
+    );
   }
-  const industryShareTotal = Object.values(pack.nation.industryStructure).reduce((sum, value) => sum + value, 0);
+  const industryShareTotal = Object.values(
+    pack.nation.industryStructure,
+  ).reduce((sum, value) => sum + value, 0);
   if (Math.abs(industryShareTotal - 1) > 1e-10) {
     throw new Error("NationProfile industry shares must sum to one");
   }
-  if (Object.keys(pack.nation.industryLoadings).sort().join(",") !== expectedIndustryKeys.join(",")) {
-    throw new Error("NationProfile must define loadings for all six industries");
+  if (
+    Object.keys(pack.nation.industryLoadings).sort().join(",") !==
+    expectedIndustryKeys.join(",")
+  ) {
+    throw new Error(
+      "NationProfile must define loadings for all six industries",
+    );
   }
-  for (const [name, range] of Object.entries(pack.limits.hard) as [string, [number, number]][]) {
+  for (const [name, range] of Object.entries(pack.limits.hard) as [
+    string,
+    [number, number],
+  ][]) {
     if (range[0] > range[1]) throw new Error(`Invalid hard limit ${name}`);
   }
-  for (const [name, range] of Object.entries(pack.limits.scenarioUi) as [string, [number, number]][]) {
+  for (const [name, range] of Object.entries(pack.limits.scenarioUi) as [
+    string,
+    [number, number],
+  ][]) {
     if (range[0] > range[1]) throw new Error(`Invalid UI limit ${name}`);
   }
-  for (const [name, weights] of Object.entries(pack.effectCurves) as [string, number[]][]) {
-    if (Math.abs(weights.reduce((sum, weight) => sum + weight, 0) - 1) > 1e-10) {
+  for (const [name, weights] of Object.entries(pack.effectCurves) as [
+    string,
+    number[],
+  ][]) {
+    if (
+      Math.abs(weights.reduce((sum, weight) => sum + weight, 0) - 1) > 1e-10
+    ) {
       throw new Error(`Effect curve ${name} must sum to 1`);
     }
   }
@@ -292,20 +365,38 @@ export function parseConfigPack(
     }
   }
 
-  const definitions = new Map(pack.coefficients.map((item) => [item.parameterId, item]));
-  const publicInvestmentLagStart = definitions.get("PINV-SUPPLY-LAG-START-001")?.default;
-  const publicInvestmentLagEnd = definitions.get("PINV-SUPPLY-LAG-END-001")?.default;
-  if (publicInvestmentLagStart === undefined || publicInvestmentLagEnd === undefined || publicInvestmentLagStart >= publicInvestmentLagEnd) {
+  const definitions = new Map(
+    pack.coefficients.map((item) => [item.parameterId, item]),
+  );
+  const publicInvestmentLagStart = definitions.get(
+    "PINV-SUPPLY-LAG-START-001",
+  )?.default;
+  const publicInvestmentLagEnd = definitions.get(
+    "PINV-SUPPLY-LAG-END-001",
+  )?.default;
+  if (
+    publicInvestmentLagStart === undefined ||
+    publicInvestmentLagEnd === undefined ||
+    publicInvestmentLagStart >= publicInvestmentLagEnd
+  ) {
     throw new Error("Public-investment supply lag must satisfy start < end");
   }
   for (const targetId of ["PINV-GDP-12M", "PINV-POTENTIAL-48M"]) {
-    if (!pack.calibrationTargets.irf.some((target) => target.targetId === targetId)) {
-      throw new Error(`Missing public-investment calibration target ${targetId}`);
+    if (
+      !pack.calibrationTargets.irf.some(
+        (target) => target.targetId === targetId,
+      )
+    ) {
+      throw new Error(
+        `Missing public-investment calibration target ${targetId}`,
+      );
     }
   }
   for (const parameterId of pack.manifest.overrideAllowlist) {
     if (!definitions.has(parameterId)) {
-      throw new Error(`Override allowlist references unknown parameter ${parameterId}`);
+      throw new Error(
+        `Override allowlist references unknown parameter ${parameterId}`,
+      );
     }
   }
   const allowedOverrides = new Set(pack.manifest.overrideAllowlist);
@@ -314,9 +405,14 @@ export function parseConfigPack(
       throw new Error(`scenario override not allowed: ${override.parameterId}`);
     }
     const definition = definitions.get(override.parameterId);
-    if (!definition) throw new Error(`Unknown scenario override parameter ${override.parameterId}`);
+    if (!definition)
+      throw new Error(
+        `Unknown scenario override parameter ${override.parameterId}`,
+      );
     if (override.value < definition.min || override.value > definition.max) {
-      throw new Error(`scenario override out of range: ${override.parameterId}`);
+      throw new Error(
+        `scenario override out of range: ${override.parameterId}`,
+      );
     }
   }
 
@@ -331,7 +427,13 @@ export function parseConfigPack(
   if (gdpShares.some((value) => value === undefined)) {
     throw new Error("GDP share parameters are incomplete");
   }
-  const [cShare, iShare, gShare, xShare, mShare] = gdpShares as [number, number, number, number, number];
+  const [cShare, iShare, gShare, xShare, mShare] = gdpShares as [
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
   if (Math.abs(cShare + iShare + gShare + xShare - mShare - 1) > 1e-10) {
     throw new Error("GDP shares must satisfy C + I + G + X - M = 1");
   }
@@ -349,20 +451,33 @@ export interface ParameterOverride {
 export function normalizeParameters(
   pack: ParsedConfigPack,
   calibrationOverrides: readonly ParameterOverride[] = [],
-  scenarioOverrides: readonly ParameterOverride[] = pack.scenario.parameterOverrides,
+  scenarioOverrides: readonly ParameterOverride[] = pack.scenario
+    .parameterOverrides,
 ): Readonly<Record<string, number>> {
-  const values = Object.fromEntries(pack.coefficients.map((item) => [item.parameterId, item.default]));
-  const definitions = new Map(pack.coefficients.map((item) => [item.parameterId, item]));
+  const values = Object.fromEntries(
+    pack.coefficients.map((item) => [item.parameterId, item.default]),
+  );
+  const definitions = new Map(
+    pack.coefficients.map((item) => [item.parameterId, item]),
+  );
   const allowed = new Set(pack.manifest.overrideAllowlist);
-  const apply = (overrides: readonly ParameterOverride[], layer: string): void => {
+  const apply = (
+    overrides: readonly ParameterOverride[],
+    layer: string,
+  ): void => {
     for (const override of overrides) {
       if (!allowed.has(override.parameterId)) {
-        throw new Error(`${layer} override not allowed: ${override.parameterId}`);
+        throw new Error(
+          `${layer} override not allowed: ${override.parameterId}`,
+        );
       }
       const definition = definitions.get(override.parameterId);
-      if (!definition) throw new Error(`Unknown override parameter: ${override.parameterId}`);
+      if (!definition)
+        throw new Error(`Unknown override parameter: ${override.parameterId}`);
       if (override.value < definition.min || override.value > definition.max) {
-        throw new Error(`${layer} override out of range: ${override.parameterId}`);
+        throw new Error(
+          `${layer} override out of range: ${override.parameterId}`,
+        );
       }
       values[override.parameterId] = override.value;
     }
