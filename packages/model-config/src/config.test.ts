@@ -1,9 +1,12 @@
+import { assertReproducibleConfig } from "@macro-nation/domain";
 import { describe, expect, it } from "vitest";
 
 import {
   SCN01_CONFIG_FILES,
   SCN01_CONFIG_PACK,
   assertConfigCompatibility,
+  loadConfigPack,
+  loadSCN01ConfigPack,
   assertEngineCompatibility,
   createConfigSnapshot,
   createSnapshotIndicatorRegistry,
@@ -28,8 +31,96 @@ describe("ConfigPack v1", () => {
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
+        configVersion: SCN01_CONFIG_PACK.manifest.configVersion,
       }),
     ).not.toThrow();
+  });
+
+
+  it("verifies manifest hashes when loading and rejects changed or missing files", async () => {
+    await expect(loadSCN01ConfigPack()).resolves.toEqual(SCN01_CONFIG_PACK);
+
+    const changedFiles = {
+      ...SCN01_CONFIG_FILES,
+      "sources.json": SCN01_CONFIG_FILES["sources.json"].map((source) => ({
+        ...source,
+        note: "tampered source metadata",
+      })),
+    };
+    await expect(
+      loadConfigPack(SCN01_CONFIG_PACK, changedFiles),
+    ).rejects.toThrow(/hash mismatch for sources.json/);
+
+    const missingFiles: Record<string, unknown> = { ...SCN01_CONFIG_FILES };
+    delete missingFiles["sources.json"];
+    await expect(
+      loadConfigPack(SCN01_CONFIG_PACK, missingFiles),
+    ).rejects.toThrow(/Missing hashed config file sources.json/);
+  });
+
+  it("rejects incompatible ConfigPack versions including configVersion", () => {
+    expect(() =>
+      assertConfigCompatibility(SCN01_CONFIG_PACK, {
+        engineVersion: "0.1.0",
+        configSchemaVersion: "1",
+        modelVersion: "0.1.0",
+        calibrationVersion: "advanced-small-open-v1.0.0",
+        contentVersion: "1.0.0",
+        rngVersion: "xoshiro128ss-v1",
+        configVersion: "0.0.9",
+      }),
+    ).toThrow(/configVersion/);
+  });
+
+  it("rejects invalid normalized lag kernels and shock matrix dimensions", () => {
+    const badSum = SCN01_CONFIG_PACK.lagKernels.map((kernel, index) =>
+      index === 0
+        ? { ...kernel, weights: [kernel.weights[0]! + 0.1, ...kernel.weights.slice(1)] }
+        : kernel,
+    );
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, lagKernels: badSum }),
+    ).toThrow(/lag weights must sum to 1/);
+
+    const badSpan = SCN01_CONFIG_PACK.lagKernels.map((kernel, index) =>
+      index === 0 ? { ...kernel, start: kernel.start + 1 } : kernel,
+    );
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, lagKernels: badSpan }),
+    ).toThrow(/weight count must match kernel span/);
+
+    const negativeWeight = SCN01_CONFIG_PACK.lagKernels.map((kernel, index) =>
+      index === 0
+        ? { ...kernel, weights: [-0.01, ...kernel.weights.slice(1)] }
+        : kernel,
+    );
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, lagKernels: negativeWeight }),
+    ).toThrow();
+
+    const asymmetric = structuredClone(SCN01_CONFIG_PACK.shockModel);
+    asymmetric.correlation[0]![1] = 0.5;
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, shockModel: asymmetric }),
+    ).toThrow(/Correlation matrix must be symmetric/);
+
+    const badDiagonal = structuredClone(SCN01_CONFIG_PACK.shockModel);
+    badDiagonal.correlation[0]![0] = 0.9;
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, shockModel: badDiagonal }),
+    ).toThrow(/Correlation diagonal must equal 1/);
+
+    const badCholesky = structuredClone(SCN01_CONFIG_PACK.shockModel);
+    badCholesky.cholesky[1]![0] = 0.25;
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, shockModel: badCholesky }),
+    ).toThrow(/does not reconstruct correlation/);
+
+    const badDimension = structuredClone(SCN01_CONFIG_PACK.shockModel);
+    badDimension.correlation.pop();
+    expect(() =>
+      parseConfigPack({ ...SCN01_CONFIG_PACK, shockModel: badDimension }),
+    ).toThrow(/Shock matrices must match factor count/);
   });
 
   it("applies defaults, calibration, then scenario overrides", () => {
@@ -73,6 +164,23 @@ describe("ConfigPack v1", () => {
     const snapshot = await createConfigSnapshot(SCN01_CONFIG_PACK);
     expect(snapshot.configHash).toMatch(/^[a-f0-9]{64}$/);
     expect(snapshot.sourceManifest[0]?.sourceId).toBe("econ-model-v1");
+    expect(snapshot.sourceManifest[0]?.transformation).toBe(
+      "Project-calibrated monthly model parameters synchronized from the approved specification",
+    );
+    expect(snapshot.sourceManifest[0]?.url).toBe(
+      "https://github.com/boqxxxpod-debug/macro-nation/blob/de2cd137eac3577bfe24161a3979ae58d9d68cc4/docs/06-economic-model-parameters.md",
+    );
+    const changedSourcePack = parseConfigPack({
+      ...SCN01_CONFIG_PACK,
+      sources: SCN01_CONFIG_PACK.sources.map((source) => ({
+        ...source,
+        transformation: `${source.transformation} revised`,
+      })),
+    });
+    const changedSourceSnapshot = await createConfigSnapshot(changedSourcePack);
+    expect(() =>
+      assertReproducibleConfig(snapshot, changedSourceSnapshot),
+    ).toThrow(/source manifest mismatch/);
     expect(Object.isFrozen(snapshot.normalizedConfig)).toBe(true);
     expect(
       (snapshot.normalizedConfig.parameterDefinitions as unknown[]).length,

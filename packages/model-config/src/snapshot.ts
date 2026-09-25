@@ -65,6 +65,7 @@ export function assertConfigCompatibility(
     | "calibrationVersion"
     | "contentVersion"
     | "rngVersion"
+    | "configVersion"
   >,
 ): void {
   assertEngineCompatibility(pack, versions.engineVersion);
@@ -81,6 +82,14 @@ export function assertConfigCompatibility(
         `Config compatibility mismatch for ${key}: expected ${expectedValue}, got ${versions[key as keyof typeof expected]}`,
       );
     }
+  }
+  if (
+    versions.configVersion !== undefined &&
+    versions.configVersion !== pack.manifest.configVersion
+  ) {
+    throw new Error(
+      `Config compatibility mismatch for configVersion: expected ${pack.manifest.configVersion}, got ${versions.configVersion}`,
+    );
   }
 }
 
@@ -115,6 +124,8 @@ export async function createConfigSnapshot(
     title: source.title,
     retrievedAt: source.retrievedAt,
     confidence: source.confidence,
+    ...(source.url ? { url: source.url } : {}),
+    ...(source.transformation ? { transformation: source.transformation } : {}),
     ...(source.note ? { note: source.note } : {}),
   }));
   return deepFreeze({

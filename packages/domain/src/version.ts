@@ -3,6 +3,10 @@ export interface SourceManifestEntry {
   readonly title: string;
   readonly retrievedAt: string;
   readonly confidence: "high" | "medium" | "low";
+  /** Public or repository URL for the evidence record. */
+  readonly url?: string;
+  /** How the cited source was adapted into this parameter pack. */
+  readonly transformation?: string;
   readonly note?: string;
 }
 
