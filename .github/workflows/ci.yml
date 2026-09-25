@@ -29,6 +29,12 @@ jobs:
       - name: Format, lint, typecheck, unit, architecture and production build
         run: npm run verify
 
+      - name: GitHub Pages subdirectory build
+        env:
+          VITE_BASE_PATH: /macro-nation/
+          VITE_AI_ENABLED: "false"
+        run: npm run build:pages
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
