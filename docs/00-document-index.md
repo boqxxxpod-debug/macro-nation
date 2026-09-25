@@ -1,6 +1,6 @@
 # MACRO NATION — Codex document index
 
-Synced: 2026-09-22
+Synced: 2026-09-23
 
 This directory is the repository-local implementation reference for Codex. The original working documents remain in the user's private Google Drive; private Drive URLs and IDs are intentionally omitted from this public repository.
 
@@ -22,3 +22,7 @@ Always start with root `AGENTS.md`, then this index, then the documents referenc
 ## Current status
 
 The economic model parameter pack has been restored and synchronized. Codex may use `06-economic-model-parameters.md` as the calibration source of truth for economic coefficients, lag targets, parameter ranges, evidence classes, and golden-response tests.
+
+## Optional AI layer
+
+The AI supplements in `02-requirements.md`, `03-detailed-design.md`, `04-architecture.md`, `05-game-specification.md`, and `07-implementation-roadmap.md` describe an optional, explicitly invoked layer. Earlier no-AI requirements define the default behavior when the layer is disabled. See `packages/advisor-core` and `deploy/xserver/README.md` for implementation and deployment details.

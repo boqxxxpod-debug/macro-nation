@@ -1967,3 +1967,16 @@ application/history UI08 UI11
 30
 UI06からUI13 integration 30year QA
 16から29
+
+## 追補：任意のAI Layer（2026-09-23）
+
+既存の外部AI不使用設計を標準経路として維持し、AI連携は Game Core から分離した任意アダプターに置く。
+
+- `packages/advisor-core` に読み取り専用DTO、指標・因果ログの許可リスト投影、AIService、Mock provider、テンプレートニュース、応答検証を置く。
+- Web側は利用者操作時だけAIServiceを呼び、開発用Mockと同一オリジンのPHP providerを切り替える。Viteの機能フラグはAI呼び出しの表示・選択を制御し、APIキーを含めない。
+- AI利用の直前に、送信されるデータの種類と外部AI提供元への送信を画面に表示し、自由入力に個人情報を含めないよう案内する。
+- `deploy/xserver/ai/api/ai.php` は機能別入力DTO、JSON応答、サイズ、文字数、数値、時間、利用量を検証・制限する。OpenAI接続とプロンプト、価格表はサーバー側に置く。
+- provider応答はクライアントとサーバーの両方で検証し、AI失敗時は機能別の決定論的またはMockフォールバックを返す。AI文章は `GameState`、command列、保存形式、RNGへ混入させない。
+- 自由入力の結果は候補DTOとして返す。既存のPolicyHandlerRegistryによる入力検証・プレビューを経て利用者が確定するまでは、状態遷移・政策効果を発生させない。
+
+既存の受入試験ではAI無効時の外部通信ゼロ、DTO検証、フォールバック、ブラウザbundleへの秘密情報混入なしを確認する。PHP実行環境とOpenAI接続はローカルCIの対象外であり、有効化前にXserver stagingで別途確認する（設定手順は `deploy/xserver/README.md` を参照）。

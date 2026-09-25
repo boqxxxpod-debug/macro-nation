@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,5 +18,8 @@ if (!existsSync(join(dist, "index.html"))) {
 const base = normalizeBasePath(process.env.XSERVER_BASE_PATH ?? process.env.VITE_BASE_PATH);
 const template = readFileSync(join(root, "deploy/xserver/.htaccess.template"), "utf8");
 writeFileSync(join(dist, ".htaccess"), template.replaceAll("__BASE_PATH__", base), "utf8");
+
+// The optional PHP proxy contains no credentials; it reads secrets only from server environment.
+cpSync(join(root, "deploy/xserver/ai/api"), join(dist, "api"), { recursive: true });
 
 console.log(`Prepared Xserver SPA fallback for base path ${base}`);

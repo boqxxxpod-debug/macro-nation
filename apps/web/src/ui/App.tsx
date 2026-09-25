@@ -1,4 +1,5 @@
 import { getFoundationStatus } from "../application/foundation";
+import { AIPreview } from "../devtools/AIPreview";
 
 export function App() {
   const status = getFoundationStatus();
@@ -30,6 +31,7 @@ export function App() {
           </div>
         </dl>
       </section>
+      {import.meta.env.DEV && <AIPreview />}
     </main>
   );
 }
