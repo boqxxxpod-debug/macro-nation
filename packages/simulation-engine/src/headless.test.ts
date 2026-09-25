@@ -30,7 +30,7 @@ interface NoPolicyGoldenFixture {
 
 const goldenFixture = JSON.parse(
   readFileSync(
-    new URL("./fixtures/scn01-no-policy-golden-v1.json", import.meta.url),
+    new URL("./fixtures/scn01-no-policy-golden-v2.json", import.meta.url),
     "utf8",
   ),
 ) as NoPolicyGoldenFixture;
@@ -105,6 +105,29 @@ beforeAll(async () => {
 });
 
 describe("SCN-01 no-policy headless runner", () => {
+  it.each(["scn01-no-policy-1000-0007", "scn01-no-policy-1000-0009"])(
+    "completes the formerly failing 96-month boundary seed %s",
+    (seed) => {
+      const initialState = makeState(seed);
+      const result = runNoPolicyHeadless({ initialState, tickCount: 96 });
+      expect(result.failure).toBeNull();
+      expect(result.ticksCompleted).toBe(96);
+      expect(result.invariantFailures).toEqual([]);
+      expect(result.records).toHaveLength(96);
+      for (const record of result.records) {
+        const { flows, indices } = record.state.economy;
+        expect(flows.exports).toBeGreaterThanOrEqual(0);
+        expect(
+          flows.consumption +
+            flows.investment +
+            flows.governmentConsumption +
+            flows.exports -
+            flows.imports,
+        ).toBeCloseTo(indices.realGdp, 8);
+      }
+      expect(initialState.monthIndex).toBe(0);
+    },
+  );
   it.each([48, 96])(
     "completes %i monthly ticks with finite state and reconciled causal totals",
     (ticks) => {

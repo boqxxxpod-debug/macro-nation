@@ -41,6 +41,7 @@ export type TickStageId = (typeof TICK_STAGE_ORDER_V0_1_1)[number];
  */
 export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
   "0.1.1": TICK_STAGE_ORDER_V0_1_1,
+  "0.1.2": TICK_STAGE_ORDER_V0_1_1,
 });
 
 export const TICK_STAGE_ORDER =

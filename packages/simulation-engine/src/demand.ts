@@ -345,38 +345,33 @@ function compositionScale(
   projections: readonly ComponentProjection[],
   preliminaryNetDelta: number,
   targetNetDelta: number,
-): { readonly scale: number; readonly adjustments: readonly number[] } {
+  weights: readonly number[],
+): { readonly scale: number; readonly adjustments: readonly number[] } | null {
   const adjustments = projections.map(
-    (projection) =>
+    (projection, index) =>
       projection.causal.afterValue -
       projection.before -
-      projection.weight * preliminaryNetDelta,
+      weights[index]! * preliminaryNetDelta,
   );
 
   let lower = 0;
   let upper = 1;
   for (let index = 0; index < projections.length; index += 1) {
     const projection = projections[index]!;
-    const baseline = projection.before + projection.weight * targetNetDelta;
+    const baseline = projection.before + weights[index]! * targetNetDelta;
     const adjustment = adjustments[index]!;
     if (adjustment > 0) {
       lower = Math.max(lower, -baseline / adjustment);
     } else if (adjustment < 0) {
       upper = Math.min(upper, baseline / -adjustment);
-    } else if (baseline < 0) {
-      throw new RangeError(
-        "GDP loading would make a demand component negative",
-      );
+    } else if (baseline < -1e-10) {
+      return null;
     }
   }
 
   lower = Math.max(0, lower);
   upper = Math.min(1, upper);
-  if (lower > upper + 1e-12 || upper < 0) {
-    throw new RangeError(
-      "GDP loadings cannot preserve nonnegative demand components",
-    );
-  }
+  if (lower > upper + 1e-12 || upper < -1e-12) return null;
   return { scale: Math.max(lower, upper), adjustments };
 }
 
@@ -391,11 +386,40 @@ function buildLoadedComponents(
   readonly values: Readonly<Record<GdpComponentId, number>>;
   readonly causal: readonly CausalContribution[];
 } {
-  const { scale, adjustments } = compositionScale(
+  let weights: readonly number[] = projections.map((item) => item.weight);
+  let composition = compositionScale(
     projections,
     preliminaryNetDelta,
     targetNetDelta,
+    weights,
   );
+  if (!composition) {
+    // A fixed GDP share can assign a contraction to an already empty component.
+    // Spread that contraction across the available positive components instead.
+    // Their signed weights still sum to one, so GDP and causal totals reconcile.
+    const available = projections.reduce(
+      (total, item) => total + (item.sign === 1 ? item.before : 0),
+      0,
+    );
+    if (available <= 0)
+      throw new RangeError(
+        "No positive GDP component can absorb the demand loading",
+      );
+    weights = projections.map((item) =>
+      item.sign === 1 ? item.before / available : 0,
+    );
+    composition = compositionScale(
+      projections,
+      preliminaryNetDelta,
+      targetNetDelta,
+      weights,
+    );
+    if (!composition)
+      throw new RangeError(
+        "GDP loadings cannot preserve nonnegative demand components",
+      );
+  }
+  const { scale, adjustments } = composition;
   const outputGapTerms = outputGap.contributions;
   const causal: CausalContribution[] = [];
   const values = {} as Record<GdpComponentId, number>;
@@ -413,17 +437,20 @@ function buildLoadedComponents(
         if (origin.id === target.id) {
           builder.add(term, scale * term.delta);
         }
-        builder.add(term, -scale * target.weight * origin.sign * term.delta);
+        builder.add(
+          term,
+          -scale * weights[targetIndex]! * origin.sign * term.delta,
+        );
       }
     }
 
     for (const term of outputGapTerms) {
-      builder.add(term, target.weight * potentialGdp * term.delta);
+      builder.add(term, weights[targetIndex]! * potentialGdp * term.delta);
     }
 
     const afterValue =
       target.before +
-      target.weight * targetNetDelta +
+      weights[targetIndex]! * targetNetDelta +
       scale * adjustments[targetIndex]!;
     values[target.id] = Math.max(0, afterValue);
     causal.push(builder.build(values[target.id]));
