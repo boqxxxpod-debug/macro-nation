@@ -5,6 +5,7 @@ export * from "./headless";
 export * from "./demand";
 export * from "./macro";
 export * from "./policy-registry";
+export * from "./policy-effects";
 export * from "./fiscal-industries";
 export * from "./rng";
 export * from "./tick";

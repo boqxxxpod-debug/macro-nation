@@ -27,9 +27,13 @@ export const parameterDefinitionSchema = z
     sourceIds: z.array(z.string().min(1)).min(1),
   })
   .superRefine((value, ctx) => {
-    if (value.min > value.max) ctx.addIssue({ code: "custom", message: "min must be <= max" });
+    if (value.min > value.max)
+      ctx.addIssue({ code: "custom", message: "min must be <= max" });
     if (value.default < value.min || value.default > value.max) {
-      ctx.addIssue({ code: "custom", message: "default must be inside [min,max]" });
+      ctx.addIssue({
+        code: "custom",
+        message: "default must be inside [min,max]",
+      });
     }
   });
 
@@ -44,12 +48,21 @@ export const lagKernelSchema = z
   })
   .superRefine((value, ctx) => {
     if (!(value.start <= value.peak && value.peak <= value.end)) {
-      ctx.addIssue({ code: "custom", message: "start <= peak <= end required" });
+      ctx.addIssue({
+        code: "custom",
+        message: "start <= peak <= end required",
+      });
     }
     if (value.weights.length !== value.end - value.start + 1) {
-      ctx.addIssue({ code: "custom", message: "weight count must match kernel span" });
+      ctx.addIssue({
+        code: "custom",
+        message: "weight count must match kernel span",
+      });
     }
-    const sum = value.weights.reduce((total: number, weight: number) => total + weight, 0);
+    const sum = value.weights.reduce(
+      (total: number, weight: number) => total + weight,
+      0,
+    );
     if (Math.abs(sum - 1) > 1e-10) {
       ctx.addIssue({ code: "custom", message: "lag weights must sum to 1" });
     }
@@ -67,7 +80,12 @@ export const shockModelSchema = z.object({
   correlation: matrixSchema,
   cholesky: matrixSchema,
   regimes: z
-    .array(z.object({ regimeId: z.string().min(1), volatilityMultiplier: z.number().positive() }))
+    .array(
+      z.object({
+        regimeId: z.string().min(1),
+        volatilityMultiplier: z.number().positive(),
+      }),
+    )
     .min(1),
 });
 
@@ -78,6 +96,35 @@ export const policyRuleSchema = z
     // Legacy single-value rules stay valid; a new policy may declare named inputs.
     inputMin: z.number().finite().optional(),
     inputMax: z.number().finite().optional(),
+    referenceValue: z.number().finite().optional(),
+    defaultDurationMonths: z.number().int().positive().optional(),
+    terminationPoliticalCapital: z.number().finite().nonnegative().optional(),
+    modifierSettings: z.record(z.string(), z.number().finite()).optional(),
+    effectSpecs: z
+      .array(
+        z.object({
+          targetPath: z.string().min(1),
+          kernelId: z.string().min(1),
+          inputScale: z.number().finite(),
+          scaleBy: z.enum(["absolute", "gdp"]),
+          operation: z.enum(["addDelta", "addRate"]),
+          role: z.enum(["primary", "sideEffect"]),
+          inputMode: z.enum(["signed", "absoluteChange"]),
+          modifierIds: z.array(
+            z.enum([
+              "slack",
+              "capacity",
+              "debt",
+              "reserves",
+              "repeat",
+              "openness",
+              "trust",
+              "retaliation",
+            ]),
+          ),
+        }),
+      )
+      .optional(),
     inputs: z
       .array(
         z.object({
@@ -124,10 +171,17 @@ export const policyRuleSchema = z
             message: `invalid range for policy input ${input.inputId}`,
           });
         }
-        if (input.step !== undefined &&
-          Math.abs((input.defaultValue - input.min) / input.step -
-            Math.round((input.defaultValue - input.min) / input.step)) > 1e-8) {
-          ctx.addIssue({ code: "custom", message: `default is not on step for policy input ${input.inputId}` });
+        if (
+          input.step !== undefined &&
+          Math.abs(
+            (input.defaultValue - input.min) / input.step -
+              Math.round((input.defaultValue - input.min) / input.step),
+          ) > 1e-8
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: `default is not on step for policy input ${input.inputId}`,
+          });
         }
       }
     } else if (
@@ -162,7 +216,12 @@ const calibrationTargetSchema = z
   })
   .passthrough();
 export const calibrationTargetsSchema = z.object({
-  irf: z.array(calibrationTargetSchema),
+  irf: z.array(
+    calibrationTargetSchema.extend({
+      shockId: z.string().min(1),
+      horizonMonths: z.number().int().positive(),
+    }),
+  ),
   moments: z.array(
     z.object({
       targetId: z.string(),
@@ -208,7 +267,9 @@ export const contentSchema = z.object({
   /** Optional extension definitions; the nine built-in indicators retain their legacy mapping. */
   indicatorDefinitions: z.array(indicatorDefinitionSchema).optional(),
   policies: z.array(z.string().min(1)).min(1),
-  events: z.array(z.object({ eventId: z.string().min(1), dependsOn: z.array(z.string()) })),
+  events: z.array(
+    z.object({ eventId: z.string().min(1), dependsOn: z.array(z.string()) }),
+  ),
   textKeys: z.array(z.string().min(1)),
 });
 
@@ -229,14 +290,17 @@ export const nationSchema = z.object({
     support: z.number().min(0).max(100),
   }),
   industryStructure: z.record(z.string(), z.number().min(0).max(1)),
-  industryLoadings: z.record(z.string(), z.object({
-    domesticDemand: z.number().finite(),
-    productivity: z.number().finite(),
-    foreignDemand: z.number().finite(),
-    resourcePrice: z.number().finite(),
-    riskPremium: z.number().finite(),
-    weather: z.number().finite(),
-  })),
+  industryLoadings: z.record(
+    z.string(),
+    z.object({
+      domesticDemand: z.number().finite(),
+      productivity: z.number().finite(),
+      foreignDemand: z.number().finite(),
+      resourcePrice: z.number().finite(),
+      riskPremium: z.number().finite(),
+      weather: z.number().finite(),
+    }),
+  ),
   tradeStructure: z.record(z.string(), z.number()),
   energyStructure: z.record(z.string(), z.number().min(0).max(1)),
   institutions: z.record(z.string(), z.number()),
@@ -262,7 +326,9 @@ export const scenarioSchema = z.object({
   enabledPolicies: z.array(z.string()),
   enabledEvents: z.array(z.string()),
   externalBaseline: z.record(z.string(), z.number()),
-  parameterOverrides: z.array(z.object({ parameterId: z.string(), value: z.number().finite() })),
+  parameterOverrides: z.array(
+    z.object({ parameterId: z.string(), value: z.number().finite() }),
+  ),
 });
 
 export const modelSchema = z.object({
@@ -272,8 +338,14 @@ export const modelSchema = z.object({
   description: z.string().min(1),
 });
 export const limitsSchema = z.object({
-  hard: z.record(z.string(), z.tuple([z.number().finite(), z.number().finite()])),
-  scenarioUi: z.record(z.string(), z.tuple([z.number().finite(), z.number().finite()])),
+  hard: z.record(
+    z.string(),
+    z.tuple([z.number().finite(), z.number().finite()]),
+  ),
+  scenarioUi: z.record(
+    z.string(),
+    z.tuple([z.number().finite(), z.number().finite()]),
+  ),
 });
 export const effectCurvesSchema = z.record(
   z.string(),
@@ -287,7 +359,10 @@ export const manifestSchema = z.object({
   calibrationVersion: z.string().min(1),
   contentVersion: z.string().min(1),
   rngVersion: z.string().min(1),
-  compatibleEngine: z.object({ min: z.string().min(1), max: z.string().min(1) }),
+  compatibleEngine: z.object({
+    min: z.string().min(1),
+    max: z.string().min(1),
+  }),
   fileHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)),
   overrideAllowlist: z.array(z.string().min(1)),
 });

@@ -17,17 +17,19 @@ import {
 
 describe("ConfigPack v1", () => {
   it("validates the standard SCN-01 fixture and hashes", async () => {
-    expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.0");
+    expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.1");
     expect(SCN01_CONFIG_PACK.scenario.clock.policyCycleSteps).toBe(3);
     await expect(
       verifyConfigPackHashes(SCN01_CONFIG_PACK, SCN01_CONFIG_FILES),
     ).resolves.toBeUndefined();
-    expect(() => assertEngineCompatibility(SCN01_CONFIG_PACK, "0.1.0")).not.toThrow();
+    expect(() =>
+      assertEngineCompatibility(SCN01_CONFIG_PACK, "0.1.0"),
+    ).not.toThrow();
     expect(() =>
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "1",
-        modelVersion: "0.1.0",
+        modelVersion: "0.1.1",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
@@ -35,7 +37,6 @@ describe("ConfigPack v1", () => {
       }),
     ).not.toThrow();
   });
-
 
   it("verifies manifest hashes when loading and rejects changed or missing files", async () => {
     await expect(loadSCN01ConfigPack()).resolves.toEqual(SCN01_CONFIG_PACK);
@@ -63,7 +64,7 @@ describe("ConfigPack v1", () => {
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "1",
-        modelVersion: "0.1.0",
+        modelVersion: "0.1.1",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
@@ -75,7 +76,10 @@ describe("ConfigPack v1", () => {
   it("rejects invalid normalized lag kernels and shock matrix dimensions", () => {
     const badSum = SCN01_CONFIG_PACK.lagKernels.map((kernel, index) =>
       index === 0
-        ? { ...kernel, weights: [kernel.weights[0]! + 0.1, ...kernel.weights.slice(1)] }
+        ? {
+            ...kernel,
+            weights: [kernel.weights[0]! + 0.1, ...kernel.weights.slice(1)],
+          }
         : kernel,
     );
     expect(() =>
@@ -135,7 +139,7 @@ describe("ConfigPack v1", () => {
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "2",
-        modelVersion: "0.1.0",
+        modelVersion: "0.1.1",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
@@ -213,16 +217,23 @@ describe("ConfigPack v1", () => {
       [2, 1, 0],
       [0, 0, 1],
     ];
-    expect(() => parseConfigPack(correlationBroken)).toThrow(/positive definite|Cholesky/);
+    expect(() => parseConfigPack(correlationBroken)).toThrow(
+      /positive definite|Cholesky/,
+    );
 
     const circular = structuredClone(correlationBroken);
     circular.shockModel = structuredClone(SCN01_CONFIG_PACK.shockModel);
-    circular.content.events[0]!.dependsOn = [circular.content.events[0]!.eventId];
+    circular.content.events[0]!.dependsOn = [
+      circular.content.events[0]!.eventId,
+    ];
     expect(() => parseConfigPack(circular)).toThrow(/Circular event reference/);
 
     const missingVersion = structuredClone(circular) as Record<string, unknown>;
     missingVersion.content = structuredClone(SCN01_CONFIG_PACK.content);
-    missingVersion.manifest = { ...SCN01_CONFIG_PACK.manifest, modelVersion: "" };
+    missingVersion.manifest = {
+      ...SCN01_CONFIG_PACK.manifest,
+      modelVersion: "",
+    };
     expect(() => parseConfigPack(missingVersion as never)).toThrow();
 
     const forbiddenOverride = structuredClone({
@@ -243,13 +254,17 @@ describe("ConfigPack v1", () => {
     forbiddenOverride.scenario.parameterOverrides = [
       { parameterId: "CONS-Y-001", value: 0.7 },
     ];
-    expect(() => parseConfigPack(forbiddenOverride)).toThrow(/override not allowed/);
+    expect(() => parseConfigPack(forbiddenOverride)).toThrow(
+      /override not allowed/,
+    );
   });
   it("requires a definition for every new indicator and accepts a named-input policy", () => {
-    expect(() => parseConfigPack({
-      ...SCN01_CONFIG_PACK,
-      policyRules: SCN01_CONFIG_PACK.policyRules.slice(0, -1),
-    })).toThrow(/Missing policy rule/);
+    expect(() =>
+      parseConfigPack({
+        ...SCN01_CONFIG_PACK,
+        policyRules: SCN01_CONFIG_PACK.policyRules.slice(0, -1),
+      }),
+    ).toThrow(/Missing policy rule/);
     const content = {
       ...SCN01_CONFIG_PACK.content,
       indicators: [
@@ -318,14 +333,20 @@ describe("ConfigPack v1", () => {
     ).not.toThrow();
     const offStep = structuredClone(policyRules);
     offStep[offStep.length - 1]!.inputs![0]!.defaultValue = 0.055;
-    expect(() => parseConfigPack({
-      ...SCN01_CONFIG_PACK,
-      policyRules: offStep,
-      content: { ...SCN01_CONFIG_PACK.content,
-        policies: [...SCN01_CONFIG_PACK.content.policies, "housing-tax"],
-        textKeys: [...SCN01_CONFIG_PACK.content.textKeys, "policy.housing.rate"],
-      },
-    })).toThrow(/default is not on step/);
+    expect(() =>
+      parseConfigPack({
+        ...SCN01_CONFIG_PACK,
+        policyRules: offStep,
+        content: {
+          ...SCN01_CONFIG_PACK.content,
+          policies: [...SCN01_CONFIG_PACK.content.policies, "housing-tax"],
+          textKeys: [
+            ...SCN01_CONFIG_PACK.content.textKeys,
+            "policy.housing.rate",
+          ],
+        },
+      }),
+    ).toThrow(/default is not on step/);
   });
 
   it("reads indicators from the saved snapshot, even after the published pack changes", async () => {

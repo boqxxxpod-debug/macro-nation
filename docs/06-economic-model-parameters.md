@@ -177,7 +177,7 @@ SUP-GAP-MAX | outputGapMax | 0.12 | hard clamp。
 unemploymentDelta = monthlyMeanReversion * (naturalUnemployment - previousUnemployment) - okunCoefficient * laggedOutputGrowthGap / 12
 
 初期パラメータ:
-LAB-OKUN-001 | okunCoefficient | 0.47 | 0.35〜0.65 | E/C | advanced-small-openの100bp paired IRFに合わせた校正値。output growth gapは3〜9か月のhump kernelで反映する。
+LAB-OKUN-001 | okunCoefficient | 0.54 | 0.35〜0.65 | E/C | advanced-small-open Model v0.1.1の100bp paired IRFに合わせた校正値。output growth gapは3〜9か月のhump kernelで反映する。
 LAB-LAG-001 | okunLagStartMonths | 3 | 1〜4 | C。
 LAB-LAG-002 | okunLagPeakMonths | 6 | 4〜9 | C。
 LAB-LAG-003 | okunLagEndMonths | 9 | 6〜15 | C。
@@ -269,7 +269,7 @@ Issue #9で確定した校正帯:
 1%GDPの標準公共投資プログラムに対し、1年目の実質GDP水準は+0.2〜+0.8%（標準値+0.4%）、4年後の潜在GDPは+0.7〜+1.6%（標準値+1.0%）を目標とする。これはゲーム内校正目標で、特定の国・研究の推計値をそのまま再現する主張ではない。
 
 ゲーム初期値:
-PINV-DEMAND-001 | sameYearOutputEffectPer1PctGdp | +0.40% | 0.20〜0.70 | E。
+PINV-DEMAND-001 | sameYearOutputEffectPer1PctGdp | +0.70% | 0.20〜0.70 | E | Model v0.1.1の設定値。目標帯域は12か月時点の実現効果に適用する。
 PINV-SUPPLY-001 | year4PotentialGdpEffectPer1PctGdp | +1.00% | 0.50〜1.50 | C/E。
 PINV-EFF-001 | implementationEfficiencyBase | 0.70 | 0.30〜0.95 | C。
 PINV-SLACK-001 | slackDemandMultiplier | 1.25 | 1.0〜1.6 | C。
@@ -316,7 +316,7 @@ FXは短期にrandom/external要因を大きくし、政策だけで完全制御
 実証アンカーとして、外貨購入1%GDPで名目為替を約1.7〜2.0%減価させる研究、および準備が十分で政策方向と整合する場合に有効性が高いという研究を参照する。
 
 初期パラメータ:
-FXI-EFF-001 | effectPer1PctGdpIntervention | 1.50% | 0.50〜2.00 | E/C。
+FXI-EFF-001 | effectPer1PctGdpIntervention | 0.60% | 0.20〜1.50 | E/C | advanced-small-open Model v0.1.1の標準値。旧1.50%は標準値として使わない。
 FXI-IMM-001 | immediateShare | 0.70 | 0.50〜0.85 | C。
 FXI-HALF-001 | decayHalfLifeMonths | 3 | 1〜6 | C。
 FXI-CAP-001 | maxSingleActionFxEffect | 4.0% | 2〜6 | G。
@@ -534,6 +534,14 @@ reserves>6か月の方がreserves<3か月より効果が強い。
 次にstate-dependent modifierを調整する。
 最後に評価閾値を調整する。
 評価点を合わせるために経済式を歪めない。
+
+21.1 Model v0.1.1 校正記録（SCN-01）
+
+Engine v0.1.3 / Config v0.1.1で、同一seed・同一shock streamのbaselineと政策variantを60か月比較する。`npm run calibration:irf -- --runs 16` は5政策の中央値を3か月刻みで記録し、政策金利+100bpのGDP最小月19、失業率差最大月20、24か月GDP差-0.483%、失業率差+0.187pp、公共投資1%GDPの12か月GDP差+0.320%、48か月潜在GDP差+0.741%を得た。為替介入1%GDPでは6か月FX差-0.466%、発動時の外貨準備費用は12 GDP単位だった。17件の方向・範囲ゲートは通過した。ここでの値はゲーム内の校正結果であり、実証推定値を主張しない。
+
+`npm run calibration:moments -- --runs 1000` は無介入96か月×1,000 seedを完走し、最初の12か月を除いた84,000か月を集計した。失敗0件、GDP月次成長の標準偏差0.00406、FX指数P99 140.05はConfigPackの帯域内。産出gapの自己相関0.996、通常/余剰/過熱局面比率は0.388/0.122/0.490であり、帯域を設けていない診断値もレポートに残す。高い過熱頻度は後続の代表戦略比較とプレイテストで監視する。
+
+旧Model v0.1.0のGolden fixtureは保持し、v0.1.1を別fixtureとした。LAB-OKUN-001は0.47→0.54（金融政策の失業率24か月差を帯域内へ）、PINV-DEMAND-001は0.004→0.007（公共投資の12か月GDP差を帯域内へ）、FXI-EFF-001は旧標準0.015→0.006（実証校正追補の標準へ）とした。政策効果はConfigの非負・総和1のkernelとeffect specで表し、FXIのピーク後半減は4か月である。経済式、評価閾値、旧fixtureはこの調整で変更していない。
 
 22. Config実装例
 

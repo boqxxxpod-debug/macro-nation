@@ -10,6 +10,7 @@ import {
   type ConfigSnapshot,
   type EconomyState,
   type GameState,
+  type PolicyDecision,
   type VersionTuple,
 } from "@macro-nation/domain";
 import { updateDemandAndGdp } from "./demand";
@@ -18,6 +19,7 @@ import { updateFx, updatePricesLabor } from "./macro";
 import { RNG_VERSION } from "./rng";
 import { createContributionBuilder } from "./causal";
 import { ENGINE_VERSION } from "./version";
+import { activateDuePolicies } from "./policy-effects";
 import {
   XOSHIRO_TICK_RNG_PROVIDER,
   tick,
@@ -31,6 +33,7 @@ export interface NoPolicyRunInput {
   readonly tickCount: number;
   /** Set false for large seed batches that only need final indicators and failures. */
   readonly collectTrace?: boolean;
+  readonly onTick?: (record: HeadlessTickRecord) => void;
 }
 
 export interface HeadlessTickRecord {
@@ -51,7 +54,7 @@ export interface HeadlessFailure {
 }
 
 export interface NoPolicyRunResult {
-  readonly strategyId: "no-policy-v1";
+  readonly strategyId: "no-policy-v1" | "fixed-policy-v1";
   readonly requestedTicks: number;
   readonly ticksCompleted: number;
   readonly finalState: GameState;
@@ -74,6 +77,14 @@ export interface NoPolicyReplayPackage {
   readonly initialState: GameState;
   /** The no-policy strategy intentionally has no commands. */
   readonly commands: readonly [];
+}
+
+export interface FixedPolicyReplayPackage extends Omit<
+  NoPolicyReplayPackage,
+  "strategyId" | "commands"
+> {
+  readonly strategyId: "fixed-policy-v1";
+  readonly commands: readonly PolicyDecision[];
 }
 
 interface ScenarioClock {
@@ -475,6 +486,10 @@ function contributionFailure(
 const NO_POLICY_HANDLERS: Partial<
   Record<TickMutableStageId, TickStageHandler>
 > = {
+  activateReservedPolicies: ({ state }) => {
+    const result = activateDuePolicies(state);
+    return { state: result.state, causal: result.causal };
+  },
   updateDemand: ({ state, context }) => {
     const output = updateDemandAndGdp({
       economy: state.economy,
@@ -562,9 +577,9 @@ const NO_POLICY_HANDLERS: Partial<
   },
 };
 
-/** Run SCN-01 without policy commands using the production monthly tick and model blocks. */
-export function runNoPolicyHeadless(
+function runHeadless(
   input: NoPolicyRunInput,
+  strategyId: NoPolicyRunResult["strategyId"],
 ): NoPolicyRunResult {
   if (!Number.isInteger(input.tickCount) || input.tickCount <= 0) {
     throw new RangeError("tickCount must be a positive integer");
@@ -574,10 +589,10 @@ export function runNoPolicyHeadless(
   const collectTrace = input.collectTrace ?? true;
   let ticksCompleted = 0;
   let state = input.initialState;
-  let failure = noPolicyFailure(state);
+  let failure = strategyId === "no-policy-v1" ? noPolicyFailure(state) : null;
   if (failure) {
     return {
-      strategyId: "no-policy-v1",
+      strategyId,
       requestedTicks: input.tickCount,
       ticksCompleted,
       finalState: state,
@@ -599,7 +614,7 @@ export function runNoPolicyHeadless(
     };
     invariantFailures.push(failure);
     return {
-      strategyId: "no-policy-v1",
+      strategyId,
       requestedTicks: input.tickCount,
       ticksCompleted,
       finalState: state,
@@ -677,10 +692,15 @@ export function runNoPolicyHeadless(
         diagnostics: result.value.diagnostics,
       });
     }
+    input.onTick?.({
+      monthIndex,
+      state,
+      diagnostics: result.value.diagnostics,
+    });
   }
 
   return {
-    strategyId: "no-policy-v1",
+    strategyId,
     requestedTicks: input.tickCount,
     ticksCompleted,
     finalState: state,
@@ -688,6 +708,18 @@ export function runNoPolicyHeadless(
     invariantFailures,
     failure,
   };
+}
+
+/** Run the same production monthly pipeline with an initially reserved policy set. */
+export function runPolicyHeadless(input: NoPolicyRunInput): NoPolicyRunResult {
+  return runHeadless(input, "fixed-policy-v1");
+}
+
+/** Run SCN-01 without policy commands using the production monthly tick and model blocks. */
+export function runNoPolicyHeadless(
+  input: NoPolicyRunInput,
+): NoPolicyRunResult {
+  return runHeadless(input, "no-policy-v1");
 }
 
 export function createNoPolicyReplayPackage(
@@ -722,6 +754,16 @@ export function replayNoPolicyPackage(
   ) {
     throw new Error("Unsupported replay package format or strategy");
   }
+  validateReplayIdentity(replay);
+  return runNoPolicyHeadless({
+    initialState: replay.initialState,
+    tickCount: replay.tickCount,
+  });
+}
+
+function validateReplayIdentity(
+  replay: NoPolicyReplayPackage | FixedPolicyReplayPackage,
+): void {
   if (replay.engineVersion !== ENGINE_VERSION) {
     throw new Error(
       `Replay engine ${replay.engineVersion} does not match ${ENGINE_VERSION}`,
@@ -748,7 +790,44 @@ export function replayNoPolicyPackage(
   ) {
     throw new Error("Replay version tuple does not match initial state");
   }
-  return runNoPolicyHeadless({
+}
+
+export function createFixedPolicyReplayPackage(
+  initialState: GameState,
+  tickCount: number,
+): FixedPolicyReplayPackage {
+  if (!Number.isInteger(tickCount) || tickCount <= 0)
+    throw new RangeError("tickCount must be a positive integer");
+  return {
+    schemaVersion: "headless-replay-v1",
+    strategyId: "fixed-policy-v1",
+    scenarioId: initialState.scenarioId,
+    seed: initialState.rng.rootSeed,
+    tickCount,
+    engineVersion: initialState.versions.engineVersion,
+    modelVersion: initialState.versions.modelVersion,
+    rngVersion: initialState.versions.rngVersion,
+    configHash: initialState.configSnapshot.configHash,
+    initialState,
+    commands: initialState.policies.reserved,
+  };
+}
+
+export function replayFixedPolicyPackage(
+  replay: FixedPolicyReplayPackage,
+): NoPolicyRunResult {
+  if (
+    replay.schemaVersion !== "headless-replay-v1" ||
+    replay.strategyId !== "fixed-policy-v1"
+  )
+    throw new Error("Unsupported replay package format or strategy");
+  validateReplayIdentity(replay);
+  if (
+    JSON.stringify(replay.commands) !==
+    JSON.stringify(replay.initialState.policies.reserved)
+  )
+    throw new Error("Replay policy commands do not match initial state");
+  return runPolicyHeadless({
     initialState: replay.initialState,
     tickCount: replay.tickCount,
   });
