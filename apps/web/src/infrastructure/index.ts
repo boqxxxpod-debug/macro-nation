@@ -4,3 +4,4 @@
  */
 export const infrastructureLayer = "web-infrastructure" as const;
 export * from "./game-repository";
+export * from "./preview-client";
