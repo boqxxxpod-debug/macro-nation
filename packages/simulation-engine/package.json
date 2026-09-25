@@ -12,5 +12,8 @@
   },
   "dependencies": {
     "@macro-nation/domain": "0.0.0"
+  },
+  "devDependencies": {
+    "@macro-nation/model-config": "0.0.0"
   }
 }

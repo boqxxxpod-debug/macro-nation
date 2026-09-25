@@ -19,13 +19,18 @@
     "format": "prettier --write .",
     "format:check": "prettier --check package.json apps/web/package.json packages/*/package.json",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:scripts",
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "test": "npm run test --workspaces --if-present",
     "validate-content": "npm run validate-content --workspace @macro-nation/model-config",
     "test:e2e": "npm run build:web && playwright test",
     "architecture:check": "node scripts/check-architecture.mjs",
     "build:smoke": "node scripts/xserver-build-smoke.mjs && node deploy/xserver/prepare.mjs && node scripts/check-ai-build.mjs",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run validate-content && npm run architecture:check && npm run build && npm run build:smoke"
+    "simulate": "vite-node --script scripts/headless.ts",
+    "simulate:smoke": "npm run simulate -- --ticks 96 --runs 1 --seed issue-10-no-policy-golden-v1 --out /tmp/macro-nation-headless-ci",
+    "simulate:batch:10": "npm run simulate -- --ticks 96 --runs 10 --seed scn01-ci --out /tmp/macro-nation-headless-batch-10",
+    "simulate:1000": "npm run simulate -- --ticks 96 --runs 1000 --seed scn01-no-policy-1000 --out artifacts/headless/1000x96",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run simulate:smoke && npm run validate-content && npm run architecture:check && npm run build && npm run build:smoke"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
@@ -46,6 +51,7 @@
     "prettier": "^3.6.2",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.39.0",
+    "vite-node": "^3.2.4",
     "vite": "^7.1.4",
     "vite-plugin-pwa": "^1.0.3",
     "vitest": "^3.2.4"

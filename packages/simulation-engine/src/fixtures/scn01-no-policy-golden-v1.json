@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "SCN-01",
+  "seed": "issue-10-no-policy-golden-v1",
+  "engineVersion": "0.1.1",
+  "modelVersion": "0.1.0",
+  "calibrationVersion": "advanced-small-open-v1.0.0",
+  "rngVersion": "xoshiro128ss-v1",
+  "traceNumberDecimals": 8,
+  "configHash": "2e297cf768d7131780f3d36ed9c01499b40d177c65bd41c7fa2036bee3dc656e",
+  "traceSha256": {
+    "48": "930acd77017efd01a17718bdecb27a688cfb69d5ed22ea365614f701a79d8f01",
+    "96": "631e3b0736f82a5a438e080f1e761e7216b005d9bf53a634960dd32cc1a2fe90"
+  }
+}
