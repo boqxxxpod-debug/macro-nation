@@ -6,6 +6,7 @@ export * from "./demand";
 export * from "./macro";
 export * from "./policy-registry";
 export * from "./policy-effects";
+export * from "./commands";
 export * from "./fiscal-industries";
 export * from "./rng";
 export * from "./tick";

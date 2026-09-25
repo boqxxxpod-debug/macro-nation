@@ -215,6 +215,26 @@ export interface PolicyBook {
   readonly cancelled: readonly PolicyDecision[];
 }
 
+export interface ResourceReservation {
+  readonly reservationId: string;
+  readonly policyId: string;
+  readonly costs: PolicyCosts;
+}
+
+export interface PolicyCommandReceipt {
+  readonly commandId: string;
+  readonly fingerprint: string;
+  readonly quarter: number;
+  readonly monthIndex: number;
+  readonly kind: "commit" | "amend" | "cancel";
+  readonly policyId: string;
+}
+
+export interface PolicyAdministration {
+  readonly reservations: readonly ResourceReservation[];
+  readonly receipts: readonly PolicyCommandReceipt[];
+}
+
 export type EffectTarget = string;
 export interface ScheduledEffect {
   readonly effectId: string;
@@ -296,6 +316,8 @@ export interface GameState {
   readonly runState: RunState;
   readonly economy: EconomyState;
   readonly policies: PolicyBook;
+  /** Optional in saves produced before the quarterly command system. */
+  readonly policyAdministration?: PolicyAdministration;
   readonly effects: readonly ScheduledEffect[];
   readonly events: EventState;
   readonly resources: GovernmentResources;
