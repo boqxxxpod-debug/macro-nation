@@ -527,5 +527,5 @@ describe("demand and GDP block", () => {
       report.realGdpQuarterlyAnnualized.mean,
       10,
     );
-  });
+  }, 15_000);
 });

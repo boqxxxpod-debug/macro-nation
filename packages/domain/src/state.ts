@@ -118,6 +118,10 @@ export interface EconomyState {
     readonly baselinePotentialGdp?: IndexLevel;
     /** Effective incremental public-capital formation by investment vintage. */
     readonly publicCapitalFormationHistory?: readonly number[];
+    /** Supply already matured from completed policy kernels, in GDP index points. */
+    readonly completedPolicyPotential?: number;
+    /** Last applied policy supply level for monthly causal reconciliation. */
+    readonly appliedPolicyPotential?: number;
   };
   readonly ratios: {
     readonly governmentDebtRatio: PercentRate;
@@ -168,11 +172,7 @@ export interface EconomyState {
 }
 
 export type CorePolicyType =
-  | "interestRate"
-  | "taxPackage"
-  | "publicWorks"
-  | "tariff"
-  | "fxIntervention";
+  "interestRate" | "taxPackage" | "publicWorks" | "tariff" | "fxIntervention";
 /** New policy types require a registered engine handler, not a new union member. */
 export type PolicyType = CorePolicyType | (string & {});
 export type PolicyStatus =

@@ -196,9 +196,32 @@ describe("configured policy runtime", () => {
     expect(result.ticksCompleted).toBe(48);
     expect(result.finalState.policies.active).toEqual([]);
     expect(result.finalState.policies.completed).toHaveLength(1);
-    expect(result.finalState.effects).toEqual([]);
+    expect(result.finalState.effects).toMatchObject([
+      { targetPath: "economy.indices.potentialGdp", endMonth: 84 },
+    ]);
     expect(result.records[23]!.state.policies.active).toHaveLength(1);
     expect(result.records[24]!.state.policies.completed).toHaveLength(1);
+  });
+  it("keeps matured public-capital supply after its 84-month kernel ends", () => {
+    const result = runPolicyHeadless({
+      initialState: withPolicy("public-works", 0.01),
+      tickCount: 96,
+    });
+    expect(result.failure).toBeNull();
+    expect(result.finalState.effects).toEqual([]);
+    expect(
+      result.finalState.economy.memory?.completedPolicyPotential,
+    ).toBeGreaterThan(0);
+    expect(
+      result.records[85]!.state.economy.memory?.completedPolicyPotential,
+    ).toBeGreaterThan(0);
+    expect(
+      result.records[84]!.state.economy.memory?.completedPolicyPotential,
+    ).toBe(0);
+    expect(result.records[85]!.state.economy.indices.potentialGdp).toBeCloseTo(
+      result.records[84]!.state.economy.indices.potentialGdp,
+      1,
+    );
   });
   it("terminates an active policy once, removes future effects and records reversal costs", () => {
     const activated = activateDuePolicies(withPolicy("interest-rate", 0.03));
@@ -312,6 +335,19 @@ describe("configured policy runtime", () => {
     );
     expect(at("public-works", 48).indices.potentialGdp).toBeGreaterThan(
       base(48).indices.potentialGdp,
+    );
+    const publicSupplyCausal = results[
+      "public-works"
+    ]!.records[35]!.diagnostics.causal.find(
+      (entry) => entry.indicatorId === "potentialGdp",
+    );
+    expect(publicSupplyCausal?.contributions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "public-works-decision",
+          effectId: "public-works-decision:3",
+        }),
+      ]),
     );
     expect(at("tariff", 3).indices.importPrice).toBeGreaterThan(
       base(3).indices.importPrice,

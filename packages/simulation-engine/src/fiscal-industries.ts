@@ -218,6 +218,7 @@ function matchingEffects(
       source: {
         sourceType: effect.sourceType,
         sourceId: effect.sourceId,
+        effectId: effect.effectId,
         labelKey: effect.labelKey,
         confidence: "high",
       },
@@ -688,6 +689,22 @@ export function updateFiscalIndustries(
     (additionalPublicInvestment / annualNominalGdp) *
     parameter(values, "PINV-EFF-001") *
     capacityFactor;
+  // The program's direct capital supply follows its ScheduledEffect kernel.
+  // Keep only other investment formation in the legacy vintage path so the
+  // same spending does not raise potential GDP twice.
+  const directPolicyInvestment = matchingEffects(
+    input.effects,
+    input.monthIndex,
+    "economy.flows.publicInvestment",
+    economyBefore.flows.publicInvestment,
+  ).reduce((sum, term) => sum + term.delta, 0);
+  const vintageFormation = Math.max(
+    0,
+    capitalFormation -
+      (directPolicyInvestment / annualNominalGdp) *
+        parameter(values, "PINV-EFF-001") *
+        capacityFactor,
+  );
   const capitalDepreciation =
     economyBefore.stocks.publicCapital * depreciationRate;
   const previousCapital = economyBefore.stocks.publicCapital;
@@ -719,7 +736,7 @@ export function updateFiscalIndustries(
   }
   const previousHistory =
     economyBefore.memory?.publicCapitalFormationHistory ?? [];
-  const publicCapitalHistory = [...previousHistory, capitalFormation].slice(
+  const publicCapitalHistory = [...previousHistory, vintageFormation].slice(
     -(lagEnd + 1),
   );
   const maturedCapital = maturedPublicCapital(
@@ -737,12 +754,53 @@ export function updateFiscalIndustries(
   const baselinePotentialGdp =
     economyBefore.memory?.baselinePotentialGdp ??
     economyBefore.indices.potentialGdp;
-  const potentialGdp = baselinePotentialGdp * (1 + potentialEffect);
+  const activePolicyPotential = input.effects
+    .filter((effect) => effect.targetPath === "economy.indices.potentialGdp")
+    .reduce((sum, effect) => {
+      const delivered = Math.min(
+        effect.weights.length,
+        Math.max(0, input.monthIndex - effect.startMonth + 1),
+      );
+      return (
+        sum +
+        effect.baseStrength *
+          effect.weights
+            .slice(0, delivered)
+            .reduce((total, weight) => total + weight, 0)
+      );
+    }, 0);
+  const policyPotential =
+    (economyBefore.memory?.completedPolicyPotential ?? 0) +
+    activePolicyPotential;
+  const potentialGdp =
+    baselinePotentialGdp * (1 + potentialEffect) + policyPotential;
   if (!Number.isFinite(potentialGdp) || potentialGdp <= 0) {
     throw new Error(
       "Public-investment supply effect produced invalid potential GDP",
     );
   }
+  const policyPotentialTerms = matchingEffects(
+    input.effects,
+    input.monthIndex,
+    "economy.indices.potentialGdp",
+    economyBefore.indices.potentialGdp,
+  );
+  const scheduledDelta = policyPotentialTerms.reduce(
+    (sum, term) => sum + term.delta,
+    0,
+  );
+  const potentialGdpCausal = build(
+    "potentialGdp",
+    economyBefore.indices.potentialGdp,
+    [
+      ...policyPotentialTerms,
+      {
+        source: source("public-capital-vintages", "high"),
+        delta:
+          potentialGdp - economyBefore.indices.potentialGdp - scheduledDelta,
+      },
+    ],
+  );
 
   const industryRaw: Record<IndustryId, number> = {} as Record<
     IndustryId,
@@ -1040,6 +1098,9 @@ export function updateFiscalIndustries(
       effectiveDebtRateAnnual: percentRate(effectiveDebtRate),
       baselinePotentialGdp: indexLevel(baselinePotentialGdp),
       publicCapitalFormationHistory: publicCapitalHistory,
+      completedPolicyPotential:
+        economyBefore.memory?.completedPolicyPotential ?? 0,
+      appliedPolicyPotential: policyPotential,
     },
     flows: {
       ...economyBefore.flows,
@@ -1074,7 +1135,7 @@ export function updateFiscalIndustries(
   const longTermHooks = getLongTermHooks(
     economy,
     input.configSnapshot,
-    potentialEffect,
+    potentialEffect + policyPotential / baselinePotentialGdp,
   );
   return {
     economy,
@@ -1091,6 +1152,7 @@ export function updateFiscalIndustries(
       political.causal,
       implementationCapacity.causal,
       publicCapital.causal,
+      potentialGdpCausal.causal,
       industryAggregateResidual.causal,
       ...industryCausal,
     ],

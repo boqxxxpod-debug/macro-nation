@@ -17,7 +17,7 @@ import {
 
 describe("ConfigPack v1", () => {
   it("validates the standard SCN-01 fixture and hashes", async () => {
-    expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.1");
+    expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.2");
     expect(SCN01_CONFIG_PACK.scenario.clock.policyCycleSteps).toBe(3);
     await expect(
       verifyConfigPackHashes(SCN01_CONFIG_PACK, SCN01_CONFIG_FILES),
@@ -29,7 +29,7 @@ describe("ConfigPack v1", () => {
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "1",
-        modelVersion: "0.1.1",
+        modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
@@ -64,7 +64,7 @@ describe("ConfigPack v1", () => {
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "1",
-        modelVersion: "0.1.1",
+        modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",
@@ -139,7 +139,7 @@ describe("ConfigPack v1", () => {
       assertConfigCompatibility(SCN01_CONFIG_PACK, {
         engineVersion: "0.1.0",
         configSchemaVersion: "2",
-        modelVersion: "0.1.1",
+        modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
         contentVersion: "1.0.0",
         rngVersion: "xoshiro128ss-v1",

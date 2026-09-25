@@ -62,6 +62,7 @@ const POLICY_TYPES = [
 ] as const;
 const EFFECT_TARGETS = new Set([
   "economy.indices.outputGap",
+  "economy.indices.potentialGdp",
   "economy.flows.consumption",
   "economy.flows.investment",
   "economy.flows.governmentConsumption",
@@ -315,6 +316,13 @@ export function activateDuePolicies(state: GameState): ActivationResult {
   const stillScheduled = state.effects.filter(
     (effect) => effect.endMonth >= state.monthIndex,
   );
+  const completedSupply = state.effects
+    .filter(
+      (effect) =>
+        effect.endMonth < state.monthIndex &&
+        effect.targetPath === "economy.indices.potentialGdp",
+    )
+    .reduce((sum, effect) => sum + effect.baseStrength, 0);
   if (
     due.length === 0 &&
     expired.length === 0 &&
@@ -322,7 +330,21 @@ export function activateDuePolicies(state: GameState): ActivationResult {
   )
     return { state, causal: [] };
   const registry = createConfiguredPolicyRegistry(state.configSnapshot);
-  let working = state;
+  let working =
+    completedSupply === 0
+      ? state
+      : {
+          ...state,
+          economy: {
+            ...state.economy,
+            memory: {
+              ...state.economy.memory,
+              completedPolicyPotential:
+                (state.economy.memory?.completedPolicyPotential ?? 0) +
+                completedSupply,
+            },
+          },
+        };
   const causal: CausalContribution[] = [];
   let effects = stillScheduled;
   const active = state.policies.active.filter(
