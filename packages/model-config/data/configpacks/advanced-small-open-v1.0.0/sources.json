@@ -1,1 +1,11 @@
-[{"sourceId":"econ-model-v1","title":"MACRO NATION Economic Model Parameters v1.0","retrievedAt":"2026-09-22","confidence":"high","transformation":"Project-calibrated monthly model parameters synchronized from the approved specification","note":"Evidence classes E/C/G/D remain attached to every parameter."}]
+[
+  {
+    "sourceId": "econ-model-v1",
+    "title": "MACRO NATION Economic Model Parameters v1.0",
+    "retrievedAt": "2026-09-22",
+    "confidence": "high",
+    "transformation": "Project-calibrated monthly model parameters synchronized from the approved specification",
+    "note": "Evidence classes E/C/G/D remain attached to every parameter.",
+    "url": "https://github.com/boqxxxpod-debug/macro-nation/blob/de2cd137eac3577bfe24161a3979ae58d9d68cc4/docs/06-economic-model-parameters.md"
+  }
+]

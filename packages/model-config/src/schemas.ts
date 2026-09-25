@@ -199,6 +199,7 @@ export const sourceSchema = z.object({
   retrievedAt: z.string().min(1),
   confidence: z.enum(["high", "medium", "low"]),
   transformation: z.string().min(1),
+  url: z.string().url().optional(),
   note: z.string().optional(),
 });
 

@@ -11,7 +11,23 @@ import limits from "../data/tuning/limits-v1.json";
 import effectCurves from "../data/tuning/effect-curves-v1.json";
 import nation from "../data/nations/standard-nation-v1.json";
 import scenario from "../data/scenarios/scn01-v1.json";
-import { parseConfigPack } from "./config";
+import { loadConfigPack, parseConfigPack } from "./config";
+
+const SCN01_CONFIG_INPUT = {
+  manifest,
+  coefficients,
+  lagKernels,
+  shockModel,
+  policyRules,
+  calibrationTargets,
+  sources,
+  content,
+  model,
+  limits,
+  effectCurves,
+  nation,
+  scenario,
+};
 
 export const SCN01_CONFIG_FILES = Object.freeze({
   "coefficients.json": coefficients,
@@ -28,18 +44,9 @@ export const SCN01_CONFIG_FILES = Object.freeze({
   "scn01-v1.json": scenario,
 });
 
-export const SCN01_CONFIG_PACK = parseConfigPack({
-  manifest,
-  coefficients,
-  lagKernels,
-  shockModel,
-  policyRules,
-  calibrationTargets,
-  sources,
-  content,
-  model,
-  limits,
-  effectCurves,
-  nation,
-  scenario,
-});
+export const SCN01_CONFIG_PACK = parseConfigPack(SCN01_CONFIG_INPUT);
+
+/** Load the fixture only after every file matches the manifest SHA-256 values. */
+export function loadSCN01ConfigPack() {
+  return loadConfigPack(SCN01_CONFIG_INPUT, SCN01_CONFIG_FILES);
+}
