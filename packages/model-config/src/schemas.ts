@@ -314,6 +314,16 @@ export const scenarioSchema = z.object({
   id: z.string().min(1),
   titleKey: z.string().min(1),
   durationMonths: z.number().int().positive(),
+  firstPlayable: z.object({
+    tutorialQuarters: z.number().int().positive(),
+    crisis: z.object({
+      inflationAnnual: z.number().nonnegative(),
+      unemployment: z.number().nonnegative(),
+      supportBelow: z.number().nonnegative(),
+      foreignReservesBelow: z.number().nonnegative(),
+    }),
+    unresolvedCrisisMonthsToFail: z.number().int().positive(),
+  }),
   startYear: z.number().int(),
   startMonth: z.number().int().min(1).max(12),
   nationId: z.string().min(1),
