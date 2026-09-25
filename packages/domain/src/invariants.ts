@@ -218,6 +218,35 @@ export function validateState(state: GameState): ValidationIssue[] {
     state.policies.completed,
     state.policies.cancelled,
   ]);
+  if (state.policyAdministration) {
+    const admin = state.policyAdministration;
+    const commands = new Set<string>();
+    const quarters = new Map<number, number>();
+    for (const receipt of admin.receipts) {
+      if (!receipt.commandId || commands.has(receipt.commandId))
+        add(issues, "INVALID_POLICY_INPUT", "policyAdministration.receipts", "Command IDs must be unique and non-empty");
+      commands.add(receipt.commandId);
+      quarters.set(receipt.quarter, (quarters.get(receipt.quarter) ?? 0) + 1);
+    }
+    for (const [quarter, count] of quarters) {
+      if (!Number.isInteger(quarter) || quarter < 0 || count > 3)
+        add(issues, "INVALID_POLICY_INPUT", "policyAdministration.receipts", "At most three actions are allowed per quarter");
+    }
+    const reservationIds = new Set<string>();
+    for (const reservation of admin.reservations) {
+      if (!reservation.reservationId || reservationIds.has(reservation.reservationId) ||
+          !state.policies.reserved.some((policy) => policy.policyId === reservation.policyId))
+        add(issues, "INVALID_POLICY_INPUT", "policyAdministration.reservations", "Reservations must refer to unique reserved policies");
+      reservationIds.add(reservation.reservationId);
+      for (const [key, value] of Object.entries(reservation.costs))
+        numberRule(issues, `policyAdministration.reservations.${reservation.policyId}.${key}`, value, undefined, true);
+    }
+    if (admin.reservations.length !== state.policies.reserved.length)
+      add(issues, "INVALID_POLICY_INPUT", "policyAdministration.reservations", "Every reserved policy needs one reservation");
+    const held = admin.reservations.reduce((sum, item) => sum + item.costs.foreignReserves, 0);
+    if (Math.abs(held - state.resources.reservedForeignReserves) > 1e-9)
+      add(issues, "INVALID_POLICY_INPUT", "resources.reservedForeignReserves", "Held foreign reserves do not match reservations");
+  }
   state.effects.forEach((effect, index) => effectRule(issues, effect, index));
 
   for (const [name, value] of Object.entries(state.versions)) {

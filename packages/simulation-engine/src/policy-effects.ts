@@ -404,6 +404,16 @@ export function activateDuePolicies(state: GameState): ActivationResult {
     );
     if (rule.policyType !== policy.type)
       throw new Error(`Policy type mismatch for ${policy.policyId}`);
+    if (
+      working.policyAdministration &&
+      !working.policyAdministration.reservations.some(
+        (reservation) =>
+          reservation.policyId === policy.policyId &&
+          JSON.stringify(reservation.costs) === JSON.stringify(policy.costs),
+      )
+    ) {
+      throw new Error(`Missing resource reservation for ${policy.policyId}`);
+    }
     const costs = policy.costs;
     if (
       working.resources.politicalCapital < costs.politicalCapital ||
@@ -517,9 +527,28 @@ export function activateDuePolicies(state: GameState): ActivationResult {
         policy.activationMonth + (rule.defaultDurationMonths ?? 12) - 1,
     });
   }
+  const reservations = working.policyAdministration?.reservations.filter(
+    (reservation) =>
+      !due.some((policy) => policy.policyId === reservation.policyId),
+  );
   return {
     state: {
       ...working,
+      ...(working.policyAdministration && {
+        policyAdministration: {
+          ...working.policyAdministration,
+          reservations: reservations ?? [],
+        },
+      }),
+      resources: {
+        ...working.resources,
+        reservedForeignReserves: stockLevel(
+          reservations?.reduce(
+            (sum, item) => sum + item.costs.foreignReserves,
+            0,
+          ) ?? working.resources.reservedForeignReserves,
+        ),
+      },
       policies: {
         ...working.policies,
         active,

@@ -555,9 +555,67 @@ const NO_POLICY_HANDLERS: Partial<
       monthIndex: context.inputMonthIndex,
       configSnapshot: context.configSnapshot,
     });
+    const held = state.policyAdministration?.reservations.reduce(
+      (sum, reservation) => ({
+        politicalCapital:
+          sum.politicalCapital + reservation.costs.politicalCapital,
+        implementationCapacity:
+          sum.implementationCapacity + reservation.costs.implementationCapacity,
+      }),
+      { politicalCapital: 0, implementationCapacity: 0 },
+    ) ?? { politicalCapital: 0, implementationCapacity: 0 };
+    const institutions = output.economy.institutions;
+    const politicalCapital = scorePoint(
+      Math.max(institutions.politicalCapital, held.politicalCapital),
+    );
+    const implementationCapacity = scorePoint(
+      Math.max(
+        institutions.implementationCapacity,
+        held.implementationCapacity,
+      ),
+    );
+    const causal = [...output.causal];
+    for (const [metric, before, after] of [
+      ["politicalCapital", institutions.politicalCapital, politicalCapital],
+      [
+        "implementationCapacity",
+        institutions.implementationCapacity,
+        implementationCapacity,
+      ],
+    ] as const) {
+      if (after > before)
+        causal.push(
+          createContributionBuilder(metric, before)
+            .add(
+              {
+                sourceType: "policy",
+                sourceId: "reserved-resources",
+                labelKey: "policy.resourceReservation",
+                confidence: "high",
+              },
+              after - before,
+            )
+            .build(after),
+        );
+    }
     return {
-      state: { ...state, economy: output.economy },
-      causal: output.causal,
+      state: {
+        ...state,
+        economy: {
+          ...output.economy,
+          institutions: {
+            ...institutions,
+            politicalCapital,
+            implementationCapacity,
+          },
+        },
+        resources: {
+          ...state.resources,
+          politicalCapital,
+          implementationCapacity,
+        },
+      },
+      causal,
       metrics: { industryAggregateResidual: output.industryAggregateResidual },
     };
   },
@@ -570,9 +628,41 @@ const NO_POLICY_HANDLERS: Partial<
       rng: state.rng,
       rngProvider: context.rngProvider,
     });
+    const held = state.resources.reservedForeignReserves;
+    const before = output.economy.stocks.foreignReserves;
+    const after = stockLevel(Math.max(before, held));
     return {
-      state: { ...state, economy: output.economy, rng: output.rng },
-      causal: output.causal,
+      state: {
+        ...state,
+        economy: {
+          ...output.economy,
+          flows: {
+            ...output.economy.flows,
+            foreignReserveChange: flowPerMonth(
+              after - state.economy.stocks.foreignReserves,
+            ),
+          },
+          stocks: { ...output.economy.stocks, foreignReserves: after },
+        },
+        rng: output.rng,
+      },
+      causal:
+        before < after
+          ? [
+              ...output.causal,
+              createContributionBuilder("foreignReserves", before)
+                .add(
+                  {
+                    sourceType: "policy",
+                    sourceId: "reserved-resources",
+                    labelKey: "policy.resourceReservation",
+                    confidence: "high",
+                  },
+                  after - before,
+                )
+                .build(after),
+            ]
+          : output.causal,
     };
   },
 };
