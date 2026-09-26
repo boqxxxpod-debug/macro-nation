@@ -31,6 +31,7 @@
     "simulate:smoke": "npm run simulate -- --ticks 96 --runs 1 --seed issue-10-no-policy-golden-v1 --out /tmp/macro-nation-headless-ci",
     "simulate:batch:10": "npm run simulate -- --ticks 96 --runs 10 --seed scn01-ci --out /tmp/macro-nation-headless-batch-10",
     "simulate:1000": "npm run simulate -- --ticks 96 --runs 1000 --seed scn01-no-policy-1000 --out artifacts/headless/1000x96",
+    "simulate:30y:100": "npm run simulate -- --ticks 360 --runs 100 --seed issue-31c-long-term-v1 --out artifacts/headless/100x360",
     "calibration:irf": "vite-node --script scripts/calibration.ts irf",
     "calibration:moments": "vite-node --script scripts/calibration.ts moments",
     "calibration:diff": "vite-node --script scripts/calibration.ts diff",
