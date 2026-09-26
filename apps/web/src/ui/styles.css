@@ -329,6 +329,39 @@ label select {
   min-height: 18rem;
   object-fit: cover;
 }
+.nation-motion-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.nation-motion-controls {
+  position: absolute;
+  z-index: 3;
+  top: 0.45rem;
+  left: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background: rgb(255 254 245 / 91%);
+  color: #173440;
+  font-size: 0.75rem;
+}
+.nation-motion-controls label {
+  margin: 0;
+}
+.nation-motion-controls select {
+  min-height: 32px;
+  width: auto;
+  margin: 0 0.2rem;
+  padding: 0.2rem;
+}
+.nation-motion-diagnostics {
+  font-variant-numeric: tabular-nums;
+}
 .nation-hotspot {
   position: absolute;
   z-index: 2;

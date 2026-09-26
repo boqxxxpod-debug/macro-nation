@@ -12,7 +12,10 @@ import { policyStateHash } from "../application/policy-view";
 import { createGame, type GameRepository } from "../application/game-service";
 import { App } from "./App";
 
-beforeAll(() => vi.stubGlobal("crypto", webcrypto));
+beforeAll(() => {
+  vi.stubGlobal("crypto", webcrypto);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+});
 afterEach(() => {
   cleanup();
   window.history.replaceState({}, "", "/");
