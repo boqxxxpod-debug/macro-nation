@@ -97,6 +97,8 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await expect(page.getByRole("combobox", { name: "学習案内" })).toBeVisible();
+  await page.locator("body").click({ position: { x: 2, y: 2 } });
   await page.keyboard.press("Tab");
   await expect(page.getByRole("combobox", { name: "学習案内" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -175,4 +177,35 @@ test("a saved game can advance and reload while offline", async ({
   await expect(
     page.getByRole("heading", { name: "今月の3行報告" }),
   ).toBeVisible();
+});
+
+test("nation regions remain accessible with reduced motion and after direct reload", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await page.getByRole("button", { name: "国家ビュー" }).click();
+  await expect(page).toHaveURL(/\/game\/1\/nation$/);
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+  await expect(page.locator("canvas.nation-motion-canvas")).toHaveCount(0);
+  await expect(page.getByText("動きの軽減: 静止表示")).toBeVisible();
+  await page
+    .getByRole("region", { name: "地域一覧" })
+    .getByRole("button", { name: /港湾/ })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "港湾の地域詳細" }),
+  ).toContainText("輸出（月間）");
+  await page.reload();
+  await expect(page.getByRole("region", { name: "地域一覧" })).toBeVisible();
+  await page.getByRole("button", { name: "レポート", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "経済レポート" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
 });

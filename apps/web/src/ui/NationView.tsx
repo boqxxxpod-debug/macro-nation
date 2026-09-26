@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { GameState } from "@macro-nation/domain";
 import {
   REGION_IDS,
@@ -7,6 +7,7 @@ import {
   type RegionVisualState,
 } from "../application/nation-view";
 import { describeCause, label } from "./game-format";
+import { NationMotion } from "./NationMotion";
 
 const STAGE_NAMES = ["低調", "安定", "活発", "非常に活発"] as const;
 const POSITIONS: Record<RegionId, { left: string; top: string }> = {
@@ -352,7 +353,7 @@ export function NationView({
   state: GameState;
   onReport(): void;
 }) {
-  const model = selectNationView(state);
+  const model = useMemo(() => selectNationView(state), [state]);
   const [selected, setSelected] = useState<RegionId>("city");
   return (
     <div className="nation-view">
@@ -375,6 +376,7 @@ export function NationView({
           }
           crisis={model.overlays.length > 0}
         />
+        <NationMotion model={model} />
         {REGION_IDS.map((id) => (
           <button
             className="nation-hotspot"
