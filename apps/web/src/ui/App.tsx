@@ -23,6 +23,13 @@ import { migrateFirstPlayableSave } from "../application/save-migration";
 import { label, period } from "./game-format";
 
 type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+const NAV_LABELS = {
+  home: "ホーム",
+  policies: "政策会議",
+  report: "レポート",
+  nation: "国家ビュー",
+  ending: "終了評価",
+} as const;
 function routeFromLocation(): Route {
   const path = window.location.pathname;
   if (path.endsWith("/policies/preview")) return "preview";
@@ -189,7 +196,11 @@ export function App({
   }
 
   return (
-    <main className="app-shell">
+    <main
+      className={
+        route === "nation" && state ? "app-shell app-shell-nation" : "app-shell"
+      }
+    >
       <header className="hero">
         <p className="eyebrow">国家運営シミュレーション</p>
         <h1>MACRO NATION</h1>
@@ -256,6 +267,7 @@ export function App({
               <button
                 key={id}
                 type="button"
+                aria-label={NAV_LABELS[id]}
                 aria-current={
                   route === id || (id === "policies" && route === "preview")
                     ? "page"
@@ -263,20 +275,16 @@ export function App({
                 }
                 onClick={() => navigate(id)}
               >
-                {id === "home"
-                  ? "ホーム"
-                  : id === "policies"
-                    ? "政策会議"
-                    : id === "report"
-                      ? "レポート"
-                      : id === "nation"
-                        ? "国家ビュー"
-                        : "終了評価"}
+                {NAV_LABELS[id]}
               </button>
             ))}
           </nav>
           <div className="game-view">
-            <p className="eyebrow">
+            <p
+              className={
+                route === "nation" ? "eyebrow nation-shell-context" : "eyebrow"
+              }
+            >
               SCN-01・{period(state)}・第{Math.floor(state.monthIndex / 3) + 1}
               四半期
             </p>
@@ -436,7 +444,9 @@ export function App({
             )}
             {route === "nation" && (
               <>
-                <h2 tabIndex={-1}>国家ビュー</h2>
+                <h2 tabIndex={-1} className="nation-page-heading">
+                  国家ビュー
+                </h2>
                 <NationView state={state} onReport={() => navigate("report")} />
               </>
             )}

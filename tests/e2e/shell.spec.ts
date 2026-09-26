@@ -190,6 +190,21 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expect(page.locator("canvas.nation-motion-canvas")).toHaveCount(0);
   await expect(page.getByText("動きの軽減: 静止表示")).toBeVisible();
+  await expect(page.locator("img.nation-landscape")).toHaveJSProperty(
+    "naturalWidth",
+    941,
+  );
+  await expect(page.getByRole("button", { name: /港湾を選択/ })).toBeVisible();
+  await page.getByRole("button", { name: /港湾を選択/ }).click();
+  await expect(
+    page.getByRole("region", { name: "港湾の地域詳細" }),
+  ).toContainText("輸出（月間）");
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(
+    accessibility.violations.filter((violation) =>
+      ["serious", "critical"].includes(violation.impact ?? ""),
+    ),
+  ).toEqual([]);
   await page
     .getByRole("region", { name: "地域一覧" })
     .getByRole("button", { name: /港湾/ })
@@ -203,9 +218,9 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await expect(
     page.getByRole("heading", { name: "経済レポート" }),
   ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth,
-    ),
-  ).toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+    )
+    .toBe(false);
 });
