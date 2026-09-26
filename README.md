@@ -106,3 +106,7 @@ local to the browser and origin, so an Xserver save will not appear on Pages.
 
 To inspect the artifact locally, run
 `VITE_BASE_PATH=/macro-nation/ VITE_AI_ENABLED=false npm run build:pages`.
+
+## Pull request merge flow
+
+The `CI` workflow runs its `verify` job for every pull request. The default-branch ruleset requires that check to pass. Enable GitHub auto-merge on an individual PR to merge it when all required checks pass. Codex automatic review posts feedback separately; it is not a required check, so its feedback can arrive after a fast CI run. A merge to `main` triggers the GitHub Pages deployment workflow.
