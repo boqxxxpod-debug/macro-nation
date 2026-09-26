@@ -30,7 +30,7 @@ interface NoPolicyGoldenFixture {
 
 const goldenFixture = JSON.parse(
   readFileSync(
-    new URL("./fixtures/scn01-no-policy-golden-v8.json", import.meta.url),
+    new URL("./fixtures/scn01-no-policy-golden-v9.json", import.meta.url),
     "utf8",
   ),
 ) as NoPolicyGoldenFixture;
@@ -39,11 +39,15 @@ let fixture: ReturnType<typeof createSCN01InitialState>;
 let versions: VersionTuple;
 let configHash = "";
 
-function makeState(seed: string): GameState {
+function makeState(
+  seed: string,
+  durationMode?: "short" | "standard" | "long" | "ultraLong",
+): GameState {
   return createSCN01InitialState({
     configSnapshot: fixture.configSnapshot,
     seed,
     versions,
+    ...(durationMode ? { durationMode } : {}),
   });
 }
 
@@ -88,7 +92,7 @@ beforeAll(async () => {
   );
   configHash = snapshot.configHash;
   versions = {
-    saveSchemaVersion: "1",
+    saveSchemaVersion: "2",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -105,6 +109,92 @@ beforeAll(async () => {
 });
 
 describe("SCN-01 no-policy headless runner", () => {
+  it.each([
+    ["short", 48],
+    ["standard", 96],
+    ["long", 240],
+    ["ultraLong", 360],
+  ] as const)("stops %s exactly at month %i", (mode, months) => {
+    const result = runNoPolicyHeadless({
+      initialState: makeState(`duration-${mode}`, mode),
+      tickCount: months + 1,
+      collectTrace: false,
+    });
+    expect(result.failure).toBeNull();
+    expect(result.ticksCompleted).toBe(months);
+    expect(result.finalState.runState).toBe("completed");
+    expect(result.finalState.clock.endMonth).toBe(months);
+    expect(result.finalState.clock.durationMode).toBe(mode);
+  });
+
+  it("keeps six reviews and three structural updates unique over 30 years", () => {
+    const initialState = makeState("thirty-years", "ultraLong");
+    const result = runNoPolicyHeadless({ initialState, tickCount: 360 });
+    expect(result.failure).toBeNull();
+    expect(
+      result.finalState.history.reviews?.map((item) => item.monthIndex),
+    ).toEqual([60, 120, 180, 240, 300, 360]);
+    const markers = result.finalState.history.appliedMilestones ?? [];
+    expect(markers).toHaveLength(9);
+    expect(new Set(markers).size).toBe(9);
+    expect(markers.filter((key) => key.includes(":structure:"))).toEqual([
+      "headless-thirty-years:structure:120",
+      "headless-thirty-years:structure:240",
+      "headless-thirty-years:structure:360",
+    ]);
+    expect(result.finalState.longTerm?.population).toBeLessThan(
+      (
+        initialState.configSnapshot.normalizedConfig.nation as {
+          population: number;
+        }
+      ).population,
+    );
+    expect(result.finalState.longTerm?.technologyIndex).toBeGreaterThan(100);
+    expect(
+      replayNoPolicyPackage(createNoPolicyReplayPackage(initialState, 360))
+        .finalState,
+    ).toEqual(result.finalState);
+  });
+
+  it("reports 12-step progress and only cancels at a 96-step checkpoint", () => {
+    const progress: number[] = [];
+    const checkpoints: number[] = [];
+    const result = runNoPolicyHeadless({
+      initialState: makeState("checkpoint", "ultraLong"),
+      tickCount: 360,
+      collectTrace: false,
+      onProgress: (completed) => progress.push(completed),
+      onCheckpoint: (state) => {
+        checkpoints.push(state.monthIndex);
+        return state.monthIndex < 192;
+      },
+    });
+    expect(result.failure?.code).toBe("BATCH_CANCELLED");
+    expect(result.ticksCompleted).toBe(192);
+    expect(checkpoints).toEqual([96, 192]);
+    expect(progress).toEqual(
+      Array.from({ length: 16 }, (_, index) => (index + 1) * 12),
+    );
+  });
+
+  it("stops a long no-policy run at a crisis before unstable debt growth", () => {
+    const initialState = makeState("issue16-long-0001", "ultraLong");
+    const result = runNoPolicyHeadless({
+      initialState,
+      tickCount: 360,
+      collectTrace: false,
+      stopOnCrisis: true,
+    });
+    expect(result.failure).toBeNull();
+    expect(result.ticksCompleted).toBeLessThan(335);
+    expect(result.finalState.runState).toBe("crisisStopped");
+    expect(result.invariantFailures).toEqual([]);
+    expect(
+      replayNoPolicyPackage(
+        createNoPolicyReplayPackage(initialState, 360, true),
+      ).finalState,
+    ).toEqual(result.finalState);
+  });
   it.each(["scn01-no-policy-1000-0007", "scn01-no-policy-1000-0009"])(
     "completes the formerly failing 96-month boundary seed %s",
     (seed) => {

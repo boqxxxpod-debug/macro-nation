@@ -1,3 +1,4 @@
+import { endMonthForState } from "@macro-nation/domain";
 import type {
   GameState,
   PolicyCosts,
@@ -260,9 +261,20 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
   let effects: readonly ScheduledEffect[] = [];
   for (const scenario of SCENARIOS) {
     const rngProvider = quantileProvider(scenario);
+    // A preview is a disposable counterfactual. A five-year outlook may extend
+    // past a short game's finish without allowing the saved game to advance.
+    const projectionEndMonth = Math.max(
+      endMonthForState(input.state),
+      input.state.monthIndex + horizonMonths,
+    );
+    const projectionState = (state: GameState): GameState => ({
+      ...state,
+      runState: "running",
+      clock: { ...state.clock, endMonth: projectionEndMonth },
+    });
     const base = checked(
       runPolicyHeadless({
-        initialState: { ...input.state, runState: "running" },
+        initialState: projectionState(input.state),
         tickCount: horizonMonths,
         rngProvider,
       }),
@@ -272,7 +284,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
         ? base
         : checked(
             runPolicyHeadless({
-              initialState: { ...variant, runState: "running" },
+              initialState: projectionState(variant),
               tickCount: horizonMonths,
               rngProvider,
             }),

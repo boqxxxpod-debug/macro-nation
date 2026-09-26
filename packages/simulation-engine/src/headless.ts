@@ -8,6 +8,7 @@ import {
   stockLevel,
   validateState,
   type ConfigSnapshot,
+  type DurationMode,
   type EconomyState,
   type GameState,
   type PolicyDecision,
@@ -37,6 +38,12 @@ export interface NoPolicyRunInput {
   /** Set false for large seed batches that only need final indicators and failures. */
   readonly collectTrace?: boolean;
   readonly onTick?: (record: HeadlessTickRecord) => void;
+  /** UI adapters may report progress without retaining every monthly snapshot. */
+  readonly onProgress?: (completed: number, total: number) => void;
+  /** Return false to cancel after an atomic 96-step checkpoint. */
+  readonly onCheckpoint?: (state: GameState) => boolean;
+  /** Game-mode batches stop at the same crisis thresholds as advanceMonth. */
+  readonly stopOnCrisis?: boolean;
 }
 
 export interface HeadlessTickRecord {
@@ -48,7 +55,12 @@ export interface HeadlessTickRecord {
 
 export interface HeadlessFailure {
   readonly kind:
-    "precondition" | "invariant" | "contribution" | "tick" | "progress";
+    | "precondition"
+    | "invariant"
+    | "contribution"
+    | "tick"
+    | "progress"
+    | "cancelled";
   readonly monthIndex: number;
   readonly code: string;
   readonly message: string;
@@ -72,6 +84,7 @@ export interface NoPolicyReplayPackage {
   readonly scenarioId: string;
   readonly seed: string;
   readonly tickCount: number;
+  readonly stopOnCrisis?: boolean;
   readonly engineVersion: string;
   readonly modelVersion: string;
   readonly rngVersion: string;
@@ -360,6 +373,7 @@ export function createSCN01InitialState(input: {
   readonly seed: string;
   readonly versions: VersionTuple;
   readonly slotId?: 1 | 2 | 3;
+  readonly durationMode?: Exclude<DurationMode, "custom">;
 }): GameState {
   if (!input.seed.trim()) throw new Error("seed must be non-empty");
   if (input.versions.engineVersion !== ENGINE_VERSION) {
@@ -388,13 +402,23 @@ export function createSCN01InitialState(input: {
     offlineMaxSteps: scenario.clock.offlineMaxSteps,
   };
   const economy = initialEconomy(input.configSnapshot, nation, scenario);
+  const durationMode = input.durationMode ?? "standard";
+  const duration = (
+    scenario as typeof scenario & {
+      durations?: readonly { id: string; totalMonths: number }[];
+    }
+  ).durations?.find((item) => item.id === durationMode);
+  if (!duration)
+    throw new Error(
+      `Duration ${durationMode} is missing from the Config Snapshot`,
+    );
   return {
     gameId: `headless-${input.seed}`,
     slotId: input.slotId ?? 1,
     nationId: nation.nationId,
     scenarioId: "SCN-01",
     difficulty: "standard",
-    durationMode: "standard",
+    durationMode,
     monthIndex: 0,
     tickSequence: 0,
     runState: "running",
@@ -420,6 +444,8 @@ export function createSCN01InitialState(input: {
       year: scenario.startYear,
       month: scenario.startMonth,
       config: clock,
+      durationMode,
+      endMonth: duration.totalMonths,
     },
     versions: input.versions,
     configSnapshot: input.configSnapshot,
@@ -718,6 +744,7 @@ function runHeadless(
   }
 
   for (let index = 0; index < input.tickCount; index += 1) {
+    if (state.runState === "completed" || state.runState === "failed") break;
     const monthIndex = state.monthIndex;
     const result = tick({
       state,
@@ -777,6 +804,30 @@ function runHeadless(
     }
 
     state = nextState;
+    if (input.stopOnCrisis) {
+      const crisis = (
+        state.configSnapshot.normalizedConfig.scenario as
+          | {
+              firstPlayable?: {
+                crisis?: {
+                  inflationAnnual: number;
+                  unemployment: number;
+                  supportBelow: number;
+                  foreignReservesBelow: number;
+                };
+              };
+            }
+          | undefined
+      )?.firstPlayable?.crisis;
+      if (
+        crisis &&
+        (state.economy.rates.inflationAnnual >= crisis.inflationAnnual ||
+          state.economy.rates.unemployment >= crisis.unemployment ||
+          state.economy.sentiment.support < crisis.supportBelow ||
+          state.economy.stocks.foreignReserves < crisis.foreignReservesBelow)
+      )
+        state = { ...state, runState: "crisisStopped" };
+    }
     ticksCompleted += 1;
     if (collectTrace) {
       records.push({
@@ -790,6 +841,18 @@ function runHeadless(
       state,
       diagnostics: result.value.diagnostics,
     });
+    if (ticksCompleted % 12 === 0 || ticksCompleted === input.tickCount)
+      input.onProgress?.(ticksCompleted, input.tickCount);
+    if (ticksCompleted % 96 === 0 && input.onCheckpoint?.(state) === false) {
+      failure = {
+        kind: "cancelled",
+        monthIndex: state.monthIndex,
+        code: "BATCH_CANCELLED",
+        message: "Stopped at an atomic checkpoint",
+      };
+      break;
+    }
+    if (state.runState === "crisisStopped") break;
   }
 
   return {
@@ -818,6 +881,7 @@ export function runNoPolicyHeadless(
 export function createNoPolicyReplayPackage(
   initialState: GameState,
   tickCount: number,
+  stopOnCrisis = false,
 ): NoPolicyReplayPackage {
   if (!Number.isInteger(tickCount) || tickCount <= 0) {
     throw new RangeError("tickCount must be a positive integer");
@@ -828,6 +892,7 @@ export function createNoPolicyReplayPackage(
     scenarioId: initialState.scenarioId,
     seed: initialState.rng.rootSeed,
     tickCount,
+    ...(stopOnCrisis ? { stopOnCrisis } : {}),
     engineVersion: initialState.versions.engineVersion,
     modelVersion: initialState.versions.modelVersion,
     rngVersion: initialState.versions.rngVersion,
@@ -851,6 +916,7 @@ export function replayNoPolicyPackage(
   return runNoPolicyHeadless({
     initialState: replay.initialState,
     tickCount: replay.tickCount,
+    stopOnCrisis: replay.stopOnCrisis ?? false,
   });
 }
 

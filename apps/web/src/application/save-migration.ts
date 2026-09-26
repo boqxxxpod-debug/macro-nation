@@ -1,6 +1,5 @@
 import type { GameState } from "@macro-nation/domain";
 import {
-  createConfigSnapshot,
   loadSCN01ConfigPack,
   sha256Hex,
   stableStringify,
@@ -16,13 +15,15 @@ export async function migrateFirstPlayableSave(
   repository: GameRepository,
   state: GameState,
 ): Promise<GameState> {
-  if (state.versions.engineVersion === ENGINE_VERSION) return state;
+  if (
+    state.versions.engineVersion === ENGINE_VERSION &&
+    state.clock.endMonth !== undefined &&
+    state.versions.saveSchemaVersion === "2"
+  )
+    return state;
   if (
     state.scenarioId !== "SCN-01" ||
-    state.versions.engineVersion !== "0.1.7" ||
-    state.versions.modelVersion !== "0.1.2" ||
-    state.versions.configVersion !== "0.1.2" ||
-    state.configSnapshot.snapshotVersion !== "0.1.2"
+    !["0.1.7", "0.1.8", ENGINE_VERSION].includes(state.versions.engineVersion)
   )
     throw new Error(
       "保存データの版に対応していません。元の版で再開してください",
@@ -33,32 +34,45 @@ export async function migrateFirstPlayableSave(
     state.configSnapshot.configHash
   )
     throw new Error("保存済みConfig Snapshotの整合性を確認できません");
-  const pack = await loadSCN01ConfigPack();
-  const current = await createConfigSnapshot(
-    pack,
-    pack.scenario.parameterOverrides,
-  );
-  const priorScenario = {
-    ...(current.normalizedConfig.scenario as Record<string, unknown>),
-  };
-  delete priorScenario.firstPlayable;
-  if (
-    stableStringify({
-      ...current.normalizedConfig,
-      scenario: priorScenario,
-    }) !== stableStringify(oldConfig)
-  )
-    throw new Error("経済モデルが変更されているため保存データを移行できません");
+  // Preserve the old run's economic and calibration snapshot. Only the 0.1.7
+  // playable-rule metadata was missing; it cannot influence Engine equations.
+  const needsPlayableRules = state.versions.engineVersion === "0.1.7";
+  const pack = needsPlayableRules ? await loadSCN01ConfigPack() : null;
+  const normalizedConfig = needsPlayableRules
+    ? {
+        ...oldConfig,
+        scenario: {
+          ...(oldConfig.scenario as Record<string, unknown>),
+          firstPlayable: pack!.scenario.firstPlayable,
+        },
+      }
+    : oldConfig;
+  const configSnapshot = needsPlayableRules
+    ? {
+        ...state.configSnapshot,
+        snapshotVersion: "0.1.3",
+        normalizedConfig,
+        configHash: await sha256Hex(stableStringify(normalizedConfig)),
+      }
+    : state.configSnapshot;
+  const durationMode = "short" as const;
   const migrated: GameState = {
     ...state,
-    durationMode: "short",
-    learningMode: "standard",
+    durationMode,
+    learningMode: state.learningMode ?? "standard",
+    clock: { ...state.clock, durationMode, endMonth: 48 },
+    history: {
+      ...state.history,
+      appliedMilestones: state.history.appliedMilestones ?? [],
+      reviews: state.history.reviews ?? [],
+    },
     versions: {
       ...state.versions,
       engineVersion: ENGINE_VERSION,
-      configVersion: pack.manifest.configVersion,
+      saveSchemaVersion: "2",
+      ...(needsPlayableRules ? { configVersion: "0.1.3" } : {}),
     },
-    configSnapshot: current,
+    configSnapshot,
   };
   await repository.save(policyStateHash(state), migrated);
   return migrated;

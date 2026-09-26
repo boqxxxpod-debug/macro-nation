@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ParameterDefinition } from "@macro-nation/domain";
+import { INDUSTRY_IDS, type ParameterDefinition } from "@macro-nation/domain";
 
 const evidenceClassSchema = z.enum(["E", "C", "G", "D", "E/C", "G/C"]);
 const numericUnitSchema = z.enum([
@@ -314,6 +314,48 @@ export const scenarioSchema = z.object({
   id: z.string().min(1),
   titleKey: z.string().min(1),
   durationMonths: z.number().int().positive(),
+  durations: z
+    .array(
+      z.object({
+        id: z.enum(["short", "standard", "long", "ultraLong"]),
+        totalMonths: z.union([
+          z.literal(48),
+          z.literal(96),
+          z.literal(240),
+          z.literal(360),
+        ]),
+        reviewIntervalMonths: z.number().int().positive(),
+        structuralIntervalMonths: z.number().int().positive(),
+        expectedPlayLabelKey: z.string().min(1),
+        learningFocusKeys: z.array(z.string().min(1)),
+      }),
+    )
+    .length(4)
+    .refine(
+      (durations) =>
+        durations.every(
+          (item) =>
+            ({ short: 48, standard: 96, long: 240, ultraLong: 360 })[
+              item.id
+            ] === item.totalMonths,
+        ) && new Set(durations.map((item) => item.id)).size === 4,
+      "Duration modes must each have their configured calendar length",
+    )
+    .optional(),
+  longTerm: z
+    .object({
+      populationAnnualGrowth: z.number().finite().min(-0.05).max(0.05),
+      technologyDecadeGain: z.number().finite().min(0).max(0.1),
+      infrastructureDecadeWear: z.number().finite().min(0).max(0.1),
+      employmentShiftPerDecade: z.number().finite().min(0).max(0.1),
+      shiftFrom: z.enum(INDUSTRY_IDS),
+      shiftTo: z.enum(INDUSTRY_IDS),
+    })
+    .refine(
+      (value) => value.shiftFrom !== value.shiftTo,
+      "Industry shift needs distinct sectors",
+    )
+    .optional(),
   firstPlayable: z.object({
     tutorialQuarters: z.number().int().positive(),
     crisis: z.object({

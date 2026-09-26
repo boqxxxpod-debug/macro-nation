@@ -70,7 +70,7 @@ function parseArguments(args: readonly string[]): RunnerOptions {
     const key = args[index];
     if (key === "--help" || key === "-h") {
       process.stdout.write(
-        "Usage: npm run simulate -- [--ticks 48|96] [--runs 1..1000] [--seed value] [--out directory] [--replay file]\n",
+        "Usage: npm run simulate -- [--ticks 48|96|240|360] [--runs 1..1000] [--seed value] [--out directory] [--replay file]\n",
       );
       process.exit(0);
     }
@@ -124,7 +124,7 @@ function createVersions(
   pack: Awaited<ReturnType<typeof loadSCN01ConfigPack>>,
 ): VersionTuple {
   return {
-    saveSchemaVersion: "1",
+    saveSchemaVersion: "2",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -236,13 +236,26 @@ async function runBatch(options: RunnerOptions): Promise<void> {
       configSnapshot,
       seed,
       versions,
+      durationMode:
+        options.ticks <= 48
+          ? "short"
+          : options.ticks <= 96
+            ? "standard"
+            : options.ticks <= 240
+              ? "long"
+              : "ultraLong",
     });
     const result = runNoPolicyHeadless({
       initialState,
       tickCount: options.ticks,
       collectTrace: false,
+      stopOnCrisis: options.ticks > 96,
     });
-    const replay = createNoPolicyReplayPackage(initialState, options.ticks);
+    const replay = createNoPolicyReplayPackage(
+      initialState,
+      options.ticks,
+      options.ticks > 96,
+    );
     rows.push({
       seed,
       requestedTicks: result.requestedTicks,
@@ -266,6 +279,12 @@ async function runBatch(options: RunnerOptions): Promise<void> {
     requestedTicks: options.ticks,
     requestedRuns: options.runs,
     successfulRuns,
+    completedRuns: rows.filter(
+      (row) => row.failure === null && row.ticksCompleted === options.ticks,
+    ).length,
+    crisisStoppedRuns: rows.filter(
+      (row) => row.failure === null && row.ticksCompleted < options.ticks,
+    ).length,
     failedRuns: options.runs - successfulRuns,
     invariantFailureCount: failures.filter(
       (failure) => failure.kind === "invariant",
@@ -318,7 +337,7 @@ async function runBatch(options: RunnerOptions): Promise<void> {
     `${JSON.stringify({ replayPackage: chosenReplay.replay, firstFailure: chosenReplay.firstFailure }, null, 2)}\n`,
   );
   process.stdout.write(
-    `SCN-01 no-policy: ${successfulRuns}/${options.runs} runs passed at ${options.ticks} ticks; outputs: ${options.outputDirectory}\n`,
+    `SCN-01 no-policy: ${successfulRuns}/${options.runs} valid runs (completed or crisis-stopped) within ${options.ticks} ticks; outputs: ${options.outputDirectory}\n`,
   );
   if (successfulRuns !== options.runs) process.exitCode = 1;
 }

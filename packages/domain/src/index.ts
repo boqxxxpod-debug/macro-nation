@@ -1,4 +1,5 @@
 export * from "./causal";
+export * from "./duration";
 export * from "./invariants";
 export * from "./indicators";
 export * from "./numeric";

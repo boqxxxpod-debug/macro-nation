@@ -1,5 +1,6 @@
 import {
   assertReproducibleConfig,
+  endMonthForState,
   validateState,
   type CausalContribution,
   type ClockConfig,
@@ -15,6 +16,7 @@ import {
   serializeRngBundle,
 } from "./rng";
 import { ENGINE_VERSION } from "./version";
+import { appendReview, applyLongTermMilestone } from "./long-term";
 
 export const TICK_STAGE_ORDER_V0_1_1 = Object.freeze([
   "validateInput",
@@ -48,6 +50,7 @@ export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
   "0.1.6": TICK_STAGE_ORDER_V0_1_1,
   "0.1.7": TICK_STAGE_ORDER_V0_1_1,
   "0.1.8": TICK_STAGE_ORDER_V0_1_1,
+  "0.1.9": TICK_STAGE_ORDER_V0_1_1,
 });
 
 export const TICK_STAGE_ORDER =
@@ -265,6 +268,9 @@ function validateTickInput(input: TickInput): void {
       `tick requires runState=running, got ${input.state.runState}`,
     );
   }
+  if (input.state.monthIndex >= endMonthForState(input.state)) {
+    throw new TickAbort("INVALID_RUN_STATE", "Game duration has ended");
+  }
   if (input.state.versions.engineVersion !== ENGINE_VERSION) {
     throw new TickAbort(
       "ENGINE_VERSION_MISMATCH",
@@ -321,6 +327,7 @@ function advanceClock(state: GameState, clockConfig: ClockConfig): GameState {
     monthIndex: state.monthIndex + 1,
     tickSequence: state.tickSequence + 1,
     clock: {
+      ...state.clock,
       stepIndex: state.clock.stepIndex + 1,
       year: nextYear,
       month: nextMonth,
@@ -466,7 +473,13 @@ export function tick(input: TickInput): TickResult {
 
     currentStage = "reconcileCausalAndFinalizeSnapshot";
     runExtensions(currentStage);
+    const longTerm = applyLongTermMilestone(working);
+    working = longTerm.state;
+    causal.push(...longTerm.causal);
     working = advanceClock(working, clockConfig);
+    working = appendReview(working, causal);
+    if (working.monthIndex >= endMonthForState(working))
+      working = { ...working, runState: "completed" };
     stageTrace.push(currentStage);
 
     currentStage = "finalValidation";

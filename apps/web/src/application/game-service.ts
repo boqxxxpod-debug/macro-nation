@@ -1,9 +1,11 @@
 import type {
   CausalContribution,
+  DurationMode,
   GameState,
   MonthlyReportSnapshot,
   VersionTuple,
 } from "@macro-nation/domain";
+import { endMonthForState } from "@macro-nation/domain";
 import {
   createConfigSnapshot,
   loadSCN01ConfigPack,
@@ -74,6 +76,7 @@ export async function createGame(
   seed: string,
   slotId: GameState["slotId"] = 1,
   learningMode: NonNullable<GameState["learningMode"]> = "learning",
+  durationMode: Exclude<DurationMode, "custom"> = "short",
 ): Promise<GameState> {
   const pack = await loadSCN01ConfigPack();
   const configSnapshot = await createConfigSnapshot(
@@ -81,7 +84,7 @@ export async function createGame(
     pack.scenario.parameterOverrides,
   );
   const versions: VersionTuple = {
-    saveSchemaVersion: "1",
+    saveSchemaVersion: "2",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -95,13 +98,15 @@ export async function createGame(
     slotId,
     configSnapshot,
     versions,
+    durationMode,
   });
   const state: GameState = {
     ...initial,
     runState: "paused",
     difficulty: "intro",
-    durationMode: "short",
+    durationMode,
     learningMode,
+    pendingOfflineSteps: 0,
     history: {
       ...initial.history,
       reports: [reportSnapshot(initial)],
@@ -115,6 +120,7 @@ export async function createGame(
 export async function advanceMonth(
   repository: GameRepository,
   slotId: GameState["slotId"],
+  fromOffline = false,
 ): Promise<GameState> {
   const state = await repository.load(slotId);
   if (!state) throw new Error("保存済みのゲームがありません");
@@ -136,12 +142,22 @@ export async function advanceMonth(
     ? priorCritical >= rules.unresolvedCrisisMonthsToFail
       ? "failed"
       : "crisisStopped"
-    : result.finalState.monthIndex >= rules.durationMonths
+    : result.finalState.monthIndex >= endMonthForState(result.finalState)
       ? "completed"
       : "paused";
   const next: GameState = {
     ...result.finalState,
     runState,
+    ...(fromOffline
+      ? {
+          pendingOfflineSteps: Math.max(
+            0,
+            (state.pendingOfflineSteps ?? 0) - 1,
+          ),
+        }
+      : state.pendingOfflineSteps !== undefined
+        ? { pendingOfflineSteps: state.pendingOfflineSteps }
+        : {}),
     crisisCounters: {
       ...state.crisisCounters,
       unresolved: critical ? priorCritical + 1 : 0,
@@ -163,6 +179,53 @@ export async function advanceMonth(
   };
   await repository.save(policyStateHash(state), next);
   return next;
+}
+
+/** The caller supplies elapsed seconds; the Engine never reads the browser clock. */
+export async function catchUpOffline(
+  repository: GameRepository,
+  slotId: GameState["slotId"],
+  elapsedSeconds: number,
+  onProgress?: (completed: number, pending: number) => boolean | void,
+): Promise<GameState> {
+  let state = await repository.load(slotId);
+  if (!state) throw new Error("保存済みのゲームがありません");
+  if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0)
+    throw new RangeError("経過時間が正しくありません");
+  if (state.runState === "running") {
+    const newSteps = Math.floor(
+      elapsedSeconds / state.clock.config.realSecondsPerStep,
+    );
+    if (!Number.isSafeInteger(newSteps + (state.pendingOfflineSteps ?? 0)))
+      throw new RangeError("オフライン経過が長すぎます");
+    if (newSteps > 0) {
+      const queued = {
+        ...state,
+        pendingOfflineSteps: (state.pendingOfflineSteps ?? 0) + newSteps,
+      };
+      await repository.save(policyStateHash(state), queued);
+      state = queued;
+    }
+  }
+  const count = Math.min(
+    state.pendingOfflineSteps ?? 0,
+    state.clock.config.offlineMaxSteps,
+    96,
+  );
+  for (let index = 0; index < count; index += 1) {
+    if (
+      state.runState === "completed" ||
+      state.runState === "failed" ||
+      state.runState === "crisisStopped"
+    )
+      break;
+    state = await advanceMonth(repository, slotId, true);
+    if ((index + 1) % 12 === 0 || index + 1 === count) {
+      if (onProgress?.(index + 1, state.pendingOfflineSteps ?? 0) === false)
+        break;
+    }
+  }
+  return state;
 }
 
 interface PlayRules {

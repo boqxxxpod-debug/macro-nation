@@ -12,7 +12,7 @@ import {
 } from "@macro-nation/simulation-engine";
 
 const fixturePath =
-  "packages/simulation-engine/src/fixtures/scn01-no-policy-golden-v8.json";
+  "packages/simulation-engine/src/fixtures/scn01-no-policy-golden-v9.json";
 const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 const pack = await loadSCN01ConfigPack();
 const configSnapshot = await createConfigSnapshot(
@@ -20,7 +20,7 @@ const configSnapshot = await createConfigSnapshot(
   pack.scenario.parameterOverrides,
 );
 const versions = {
-  saveSchemaVersion: "1",
+  saveSchemaVersion: "2",
   engineVersion: ENGINE_VERSION,
   configSchemaVersion: pack.manifest.configSchemaVersion,
   modelVersion: pack.manifest.modelVersion,
