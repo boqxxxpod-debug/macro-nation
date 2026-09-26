@@ -170,6 +170,41 @@ function Landscape({
           fill="#427d5c"
         />
         <path d="M102 351 H305" stroke="#6b9663" strokeWidth="12" />
+        {Array.from({ length: stages.countryside + 1 }, (_, index) => (
+          <g key={`field-${index}`}>
+            <path
+              d={`M${72 + index * 55} ${390 - index * 11} l15 -7 18 7 -15 8 Z`}
+              fill="#e4bd68"
+            />
+            <path
+              d={`M${84 + index * 55} ${381 - index * 11} v-18`}
+              stroke="#e2dc9a"
+              strokeWidth="3"
+            />
+          </g>
+        ))}
+        {Array.from({ length: stages.industry + 1 }, (_, index) => (
+          <rect
+            key={`factory-${index}`}
+            x={647 + index * 19}
+            y={412}
+            width="12"
+            height="8"
+            rx="2"
+            fill="#f8db98"
+          />
+        ))}
+        {Array.from({ length: stages.airport + 1 }, (_, index) => (
+          <rect
+            key={`freight-${index}`}
+            x={791 + index * 23}
+            y={282}
+            width="16"
+            height="8"
+            rx="1"
+            fill="#e2aa70"
+          />
+        ))}
       </g>
       <g data-layer="Transport">
         <path
@@ -209,6 +244,16 @@ function Landscape({
           stroke="#f1ead0"
           strokeWidth="4"
         />
+        {Array.from({ length: stages.transport + 1 }, (_, index) => (
+          <g
+            key={`vehicle-${index}`}
+            transform={`translate(${115 + index * 95} ${452 - index * 9})`}
+          >
+            <rect width="28" height="9" rx="3" fill="#e09a62" />
+            <circle cx="6" cy="10" r="3" fill="#294d59" />
+            <circle cx="23" cy="10" r="3" fill="#294d59" />
+          </g>
+        ))}
       </g>
       <g data-layer="Effect">
         {stages.city >= 2 && (
@@ -228,6 +273,16 @@ function Landscape({
             fill="#edc37b"
           />
         )}
+        {Array.from({ length: stages.energy + 1 }, (_, index) => (
+          <rect
+            key={`power-${index}`}
+            x={822 + index * 22}
+            y={437}
+            width="16"
+            height="8"
+            fill="#e8d57b"
+          />
+        ))}
       </g>
       <g data-layer="Event">
         {crisis && (
