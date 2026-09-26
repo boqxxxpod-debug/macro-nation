@@ -40,6 +40,14 @@ interface RunRow {
   readonly finalStateSha256: string;
 }
 
+interface CrisisStopRecord {
+  readonly seed: string;
+  readonly monthIndex: number;
+  readonly configHash: string;
+  readonly replayFile: "replay-package.json" | null;
+  readonly reproduceCommand: string;
+}
+
 const INDICATORS: readonly PrimaryIndicatorId[] = [
   "realGdp",
   "inflation",
@@ -272,6 +280,15 @@ async function runBatch(options: RunnerOptions): Promise<void> {
     }
   }
   const successfulRuns = rows.filter((row) => row.failure === null).length;
+  const crisisStops: CrisisStopRecord[] = rows
+    .filter((row) => row.failure === null && row.ticksCompleted < options.ticks)
+    .map((row, index) => ({
+      seed: row.seed,
+      monthIndex: row.ticksCompleted,
+      configHash: configSnapshot.configHash,
+      replayFile: index === 0 ? "replay-package.json" : null,
+      reproduceCommand: `npm run simulate -- --ticks ${options.ticks} --runs 1 --seed ${row.seed} --out /tmp/macro-nation-reproduce-${row.seed}`,
+    }));
   const summary = {
     schemaVersion: 1,
     strategyId: "no-policy-v1",
@@ -282,9 +299,9 @@ async function runBatch(options: RunnerOptions): Promise<void> {
     completedRuns: rows.filter(
       (row) => row.failure === null && row.ticksCompleted === options.ticks,
     ).length,
-    crisisStoppedRuns: rows.filter(
-      (row) => row.failure === null && row.ticksCompleted < options.ticks,
-    ).length,
+    crisisStoppedRuns: crisisStops.length,
+    crisisStopRate: crisisStops.length / options.runs,
+    firstCrisisStop: crisisStops[0] ?? null,
     failedRuns: options.runs - successfulRuns,
     invariantFailureCount: failures.filter(
       (failure) => failure.kind === "invariant",
@@ -330,6 +347,10 @@ async function runBatch(options: RunnerOptions): Promise<void> {
   await writeFile(
     resolve(options.outputDirectory, "run-failures.json"),
     `${JSON.stringify(failures, null, 2)}\n`,
+  );
+  await writeFile(
+    resolve(options.outputDirectory, "crisis-stops.json"),
+    `${JSON.stringify(crisisStops, null, 2)}\n`,
   );
   if (!chosenReplay) throw new Error("No replay row was created");
   await writeFile(
