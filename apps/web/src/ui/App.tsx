@@ -116,6 +116,9 @@ export function App({
     useState<GameState["difficulty"]>("intro");
   const [slotId, setSlotId] = useState<GameState["slotId"]>(1);
   const [slots, setSlots] = useState<ReadonlyMap<number, GameState>>(new Map());
+  const [launchPanel, setLaunchPanel] = useState<"history" | "help" | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -291,6 +294,81 @@ export function App({
           <p>
             架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
           </p>
+          <div className="launch-actions" aria-label="起動メニュー">
+            <button
+              type="button"
+              aria-expanded={launchPanel === "history"}
+              aria-controls="save-history"
+              onClick={() =>
+                setLaunchPanel((current) =>
+                  current === "history" ? null : "history",
+                )
+              }
+            >
+              保存履歴
+            </button>
+            <button
+              type="button"
+              aria-expanded={launchPanel === "help"}
+              aria-controls="launch-help"
+              onClick={() =>
+                setLaunchPanel((current) =>
+                  current === "help" ? null : "help",
+                )
+              }
+            >
+              遊び方・設定
+            </button>
+          </div>
+          {launchPanel === "history" && (
+            <section
+              id="save-history"
+              className="panel launch-panel"
+              aria-labelledby="save-history-heading"
+            >
+              <h3 id="save-history-heading">保存履歴</h3>
+              {slots.size === 0 ? (
+                <p>保存された国家運営はまだありません。</p>
+              ) : (
+                <ol>
+                  {[...slots.entries()]
+                    .sort(
+                      (left, right) => right[1].monthIndex - left[1].monthIndex,
+                    )
+                    .map(([id, saved]) => (
+                      <li key={id}>
+                        <strong>スロット{id}</strong>：{durationLabel(saved)}、
+                        {saved.monthIndex}か月まで進行、
+                        {saved.runState === "completed"
+                          ? "期間満了"
+                          : saved.runState === "failed"
+                            ? "運営失敗"
+                            : "運営中"}
+                      </li>
+                    ))}
+                </ol>
+              )}
+              <p className="quiet">
+                終了済みゲームの評価・国家史（最大10件）はUI11国家史で扱う後続機能です。ここでは保存スロットの進行履歴を表示します。
+              </p>
+            </section>
+          )}
+          {launchPanel === "help" && (
+            <section
+              id="launch-help"
+              className="panel launch-panel"
+              aria-labelledby="launch-help-heading"
+            >
+              <h3 id="launch-help-heading">遊び方・端末設定</h3>
+              <ul>
+                <li>新規開始では期間、難易度、説明量、seedを選びます。</li>
+                <li>進行中の設定と期間は開始後に変更できません。</li>
+                <li>
+                  保存はこの端末内だけで行い、ログインや通信を必要としません。
+                </li>
+              </ul>
+            </section>
+          )}
           <div className="slot-grid" aria-label="保存スロット">
             {SLOT_IDS.map((id) => {
               const saved = slots.get(id);
