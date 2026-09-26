@@ -883,11 +883,15 @@ export function updateFiscalIndustries(
         industry.productionIndex,
       ),
     ];
-    const raw = Math.max(
-      1,
+    const unbounded =
       industry.productionIndex +
-        terms.reduce((sum, term) => sum + term.delta, 0),
-    );
+      terms.reduce((sum, term) => sum + term.delta, 0);
+    const raw = Math.max(1, unbounded);
+    if (unbounded < 1)
+      terms.push({
+        source: source("industry-production-floor", "high"),
+        delta: 1 - unbounded,
+      });
     industryRaw[id] = raw;
     industryTerms[id] = terms;
     const relativeGrowth = raw / industry.productionIndex - 1 - outputGap / 12;
@@ -940,7 +944,26 @@ export function updateFiscalIndustries(
       "Industry aggregate residual contributions do not reconcile",
     );
   }
-  const productionScale = economyBefore.indices.realGdp / rawWeightedProduction;
+  let productionScale = economyBefore.indices.realGdp / rawWeightedProduction;
+  // At long horizons a weak sector can hit the production floor. Scaling every
+  // sector by the same factor and then clamping that sector breaks the GDP
+  // identity; solve the constrained weighted allocation in that case only.
+  if (INDUSTRY_IDS.some((id) => industryRaw[id] * productionScale < 1)) {
+    let lower = 0;
+    let upper = Math.max(1, economyBefore.indices.realGdp);
+    for (let iteration = 0; iteration < 80; iteration += 1) {
+      const middle = (lower + upper) / 2;
+      const aggregate = INDUSTRY_IDS.reduce(
+        (sum, id) =>
+          sum +
+          Math.max(1, industryRaw[id] * middle) * industryModel.shares[id],
+        0,
+      );
+      if (aggregate < economyBefore.indices.realGdp) lower = middle;
+      else upper = middle;
+    }
+    productionScale = (lower + upper) / 2;
+  }
   const industryCausal: CausalContribution[] = [];
   const industries = {} as Record<IndustryId, IndustryState>;
   const publicInvestmentCapacityFlow =
@@ -950,7 +973,7 @@ export function updateFiscalIndustries(
 
   for (const id of INDUSTRY_IDS) {
     const before = economyBefore.industries[id];
-    const productionValue = industryRaw[id] * productionScale;
+    const productionValue = Math.max(1, industryRaw[id] * productionScale);
     const employmentValue = employmentRaw[id] / employmentTotal;
     const productionTerms = [...industryTerms[id]];
     if (productionValue !== industryRaw[id]) {

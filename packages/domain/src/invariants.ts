@@ -109,11 +109,27 @@ export function validateState(state: GameState): ValidationIssue[] {
   if (!Number.isInteger(state.monthIndex) || state.monthIndex < 0) {
     add(issues, "INVALID_CLOCK", "monthIndex", "monthIndex must be a non-negative integer");
   }
+  if (state.pendingOfflineSteps !== undefined && (!Number.isSafeInteger(state.pendingOfflineSteps) || state.pendingOfflineSteps < 0)) {
+    add(issues, "INVALID_CLOCK", "pendingOfflineSteps", "pending offline steps must be a non-negative safe integer");
+  }
   if (!Number.isInteger(state.tickSequence) || state.tickSequence < 0 || state.tickSequence !== state.monthIndex) {
     add(issues, "INVALID_CLOCK", "tickSequence", "tickSequence and monthIndex must advance together");
   }
   if (state.clock.stepIndex !== state.monthIndex || state.clock.month < 1 || state.clock.month > 12) {
     add(issues, "INVALID_CLOCK", "clock", "clock must match monthIndex and use months 1..12");
+  }
+  if (state.clock.endMonth !== undefined &&
+    (!Number.isInteger(state.clock.endMonth) || state.clock.endMonth < 1 || state.monthIndex > state.clock.endMonth || state.clock.durationMode !== state.durationMode)) {
+    add(issues, "INVALID_CLOCK", "clock.endMonth", "duration and end month must match the saved clock");
+  }
+  const milestones = state.history.appliedMilestones ?? [];
+  if (new Set(milestones).size !== milestones.length ||
+    (state.history.reviews ?? []).some((review) => review.monthIndex > state.monthIndex)) {
+    add(issues, "INVALID_CLOCK", "history.appliedMilestones", "milestones must be unique and reviews cannot be in the future");
+  }
+  if (state.longTerm) {
+    numberRule(issues, "longTerm.population", state.longTerm.population, [Number.MIN_VALUE, Number.MAX_VALUE]);
+    numberRule(issues, "longTerm.technologyIndex", state.longTerm.technologyIndex, [Number.MIN_VALUE, Number.MAX_VALUE]);
   }
   if (
     !Number.isInteger(state.clock.config.policyCycleSteps) ||

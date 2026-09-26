@@ -49,6 +49,22 @@ const draft: PolicyDraft = {
 };
 
 describe("paired policy preview", () => {
+  it("can show a five-year counterfactual for a four-year game without extending its saved end", () => {
+    const short = createSCN01InitialState({
+      configSnapshot: state.configSnapshot,
+      versions: state.versions,
+      seed: "short-preview",
+      durationMode: "short",
+    });
+    const preview = previewPolicy({
+      state: { ...short, runState: "paused" },
+      draft,
+      horizonMonths: 60,
+    });
+    expect(preview.irf.realGdp).toHaveLength(60);
+    expect(short.clock.endMonth).toBe(48);
+    expect(short.monthIndex).toBe(0);
+  });
   it("previews a paused policy meeting without advancing the saved game", () => {
     const paused: GameState = { ...state, runState: "paused" };
     const result = previewPolicy({ state: paused, draft, horizonMonths: 12 });

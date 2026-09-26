@@ -46,7 +46,8 @@ export type RunState =
   | "failed";
 export type Difficulty = "intro" | "standard" | "expert";
 export type ScenarioId = "SCN-01" | "SCN-02" | "SCN-03" | (string & {});
-export type DurationMode = "short" | "standard" | "long" | "custom";
+export type DurationMode =
+  "short" | "standard" | "long" | "ultraLong" | "custom"; // older saves may still contain custom
 
 export interface ClockConfig {
   readonly simulationStep: "month";
@@ -67,6 +68,9 @@ export interface GameClock {
   readonly year: number;
   readonly month: number;
   readonly config: ClockConfig;
+  /** Added in save schema 2; absent only on older saves awaiting migration. */
+  readonly endMonth?: number;
+  readonly durationMode?: DurationMode;
 }
 
 export interface IndustryState {
@@ -282,8 +286,28 @@ export interface RngBundle {
 export interface HistoryIndex {
   readonly snapshotMonths: readonly number[];
   readonly lastReviewMonth?: number;
+  readonly appliedMilestones?: readonly string[];
+  readonly reviews?: readonly ReviewSnapshot[];
   /** Compact, saved monthly values and causes for the report screen. */
   readonly reports?: readonly MonthlyReportSnapshot[];
+}
+
+export interface ReviewSnapshot {
+  readonly monthIndex: number;
+  readonly axes: Readonly<
+    Record<
+      "living" | "growth" | "stability" | "sustainability" | "trust",
+      number
+    >
+  >;
+  readonly policyIds: readonly string[];
+  readonly crisisMonths: number;
+  readonly causeRefs: readonly string[];
+}
+
+export interface LongTermState {
+  readonly population: number;
+  readonly technologyIndex: number;
 }
 
 export interface MonthlyReportSnapshot {
@@ -329,6 +353,8 @@ export interface GameState {
   readonly monthIndex: number;
   readonly tickSequence: number;
   readonly runState: RunState;
+  /** Unprocessed elapsed steps; a catch-up processes at most one 96-step batch. */
+  readonly pendingOfflineSteps?: number;
   readonly economy: EconomyState;
   readonly policies: PolicyBook;
   /** Optional in saves produced before the quarterly command system. */
@@ -339,6 +365,7 @@ export interface GameState {
   readonly rng: RngBundle;
   readonly crisisCounters: Readonly<Record<string, number>>;
   readonly history: HistoryIndex;
+  readonly longTerm?: LongTermState;
   readonly clock: GameClock;
   readonly versions: VersionTuple;
   readonly configSnapshot: ConfigSnapshot;
