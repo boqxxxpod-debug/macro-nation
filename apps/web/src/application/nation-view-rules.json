@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "stages": {
+    "city": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "industry": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "countryside": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "harbor": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "airport": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "transport": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 },
+    "energy": { "thresholds": [0.82, 1, 1.18], "margin": 0.025 }
+  }
+}

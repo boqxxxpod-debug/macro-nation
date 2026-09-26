@@ -18,16 +18,18 @@ import { PreviewClient } from "../infrastructure/preview-client";
 import { AIPreview } from "../devtools/AIPreview";
 import { Home, PolicyForm, Preview, Report } from "./GameViews";
 import { Ending } from "./Ending";
+import { NationView } from "./NationView";
 import { migrateFirstPlayableSave } from "../application/save-migration";
 import { label, period } from "./game-format";
 
-type Route = "home" | "policies" | "preview" | "report" | "ending";
+type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
 function routeFromLocation(): Route {
   const path = window.location.pathname;
   if (path.endsWith("/policies/preview")) return "preview";
   if (path.endsWith("/policies")) return "policies";
   if (path.endsWith("/report")) return "report";
   if (path.endsWith("/ending")) return "ending";
+  if (path.endsWith("/nation")) return "nation";
   return "home";
 }
 
@@ -115,7 +117,9 @@ export function App({
             ? "game/1/policies/preview"
             : next === "report"
               ? "game/1/report"
-              : "game/1/ending";
+              : next === "nation"
+                ? "game/1/nation"
+                : "game/1/ending";
     window.history[replace ? "replaceState" : "pushState"](
       {},
       "",
@@ -242,6 +246,7 @@ export function App({
                 "home",
                 "policies",
                 "report",
+                "nation",
                 ...(state.runState === "completed" ||
                 state.runState === "failed"
                   ? ["ending" as const]
@@ -264,7 +269,9 @@ export function App({
                     ? "政策会議"
                     : id === "report"
                       ? "レポート"
-                      : "終了評価"}
+                      : id === "nation"
+                        ? "国家ビュー"
+                        : "終了評価"}
               </button>
             ))}
           </nav>
@@ -277,6 +284,9 @@ export function App({
               <>
                 <h2 tabIndex={-1}>国家ホーム</h2>
                 <Home state={state} />
+                <button onClick={() => navigate("nation")}>
+                  国家の景観を見る
+                </button>
                 {state.runState === "crisisStopped" && (
                   <section className="panel crisis">
                     <h3>緊急会議</h3>
@@ -422,6 +432,12 @@ export function App({
               <>
                 <h2 tabIndex={-1}>経済レポート</h2>
                 <Report state={state} />
+              </>
+            )}
+            {route === "nation" && (
+              <>
+                <h2 tabIndex={-1}>国家ビュー</h2>
+                <NationView state={state} onReport={() => navigate("report")} />
               </>
             )}
             {route === "ending" && (
