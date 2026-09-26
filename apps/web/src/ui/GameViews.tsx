@@ -9,17 +9,24 @@ import {
   type PreviewOutput,
 } from "../application/policy-view";
 import { createBrowserAIService } from "../infrastructure/ai";
+import {
+  causeCategory,
+  selectHomeIndicators,
+  selectHomeMilestones,
+  selectHomeRecommendations,
+  topCause,
+} from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
 
-const CARD_KEYS = [
-  "realHouseholdIncome",
-  "realGdp",
-  "inflation",
-  "unemployment",
-  "policyTrust",
-] as const;
-
-export function Home({ state }: { state: GameState }) {
+export function Home({
+  state,
+  onOpenReport,
+  onOpenPolicies,
+}: {
+  state: GameState;
+  onOpenReport(): void;
+  onOpenPolicies(): void;
+}) {
   const reports = state.history.reports ?? [];
   const latest = reports.at(-1);
   const prior = reports.at(-2);
@@ -28,21 +35,7 @@ export function Home({ state }: { state: GameState }) {
     state.runState === "crisisStopped" ||
     e.rates.inflationAnnual >= 0.08 ||
     e.rates.unemployment >= 0.1;
-  const cards = CARD_KEYS.map((id) => ({
-    id,
-    current:
-      latest?.values[id] ??
-      (id === "realHouseholdIncome"
-        ? e.indices.realHouseholdIncome
-        : id === "realGdp"
-          ? e.indices.realGdp
-          : id === "inflation"
-            ? e.rates.inflationAnnual
-            : id === "unemployment"
-              ? e.rates.unemployment
-              : e.sentiment.policyTrust),
-    previous: prior?.values[id],
-  }));
+  const cards = selectHomeIndicators(state);
   const ranked = cards
     .filter((item) => item.previous !== undefined)
     .sort(
@@ -50,22 +43,9 @@ export function Home({ state }: { state: GameState }) {
         Math.abs((b.current - b.previous!) / (Math.abs(b.previous!) || 1)) -
         Math.abs((a.current - a.previous!) / (Math.abs(a.previous!) || 1)),
     );
-  const milestones = [
-    ...state.policies.reserved.map((policy) => ({
-      month: policy.activationMonth,
-      text: `政策発動（${policy.policyId}）`,
-    })),
-    ...state.policies.active
-      .filter((policy) => policy.endMonth !== undefined)
-      .map((policy) => ({
-        month: policy.endMonth! + 1,
-        text: `政策終了（${policy.policyId}）`,
-      })),
-    { month: 48, text: "入門シナリオの節目" },
-  ]
-    .filter((item) => item.month >= state.monthIndex)
-    .sort((a, b) => a.month - b.month)
-    .slice(0, 3);
+  const milestones = selectHomeMilestones(state);
+  const recommendations = selectHomeRecommendations(state);
+  const primaryCause = topCause(latest);
   return (
     <>
       {state.monthIndex < 12 && state.learningMode === "learning" && (
@@ -95,21 +75,25 @@ export function Home({ state }: { state: GameState }) {
           <ol className="brief">
             {ranked.slice(0, 2).map(({ id, current, previous }) => (
               <li key={id}>
-                {label(id)}は前月から
-                {current > previous!
-                  ? "上昇"
-                  : current < previous!
-                    ? "低下"
-                    : "横ばい"}
-                、{display(id, current)}です。
+                <button className="brief-link" onClick={onOpenReport}>
+                  {label(id)}は前月から
+                  {current > previous!
+                    ? "上昇"
+                    : current < previous!
+                      ? "低下"
+                      : "横ばい"}
+                  、{display(id, current)}です。
+                </button>
               </li>
             ))}
             <li>
-              最大の寄与：
-              {latest?.topCauses[0]
-                ? `${label(latest.topCauses[0].indicatorId)}には${describeCause(latest.topCauses[0], state)}`
-                : "大きな変化は確認されていません"}
-              。
+              <button className="brief-link" onClick={onOpenReport}>
+                次に注意：最大の寄与は
+                {latest?.topCauses[0]
+                  ? `${label(latest.topCauses[0].indicatorId)}には${describeCause(latest.topCauses[0], state)}`
+                  : "大きな変化は確認されていません"}
+                。根拠を見る
+              </button>
             </li>
           </ol>
         </section>
@@ -117,18 +101,33 @@ export function Home({ state }: { state: GameState }) {
       <section>
         <h3>主要5指標</h3>
         <div className="indicator-grid">
-          {cards.map(({ id, current, previous }) => (
-            <article className="indicator" key={id}>
+          {cards.map(({ id, current, previous, direction, assessment }) => (
+            <article className={`indicator indicator-${assessment}`} key={id}>
               <h4>{label(id)}</h4>
               <strong>{display(id, current)}</strong>
               <small>
                 {previous === undefined
                   ? "開始時点"
-                  : `前月比 ${current > previous ? "↑ 上昇" : current < previous ? "↓ 低下" : "→ 横ばい"} ${display(id, Math.abs(current - previous))}`}
+                  : `前月比 ${direction === "up" ? "↑ 上昇" : direction === "down" ? "↓ 低下" : "→ 安定"} ${display(id, Math.abs(current - previous))}・${assessment === "improved" ? "良化" : assessment === "worsened" ? "悪化" : "安定"}`}
               </small>
             </article>
           ))}
         </div>
+      </section>
+      <section className="panel" aria-labelledby="cause-heading">
+        <h3 id="cause-heading">最大変化要因</h3>
+        {primaryCause ? (
+          <p>
+            <strong>{causeCategory(primaryCause.sourceType)}</strong>：
+            {label(primaryCause.indicatorId)}には
+            {describeCause(primaryCause, state)}が最大の寄与をしました。
+          </p>
+        ) : (
+          <p>
+            月次計算後に、政策・外部要因・慣性・ランダム要因の区分付きで表示します。
+          </p>
+        )}
+        <button onClick={onOpenReport}>因果ログで根拠を見る</button>
       </section>
       <section className="panel">
         <h3>次の節目</h3>
@@ -140,6 +139,23 @@ export function Home({ state }: { state: GameState }) {
           ))}
         </ul>
       </section>
+      {recommendations.length > 0 && (
+        <section
+          className="panel recommendations"
+          aria-labelledby="recommendations-heading"
+        >
+          <h3 id="recommendations-heading">首席補佐官の提案</h3>
+          <ol>
+            {recommendations.map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ol>
+          <p className="quiet">
+            提案は自動では確定されません。比較してから判断してください。
+          </p>
+          <button onClick={onOpenPolicies}>政策会議で比較する</button>
+        </section>
+      )}
     </>
   );
 }

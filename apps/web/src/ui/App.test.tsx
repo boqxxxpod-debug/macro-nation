@@ -100,6 +100,13 @@ describe("SCN-01 user journey", () => {
       expect(screen.getByRole("heading", { name: "国家ホーム" })).toHaveFocus(),
     );
     expect(screen.getAllByRole("article")).toHaveLength(5);
+    expect(
+      screen.getByRole("heading", { name: "最大変化要因" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "首席補佐官の提案" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("48月目：シナリオ終了")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "政策を考える" }));
     expect(screen.getByText(/残り 3 \/ 3枠/)).toBeInTheDocument();
     fireEvent.change(
