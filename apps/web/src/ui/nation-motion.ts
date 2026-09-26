@@ -12,7 +12,7 @@ export interface Sprite {
 }
 
 export const MOTION_WIDTH = 1000;
-export const MOTION_HEIGHT = 540;
+export const MOTION_HEIGHT = 1389;
 const ICON_SIZE = 32;
 const KINDS: readonly SpriteKind[] = [
   "car",
@@ -36,14 +36,14 @@ const CAPACITY: Record<SpriteKind, number> = {
   cloud: 3,
 };
 const LANES: Record<SpriteKind, number> = {
-  car: 450,
-  train: 370,
-  ship: 457,
-  plane: 210,
-  person: 370,
-  crane: 178,
-  light: 285,
-  cloud: 115,
+  car: 930,
+  train: 825,
+  ship: 1150,
+  plane: 1090,
+  person: 675,
+  crane: 510,
+  light: 655,
+  cloud: 85,
 };
 const SPEED: Record<SpriteKind, number> = {
   car: 28,

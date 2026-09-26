@@ -5,7 +5,9 @@ import { VitePWA } from "vite-plugin-pwa";
 function normalizeBasePath(input: string | undefined): string {
   const trimmed = input?.trim() || "/";
   const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return withLeadingSlash.endsWith("/") ? withLeadingSlash : `${withLeadingSlash}/`;
+  return withLeadingSlash.endsWith("/")
+    ? withLeadingSlash
+    : `${withLeadingSlash}/`;
 }
 
 const base = normalizeBasePath(process.env.VITE_BASE_PATH);
@@ -38,7 +40,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "index.html",
-        globPatterns: ["**/*.{js,css,html,svg,webmanifest}"],
+        globPatterns: ["**/*.{js,css,html,svg,webp,webmanifest}"],
       },
     }),
   ],
