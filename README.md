@@ -109,4 +109,4 @@ To inspect the artifact locally, run
 
 ## Pull request merge flow
 
-The `CI` workflow runs its `verify` job for every pull request. The default-branch ruleset requires that check to pass. Enable GitHub auto-merge on an individual PR to merge it when all required checks pass. Codex automatic review posts feedback separately; it is not a required check, so its feedback can arrive after a fast CI run. A merge to `main` triggers the GitHub Pages deployment workflow.
+The [`CI` workflow](.github/workflows/ci.yml) runs its `verify` job for every pull request. The default-branch ruleset requires that check to pass. Enable GitHub auto-merge on an individual PR to merge it when all required checks pass. Codex automatic review posts feedback separately; it is not a required check, so its feedback can arrive after a fast CI run. A merge to `main` triggers the [GitHub Pages deployment workflow](.github/workflows/pages.yml).
