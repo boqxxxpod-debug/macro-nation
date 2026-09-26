@@ -106,11 +106,23 @@ describe("SCN-01 user journey", () => {
       screen.getByRole("spinbutton", { name: "政策金利の設定値" }),
       { target: { value: "0.05" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "12か月を比較する" }));
+    fireEvent.click(screen.getByRole("button", { name: "1年・5年を比較する" }));
     expect(
       await screen.findByRole("heading", { name: "政策プレビュー" }),
     ).toHaveFocus();
     expect(screen.getAllByText(/固定ショック分位/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: "反実仮想：別の判断なら" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "政策案と無介入の比較" }),
+    ).toHaveTextContent("何もしない");
+    expect(
+      screen.getByRole("heading", { name: "1年・5年の見通し" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "マクロ経済" }),
+    ).toBeInTheDocument();
     const button = screen.getByRole("button", { name: "政策を確定して保存" });
     fireEvent.click(button);
     fireEvent.click(button);
@@ -140,7 +152,7 @@ describe("SCN-01 user journey", () => {
     await createGame(memory.repository, "ui-save-failure");
     render(<App repository={memory.repository} />);
     fireEvent.click(await screen.findByRole("button", { name: "政策会議" }));
-    fireEvent.click(screen.getByRole("button", { name: "12か月を比較する" }));
+    fireEvent.click(screen.getByRole("button", { name: "1年・5年を比較する" }));
     await screen.findByRole("heading", { name: "政策プレビュー" });
     memory.fail();
     fireEvent.click(screen.getByRole("button", { name: "政策を確定して保存" }));
