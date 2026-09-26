@@ -51,6 +51,20 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("shows empty launch history and offline usage guidance", async () => {
+    const memory = memoryRepository();
+    render(<App repository={memory.repository} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "保存履歴" }));
+    expect(
+      screen.getByText("保存された国家運営はまだありません。"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "遊び方・設定" }));
+    expect(
+      screen.getByText(/ログインや通信を必要としません/),
+    ).toBeInTheDocument();
+  });
+
   it("opens the nation view from home and reaches the same region from its DOM list", async () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "nation-view-accessibility");

@@ -10,6 +10,12 @@ test("360px PWA shell renders and remains available offline after first load", a
   await expect(
     page.getByRole("heading", { name: "MACRO NATION" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "保存履歴" }).click();
+  await expect(
+    page.getByText("保存された国家運営はまだありません。"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "遊び方・設定" }).click();
+  await expect(page.getByText(/ログインや通信を必要としません/)).toBeVisible();
 
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
