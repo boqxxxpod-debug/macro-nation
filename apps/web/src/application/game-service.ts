@@ -46,6 +46,13 @@ export function reportSnapshot(
       support: e.sentiment.support,
       fx: e.indices.fx,
       governmentDebtRatio: e.ratios.governmentDebtRatio,
+      manufacturing: e.industries.manufacturing.productionIndex,
+      agriculture: e.industries.agricultureResources.productionIndex,
+      exports: e.flows.exports,
+      imports: e.flows.imports,
+      transport: e.infrastructure.transport,
+      energy: e.infrastructure.energy,
+      consumption: e.flows.consumption,
     },
     topCauses: causal
       .flatMap((item) =>

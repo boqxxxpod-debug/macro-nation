@@ -48,6 +48,26 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("opens the nation view from home and reaches the same region from its DOM list", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "nation-view-accessibility");
+    render(<App repository={memory.repository} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "国家の景観を見る" }),
+    );
+    expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus();
+    expect(window.location.pathname).toBe("/game/1/nation");
+    fireEvent.click(screen.getByRole("button", { name: /港湾 安定/ }));
+    expect(
+      screen.getByRole("region", { name: "港湾の地域詳細" }),
+    ).toHaveTextContent("輸出（月間）");
+    fireEvent.click(
+      screen.getByRole("button", { name: "経済レポートで理由を見る" }),
+    );
+    expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
+    expect(memory.saved?.runState).toBe("paused");
+  });
+
   it("starts, previews, saves once, advances, and explains the result after browser back", async () => {
     const memory = memoryRepository();
     render(
@@ -58,7 +78,10 @@ describe("SCN-01 user journey", () => {
     );
     expect(
       await screen.findByRole("heading", { name: "国家ホーム" }),
-    ).toHaveFocus();
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "国家ホーム" })).toHaveFocus(),
+    );
     expect(screen.getAllByRole("article")).toHaveLength(5);
     fireEvent.click(screen.getByRole("button", { name: "政策を考える" }));
     expect(screen.getByText(/残り 3 \/ 3枠/)).toBeInTheDocument();
