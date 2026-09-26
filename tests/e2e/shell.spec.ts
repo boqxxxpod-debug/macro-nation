@@ -97,27 +97,53 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await expect(page.getByRole("combobox", { name: "学習案内" })).toBeVisible();
-  await page.locator("body").click({ position: { x: 2, y: 2 } });
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("combobox", { name: "学習案内" })).toBeFocused();
-  await page.keyboard.press("Tab");
   await expect(
-    page.getByRole("textbox", { name: "再現用seed（任意）" }),
-  ).toBeFocused();
+    page.getByRole("combobox", { name: "説明モード" }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await page.getByRole("radio", { name: /30年/ }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("radio", { name: /30年/ })).toBeChecked();
+  await page.getByRole("textbox", { name: "再現用seed（任意）" }).focus();
   await page.keyboard.press("Tab");
   await expect(
     page.getByRole("button", { name: "ゲームを始める" }),
   ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = "200%";
-  });
   await expect(page.getByRole("button", { name: "1か月進める" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "政策を考える" }),
   ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+});
+
+test("duration, difficulty, learning mode, seed, and slot survive reload", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "スロット2で新しく始める" }).click();
+  await page.getByRole("combobox", { name: "難易度" }).selectOption("expert");
+  await page.getByRole("radio", { name: /20年/ }).check();
+  await page
+    .getByRole("combobox", { name: "説明モード" })
+    .selectOption("casual");
+  await page
+    .getByRole("textbox", { name: "再現用seed（任意）" })
+    .fill("issue-17-seed");
+  await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await page.getByRole("button", { name: "保存スロット" }).click();
+  await expect(page.getByText(/20年・240か月・expert・casual/)).toBeVisible();
+  await page.getByRole("button", { name: "スロット2の続きから" }).click();
+  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,

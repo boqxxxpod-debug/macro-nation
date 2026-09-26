@@ -28,8 +28,15 @@ export function browserGameRepository(): GameRepository | null {
 
 export interface GameRepository {
   load(slotId: GameState["slotId"]): Promise<GameState | null>;
+  loadSlot?(slotId: GameState["slotId"]): Promise<SlotLoadResult>;
   save(expectedStateHash: string, next: GameState): Promise<void>;
-  create(state: GameState): Promise<void>;
+  create(state: GameState, startCommandId?: string): Promise<void>;
+}
+
+export interface SlotLoadResult {
+  readonly state: GameState | null;
+  readonly recovered: boolean;
+  readonly reason?: string;
 }
 
 export function reportSnapshot(
@@ -77,6 +84,8 @@ export async function createGame(
   slotId: GameState["slotId"] = 1,
   learningMode: NonNullable<GameState["learningMode"]> = "learning",
   durationMode: Exclude<DurationMode, "custom"> = "short",
+  difficulty: GameState["difficulty"] = "intro",
+  startCommandId?: string,
 ): Promise<GameState> {
   const pack = await loadSCN01ConfigPack();
   const configSnapshot = await createConfigSnapshot(
@@ -103,7 +112,7 @@ export async function createGame(
   const state: GameState = {
     ...initial,
     runState: "paused",
-    difficulty: "intro",
+    difficulty,
     durationMode,
     learningMode,
     pendingOfflineSteps: 0,
@@ -112,8 +121,10 @@ export async function createGame(
       reports: [reportSnapshot(initial)],
     },
   };
-  await repository.create(state);
-  return state;
+  await repository.create(state, startCommandId);
+  // An idempotent retry may have found the already committed start command.
+  // Always return the durable value rather than a newly generated duplicate.
+  return (await repository.load(slotId)) ?? state;
 }
 
 /** One explicit month, persisted before the UI shows its result. */

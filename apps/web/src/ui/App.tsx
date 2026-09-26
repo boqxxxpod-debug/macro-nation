@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GameState } from "@macro-nation/domain";
+import type { DurationMode, GameState } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
   policyStateHash,
@@ -30,6 +30,49 @@ const NAV_LABELS = {
   nation: "国家ビュー",
   ending: "終了評価",
 } as const;
+const SLOT_IDS = [1, 2, 3] as const;
+const DURATIONS: readonly {
+  id: Exclude<DurationMode, "custom">;
+  years: number;
+  months: number;
+  time: string;
+  focus: string;
+}[] = [
+  {
+    id: "short",
+    years: 4,
+    months: 48,
+    time: "約20〜30分",
+    focus: "政策の基本と時間差",
+  },
+  {
+    id: "standard",
+    years: 8,
+    months: 96,
+    time: "約40〜60分",
+    focus: "景気循環と副作用",
+  },
+  {
+    id: "long",
+    years: 20,
+    months: 240,
+    time: "約2〜3時間",
+    focus: "構造変化と財政の持続性",
+  },
+  {
+    id: "ultraLong",
+    years: 30,
+    months: 360,
+    time: "約3〜4時間",
+    focus: "世代をまたぐ長期運営",
+  },
+];
+function durationLabel(state: GameState): string {
+  const selected = DURATIONS.find((item) => item.id === state.durationMode);
+  return selected
+    ? `${selected.years}年・${selected.months}か月`
+    : "期間未設定";
+}
 function routeFromLocation(): Route {
   const path = window.location.pathname;
   if (path.endsWith("/policies/preview")) return "preview";
@@ -54,6 +97,7 @@ export function App({
   const previewClient = useRef<PreviewClient | null>(null);
   const inFlight = useRef(false);
   const confirmationId = useRef<string | null>(null);
+  const startCommandId = useRef(crypto.randomUUID());
   if (!previewClient.current) previewClient.current = new PreviewClient();
   const [state, setState] = useState<GameState | null>(null);
   const [route, setRoute] = useState<Route>(routeFromLocation);
@@ -66,6 +110,12 @@ export function App({
   const [startSeed, setStartSeed] = useState("");
   const [learningMode, setLearningMode] =
     useState<NonNullable<GameState["learningMode"]>>("learning");
+  const [durationMode, setDurationMode] =
+    useState<Exclude<DurationMode, "custom">>("short");
+  const [difficulty, setDifficulty] =
+    useState<GameState["difficulty"]>("intro");
+  const [slotId, setSlotId] = useState<GameState["slotId"]>(1);
+  const [slots, setSlots] = useState<ReadonlyMap<number, GameState>>(new Map());
 
   useEffect(() => {
     let active = true;
@@ -73,14 +123,35 @@ export function App({
       setLoading(false);
       return;
     }
-    void repository
-      .load(1)
-      .then(async (saved) =>
-        saved ? migrateFirstPlayableSave(repository, saved) : null,
-      )
-      .then((saved) => {
+    void Promise.all(
+      SLOT_IDS.map(async (id) => {
+        const result = repository.loadSlot
+          ? await repository.loadSlot(id)
+          : { state: await repository.load(id), recovered: false };
+        const saved = result.state
+          ? await migrateFirstPlayableSave(repository, result.state)
+          : null;
+        return {
+          id,
+          saved,
+          recovered: result.recovered,
+          reason: result.reason,
+        };
+      }),
+    )
+      .then((loaded) => {
         if (active) {
-          setState(saved);
+          const available = new Map<number, GameState>();
+          for (const item of loaded)
+            if (item.saved) available.set(item.id, item.saved);
+          setSlots(available);
+          const first = loaded.find((item) => item.saved)?.saved ?? null;
+          setState(first);
+          const recovery = loaded.find((item) => item.recovered);
+          if (recovery?.reason) setNotice(recovery.reason);
+          const corrupt = loaded.find((item) => !item.saved && item.reason);
+          if (corrupt?.reason)
+            setError(`スロット${corrupt.id}: ${corrupt.reason}`);
           setLoading(false);
         }
       })
@@ -155,10 +226,14 @@ export function App({
     const created = await createGame(
       repository,
       startSeed.trim() || seedFactory(),
-      1,
+      slotId,
       learningMode,
+      durationMode,
+      difficulty,
+      startCommandId.current,
     );
     setState(created);
+    setSlots((current) => new Map(current).set(slotId, created));
     navigate("home");
   }
   async function previewDraft(draft: PolicyDraft) {
@@ -211,47 +286,132 @@ export function App({
       {loading ? (
         <p role="status">保存データを読み込み中…</p>
       ) : !state ? (
-        <section className="panel welcome">
-          <h2>SCN-01 小さな開放経済</h2>
+        <section className="welcome" aria-labelledby="start-heading">
+          <h2 id="start-heading">起動・保存スロット</h2>
           <p>
-            政策を選び、1か月ずつ進めて国の変化を確かめます。端末内に自動保存します。
+            架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
           </p>
-          <p>入門難易度・4年間（48か月）。初めの4四半期は操作を案内します。</p>
-          <label>
-            学習案内
-            <select
-              value={learningMode}
-              onChange={(event) =>
-                setLearningMode(
-                  event.target.value as NonNullable<GameState["learningMode"]>,
-                )
-              }
-            >
-              <option value="learning">表示する</option>
-              <option value="standard">短く表示する</option>
-            </select>
-          </label>
-          <label>
-            再現用seed（任意）
-            <input
-              value={startSeed}
-              maxLength={80}
-              placeholder="未入力なら自動生成"
-              onChange={(event) => setStartSeed(event.target.value)}
-            />
-          </label>
-          <button
-            className="primary"
-            disabled={busy || !repository}
-            onClick={() => void action(start)}
+          <div className="slot-grid" aria-label="保存スロット">
+            {SLOT_IDS.map((id) => {
+              const saved = slots.get(id);
+              return (
+                <article className="panel" key={id}>
+                  <h3>スロット{id}</h3>
+                  <p>
+                    {saved
+                      ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${saved.difficulty}・${saved.learningMode}`
+                      : "空き"}
+                  </p>
+                  {saved ? (
+                    <button
+                      onClick={() => {
+                        setState(saved);
+                        navigate("home");
+                      }}
+                    >
+                      スロット{id}の続きから
+                    </button>
+                  ) : (
+                    <button
+                      aria-pressed={slotId === id}
+                      onClick={() => setSlotId(id)}
+                    >
+                      スロット{id}で新しく始める
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <section
+            className="panel start-options"
+            aria-labelledby="scenario-heading"
           >
-            ゲームを始める
-          </button>
-          {!repository && <p role="alert">端末の保存機能を利用できません。</p>}
+            <h3 id="scenario-heading">新しいゲームの設定</h3>
+            <label>
+              シナリオ
+              <select defaultValue="SCN-01">
+                <option value="SCN-01">SCN-01 小さな開放経済</option>
+              </select>
+            </label>
+            <label>
+              難易度
+              <select
+                value={difficulty}
+                onChange={(event) =>
+                  setDifficulty(event.target.value as GameState["difficulty"])
+                }
+              >
+                <option value="intro">入門（手厚い説明）</option>
+                <option value="standard">標準（要点を説明）</option>
+                <option value="expert">専門（最小限の説明）</option>
+              </select>
+            </label>
+            <fieldset>
+              <legend>期間</legend>
+              <div className="duration-grid">
+                {DURATIONS.map((duration) => (
+                  <label className="duration-card" key={duration.id}>
+                    <input
+                      type="radio"
+                      name="duration"
+                      value={duration.id}
+                      checked={durationMode === duration.id}
+                      onChange={() => setDurationMode(duration.id)}
+                    />
+                    <strong>
+                      {duration.years}年（{duration.months}か月）
+                    </strong>
+                    <span>想定時間: {duration.time}</span>
+                    <span>学べる論点: {duration.focus}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label>
+              説明モード
+              <select
+                value={learningMode}
+                onChange={(event) =>
+                  setLearningMode(
+                    event.target.value as NonNullable<
+                      GameState["learningMode"]
+                    >,
+                  )
+                }
+              >
+                <option value="casual">カジュアル（結論を中心に表示）</option>
+                <option value="standard">標準（理由を短く表示）</option>
+                <option value="learning">学習（用語と理論も表示）</option>
+              </select>
+            </label>
+            <label>
+              再現用seed（任意）
+              <input
+                value={startSeed}
+                maxLength={80}
+                placeholder="未入力なら自動生成"
+                onChange={(event) => setStartSeed(event.target.value)}
+              />
+            </label>
+            <button
+              className="primary"
+              disabled={busy || !repository}
+              onClick={() => void action(start)}
+            >
+              ゲームを始める
+            </button>
+            {!repository && (
+              <p role="alert">端末の保存機能を利用できません。</p>
+            )}
+          </section>
         </section>
       ) : (
         <>
           <nav className="nav" aria-label="ゲーム画面">
+            <button type="button" onClick={() => setState(null)}>
+              保存スロット
+            </button>
             {(
               [
                 "home",
