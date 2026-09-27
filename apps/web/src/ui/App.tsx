@@ -529,7 +529,11 @@ export function App({
             {route === "home" && (
               <>
                 <h2 tabIndex={-1}>国家ホーム</h2>
-                <Home state={state} />
+                <Home
+                  state={state}
+                  onOpenReport={() => navigate("report")}
+                  onOpenPolicies={() => navigate("policies")}
+                />
                 <button onClick={() => navigate("nation")}>
                   国家の景観を見る
                 </button>
