@@ -53,7 +53,7 @@ test("foundation shell has no serious or critical axe violations", async ({
   expect(blocking).toEqual([]);
 });
 
-test("mobile policy journey persists through reload and browser back", async ({
+test("mobile policy journey rejects a duplicate confirmation and persists through reload", async ({
   page,
 }) => {
   await page.goto("/");
@@ -68,13 +68,15 @@ test("mobile policy journey persists through reload and browser back", async ({
   await expect(
     page.getByRole("heading", { name: "無追加政策との12か月比較" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "政策を確定して保存" }).click();
+  // A rapid double tap must still create exactly one durable decision.
+  await page.getByRole("button", { name: "政策を確定して保存" }).dblclick();
   await expect(
     page.getByText("政策を確定し、端末に保存しました。"),
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
   await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  // One of the three quarterly slots was consumed; the duplicate was ignored.
   await expect(page.getByText(/残り 2 \/ 3枠/)).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
