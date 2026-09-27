@@ -204,4 +204,44 @@ describe("NationMotion lifecycle", () => {
     expect(getContext).toHaveBeenCalledTimes(3);
     vi.unstubAllGlobals();
   });
+
+  it("updates monthly state without restarting the animation loop", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    const request = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockReturnValue(12);
+    const cancel = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => {});
+    const initialModel = await model();
+    const { rerender } = render(<NationMotion model={initialModel} />);
+
+    expect(request).toHaveBeenCalledTimes(1);
+    rerender(
+      <NationMotion
+        model={{ ...initialModel, month: initialModel.month + 1 }}
+      />,
+    );
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
