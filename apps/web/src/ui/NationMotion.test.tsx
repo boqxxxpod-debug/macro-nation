@@ -44,6 +44,18 @@ describe("NationMotion lifecycle", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     }));
+    let intersectionChanged: IntersectionObserverCallback | undefined;
+    const disconnect = vi.fn();
+    class FakeIntersectionObserver {
+      constructor(callback: IntersectionObserverCallback) {
+        intersectionChanged = callback;
+      }
+      observe() {}
+      disconnect() {
+        disconnect();
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
       save: vi.fn(),
       restore: vi.fn(),
@@ -71,6 +83,13 @@ describe("NationMotion lifecycle", () => {
       "data-performance",
       "measuring",
     );
+
+    intersectionChanged?.(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+    expect(cancel).toHaveBeenCalledWith(7);
+
     Object.defineProperty(document, "hidden", {
       configurable: true,
       value: true,
@@ -78,6 +97,7 @@ describe("NationMotion lifecycle", () => {
     fireEvent(document, new Event("visibilitychange"));
     expect(cancel).toHaveBeenCalledWith(7);
     unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
     Object.defineProperty(document, "hidden", {
       configurable: true,
       value: false,
