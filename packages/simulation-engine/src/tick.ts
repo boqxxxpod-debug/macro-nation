@@ -7,6 +7,7 @@ import {
   type ConfigSnapshot,
   type GameState,
   type RngBundle,
+  type ReactionSnapshot,
 } from "@macro-nation/domain";
 import {
   RNG_VERSION,
@@ -17,6 +18,7 @@ import {
 } from "./rng";
 import { ENGINE_VERSION } from "./version";
 import { appendReview, applyLongTermMilestone } from "./long-term";
+import { attachReactionReferences, evaluateReactions } from "./reactions";
 
 export const TICK_STAGE_ORDER_V0_1_1 = Object.freeze([
   "validateInput",
@@ -51,6 +53,7 @@ export const TICK_STAGE_ORDER_BY_ENGINE_VERSION = Object.freeze({
   "0.1.7": TICK_STAGE_ORDER_V0_1_1,
   "0.1.8": TICK_STAGE_ORDER_V0_1_1,
   "0.1.9": TICK_STAGE_ORDER_V0_1_1,
+  "0.1.10": TICK_STAGE_ORDER_V0_1_1,
 });
 
 export const TICK_STAGE_ORDER =
@@ -170,6 +173,8 @@ export interface TickInput {
   readonly clockConfig: ClockConfig;
   readonly configSnapshot: ConfigSnapshot;
   readonly rngProvider: TickRngProvider;
+  /** Counterfactual batches may omit explanation-only reaction snapshots. */
+  readonly deriveReactions?: boolean;
   readonly handlers?: Partial<Record<TickMutableStageId, TickStageHandler>>;
   readonly extensions?: Partial<
     Record<TickExtensionPoint, TickExtensionHandler>
@@ -183,6 +188,7 @@ export interface TickDiagnostics {
   readonly causal: readonly CausalContribution[];
   readonly metrics: Readonly<Record<string, number>>;
   readonly notes: readonly string[];
+  readonly reactions: readonly ReactionSnapshot[];
 }
 
 export interface TickOutput {
@@ -401,6 +407,7 @@ export function tick(input: TickInput): TickResult {
   const causal: CausalContribution[] = [];
   const metrics: Record<string, number> = {};
   const notes: string[] = [];
+  let reactions: readonly ReactionSnapshot[] = [];
   let currentStage: TickStageId = "validateInput";
 
   const diagnostics = (): TickDiagnostics => ({
@@ -410,6 +417,7 @@ export function tick(input: TickInput): TickResult {
     causal: [...causal],
     metrics: { ...metrics },
     notes: [...notes],
+    reactions: [...reactions],
   });
 
   try {
@@ -476,6 +484,17 @@ export function tick(input: TickInput): TickResult {
     const longTerm = applyLongTermMilestone(working);
     working = longTerm.state;
     causal.push(...longTerm.causal);
+    if (
+      input.deriveReactions !== false &&
+      causal.length > 0 &&
+      (
+        working.configSnapshot.normalizedConfig.model as
+          { reactions?: unknown } | undefined
+      )?.reactions
+    ) {
+      reactions = evaluateReactions(working, causal);
+      working = attachReactionReferences(working, reactions);
+    }
     working = advanceClock(working, clockConfig);
     working = appendReview(working, causal);
     if (working.monthIndex >= endMonthForState(working))

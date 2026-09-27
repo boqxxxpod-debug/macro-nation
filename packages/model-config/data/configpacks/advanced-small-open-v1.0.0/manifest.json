@@ -6,7 +6,10 @@
   "calibrationVersion": "advanced-small-open-v1.0.0",
   "contentVersion": "1.1.0",
   "rngVersion": "xoshiro128ss-v1",
-  "compatibleEngine": { "min": "0.1.0", "max": "0.1.999" },
+  "compatibleEngine": {
+    "min": "0.1.0",
+    "max": "0.1.999"
+  },
   "fileHashes": {
     "coefficients.json": "831ba3e83a254708aa42969a7bf4c788a702f4d6658f37787fba9c0e295b5bfc",
     "lagKernels.json": "1580f13d153ea3c278ffe138d2b050b181171f1b642c847de411fba5c0a94375",
@@ -15,7 +18,7 @@
     "calibrationTargets.json": "bd11303e65d865e6579cac2aaf841f84b1b731ac796e224e0a94119de147a562",
     "sources.json": "7760c3e9333e6cb5a0f272638977cf378d6c609f92f763c14adb83d4831fe712",
     "content.json": "89416b27b812dfd2bf42ec06d02b6c9f3712bcb23671b55a42d48ac5e6d780d1",
-    "balanced-v0.1.0.json": "b4fd7e228c663a599359fe7ef2c4defcbf25b23d557615e479ea6aca4a3b8314",
+    "balanced-v0.1.0.json": "55204d44c957153cedcbafd42ce37d886739be63f0d603211d13f1e45f147c2c",
     "limits-v1.json": "380a250b60633083dd483447b1827c17e1720c2a0c78ed6f1d3a3a85abd0e050",
     "effect-curves-v1.json": "af863a76b9d3e3394df6221d590d2cb82381e9dcc7e31d0f892a7a4accd85fbd",
     "standard-nation-v1.json": "6469b870de290f133efb02e51c52555c7527f6733214132bc43afa26f22fb712",

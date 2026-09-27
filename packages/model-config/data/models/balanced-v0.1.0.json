@@ -1,1 +1,74 @@
-{"modelId":"balanced","modelVersion":"0.1.2","configPackId":"advanced-small-open-v1.0.0","description":"MVP balanced calibration; coefficients are data-driven and not embedded in engine code."}
+{
+  "modelId": "balanced",
+  "modelVersion": "0.1.2",
+  "configPackId": "advanced-small-open-v1.0.0",
+  "description": "MVP balanced calibration; coefficients are data-driven and not embedded in engine code.",
+  "reactions": {
+    "neutralThreshold": 0.03,
+    "strengthThresholds": [0.12, 0.35, 0.65],
+    "sourceWeights": {
+      "policy": 1,
+      "event": 1,
+      "external": 0.8,
+      "inertia": 0.6,
+      "random": 0.35
+    },
+    "metricScales": {
+      "realGdp": 0.5,
+      "consumption": 0.25,
+      "investment": 0.2,
+      "inflation": 0.01,
+      "unemployment": 0.005,
+      "policyTrust": 2,
+      "support": 2,
+      "businessConfidence": 2,
+      "consumerConfidence": 2,
+      "marketRate": 0.005,
+      "fx": 1,
+      "governmentDebtRatio": 0.01,
+      "foreignReserves": 1,
+      "politicalCapital": 2,
+      "implementationCapacity": 2
+    },
+    "audiences": {
+      "citizens": {
+        "lagMonths": 1,
+        "costWeight": -0.08,
+        "metricWeights": {
+          "realGdp": 0.4,
+          "consumption": 0.8,
+          "inflation": -1,
+          "unemployment": -1,
+          "consumerConfidence": 0.6,
+          "policyTrust": 0.5,
+          "support": 0.5
+        }
+      },
+      "business": {
+        "lagMonths": 2,
+        "costWeight": -0.04,
+        "metricWeights": {
+          "realGdp": 0.5,
+          "investment": 1,
+          "inflation": -0.3,
+          "marketRate": -0.7,
+          "businessConfidence": 0.8,
+          "implementationCapacity": 0.2
+        }
+      },
+      "market": {
+        "lagMonths": 0,
+        "costWeight": -0.02,
+        "metricWeights": {
+          "inflation": -0.8,
+          "marketRate": -0.2,
+          "fx": -0.5,
+          "governmentDebtRatio": -0.8,
+          "foreignReserves": 0.5,
+          "policyTrust": 0.7,
+          "politicalCapital": 0.2
+        }
+      }
+    }
+  }
+}

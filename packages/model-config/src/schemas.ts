@@ -388,6 +388,26 @@ export const modelSchema = z.object({
   modelVersion: z.string().min(1),
   configPackId: z.string().min(1),
   description: z.string().min(1),
+  reactions: z.object({
+    neutralThreshold: z.number().finite().nonnegative().max(1),
+    strengthThresholds: z
+      .tuple([
+        z.number().finite().nonnegative(),
+        z.number().finite().nonnegative(),
+        z.number().finite().nonnegative(),
+      ])
+      .refine(([weak, medium, strong]) => weak < medium && medium < strong),
+    sourceWeights: z.record(z.string(), z.number().finite()),
+    metricScales: z.record(z.string(), z.number().finite().positive()),
+    audiences: z.record(
+      z.enum(["citizens", "business", "market"]),
+      z.object({
+        lagMonths: z.number().int().nonnegative(),
+        costWeight: z.number().finite(),
+        metricWeights: z.record(z.string(), z.number().finite()),
+      }),
+    ),
+  }),
 });
 export const limitsSchema = z.object({
   hard: z.record(

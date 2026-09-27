@@ -277,6 +277,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
         initialState: projectionState(input.state),
         tickCount: horizonMonths,
         rngProvider,
+        deriveReactions: false,
       }),
     );
     const proposed =
@@ -287,6 +288,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
               initialState: projectionState(variant),
               tickCount: horizonMonths,
               rngProvider,
+              deriveReactions: false,
             }),
           );
     if (
