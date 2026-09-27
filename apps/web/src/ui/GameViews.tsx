@@ -21,6 +21,7 @@ import {
   topCause,
 } from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
+import { NationVoice } from "./NationVoice";
 
 export function Home({
   state,
@@ -133,6 +134,7 @@ export function Home({
         )}
         <button onClick={onOpenReport}>因果ログで根拠を見る</button>
       </section>
+      <NationVoice state={state} onOpenCause={onOpenReport} />
       <section className="panel">
         <h3>次の節目</h3>
         <ul>
@@ -233,6 +235,7 @@ export function Report({ state }: { state: GameState }) {
           <Trend key={id} reports={state.history.reports ?? []} id={id} />
         ))}
       </section>
+      <NationVoice state={state} />
       <section className="panel">
         <h3>今月の主な原因</h3>
         {latest?.topCauses.length ? (
