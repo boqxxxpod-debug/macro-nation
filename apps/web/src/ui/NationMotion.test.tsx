@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGame, type GameRepository } from "../application/game-service";
 import { selectNationView } from "../application/nation-view";
@@ -102,6 +108,61 @@ describe("NationMotion lifecycle", () => {
       configurable: true,
       value: false,
     });
+    vi.unstubAllGlobals();
+  });
+
+  it("automatically lowers drawing quality when measured frame rate misses the minimum", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    Object.defineProperty(navigator, "hardwareConcurrency", {
+      configurable: true,
+      value: 8,
+    });
+    Object.defineProperty(navigator, "deviceMemory", {
+      configurable: true,
+      value: 8,
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    render(<NationMotion model={await model()} />);
+    expect(
+      document.querySelector("canvas.nation-motion-canvas"),
+    ).toHaveAttribute("data-quality", "high");
+
+    await act(async () => {
+      frames.shift()?.(34);
+      frames.shift()?.(68);
+      frames.shift()?.(2_100);
+    });
+
+    expect(
+      document.querySelector("canvas.nation-motion-canvas"),
+    ).toHaveAttribute("data-quality", "medium");
+    expect(screen.getByText(/20fps未満・画質を調整中/)).toHaveAttribute(
+      "data-performance",
+      "slow",
+    );
     vi.unstubAllGlobals();
   });
 
