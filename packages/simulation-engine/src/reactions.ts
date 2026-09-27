@@ -40,6 +40,18 @@ function refKey(ref: CausalRef): string {
   );
 }
 
+interface ScoredCause {
+  readonly ref: CausalRef;
+  readonly score: number;
+}
+
+function compareScoredCauses(left: ScoredCause, right: ScoredCause): number {
+  return (
+    Math.abs(right.score) - Math.abs(left.score) ||
+    refKey(left.ref).localeCompare(refKey(right.ref))
+  );
+}
+
 function policyCost(state: GameState, sourceId: string): number {
   const policies: readonly PolicyDecision[] = [
     ...state.policies.active,
@@ -65,7 +77,7 @@ export function evaluateReactions(
   const config = configFor(state);
   return AUDIENCES.map((audience) => {
     const audienceConfig = config.audiences[audience];
-    const scored = causal.flatMap((contribution) => {
+    const metricSignals = causal.flatMap((contribution) => {
       const metricWeight =
         audienceConfig.metricWeights[contribution.indicatorId] ?? 0;
       const scale = config.metricScales[contribution.indicatorId] ?? 1;
@@ -73,23 +85,45 @@ export function evaluateReactions(
         ref: term as CausalRef,
         score:
           (term.delta / scale) *
-            metricWeight *
-            (config.sourceWeights[term.sourceType] ?? 0) +
-          (term.sourceType === "policy"
-            ? policyCost(state, term.sourceId) * audienceConfig.costWeight
-            : 0),
+          metricWeight *
+          (config.sourceWeights[term.sourceType] ?? 0),
       }));
     });
-    const ordered = [...scored].sort(
-      (left, right) =>
-        Math.abs(right.score) - Math.abs(left.score) ||
-        refKey(left.ref).localeCompare(refKey(right.ref)),
-    );
+
+    // A policy can contribute to several indicators. Its implementation cost is
+    // a property of the decision, not of every causal term, so charge it once
+    // and attach it to that policy's canonical causal reference.
+    const policyRefs = new Map<string, CausalRef>();
+    for (const signal of [...metricSignals].sort(compareScoredCauses)) {
+      if (
+        signal.ref.sourceType === "policy" &&
+        !policyRefs.has(signal.ref.sourceId)
+      )
+        policyRefs.set(signal.ref.sourceId, signal.ref);
+    }
+    const chargedPolicies = new Set<string>();
+    const scored = metricSignals.map((signal) => {
+      if (
+        signal.ref.sourceType !== "policy" ||
+        chargedPolicies.has(signal.ref.sourceId) ||
+        refKey(policyRefs.get(signal.ref.sourceId) ?? signal.ref) !==
+          refKey(signal.ref)
+      )
+        return signal;
+      chargedPolicies.add(signal.ref.sourceId);
+      return {
+        ...signal,
+        score:
+          signal.score +
+          policyCost(state, signal.ref.sourceId) * audienceConfig.costWeight,
+      };
+    });
+    const ordered = [...scored].sort(compareScoredCauses);
     const score = Math.max(
       -1,
       Math.min(
         1,
-        scored.reduce((total, item) => total + item.score, 0),
+        ordered.reduce((total, item) => total + item.score, 0),
       ),
     );
     const absolute = Math.abs(score);

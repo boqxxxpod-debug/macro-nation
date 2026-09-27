@@ -396,7 +396,11 @@ export const modelSchema = z.object({
         z.number().finite().nonnegative(),
         z.number().finite().nonnegative(),
       ])
-      .refine(([weak, medium, strong]) => weak < medium && medium < strong),
+      .refine(
+        ([weak, medium, strong]) =>
+          weak < medium && medium < strong && strong <= 1,
+        "reaction strength thresholds must be strictly increasing and at most 1",
+      ),
     sourceWeights: z.record(z.string(), z.number().finite()),
     metricScales: z.record(z.string(), z.number().finite().positive()),
     audiences: z.record(
