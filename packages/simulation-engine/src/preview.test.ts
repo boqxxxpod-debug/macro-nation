@@ -6,6 +6,7 @@ import {
 import type { GameState, VersionTuple } from "@macro-nation/domain";
 import {
   ENGINE_VERSION,
+  activateDuePolicies,
   applyPolicyCommand,
   createSCN01InitialState,
   policyStateHash,
@@ -49,6 +50,53 @@ const draft: PolicyDraft = {
 };
 
 describe("paired policy preview", () => {
+  it("uses the same combo decision for preview and committed activation", () => {
+    const taxDraft: PolicyDraft = {
+      status: "previewed",
+      policyId: "combo-tax",
+      ruleId: "tax-package",
+      value: -0.01,
+      quartersAhead: 0,
+      previewStateHash: policyStateHash(state),
+    };
+    const afterTax = applyPolicyCommand(state, {
+      kind: "commit",
+      commandId: "combo-tax-command",
+      expectedStateHash: policyStateHash(state),
+      draft: taxDraft,
+    }).state;
+    const worksDraft: PolicyDraft = {
+      status: "draft",
+      policyId: "combo-works",
+      ruleId: "public-works",
+      value: 0.01,
+      quartersAhead: 0,
+    };
+    const preview = previewPolicy({
+      state: afterTax,
+      draft: worksDraft,
+      horizonMonths: 12,
+    });
+    expect(
+      preview.comboResults.find(
+        (combo) => combo.comboId === "growth-investment-package",
+      ),
+    ).toMatchObject({ activated: true });
+
+    const committed = applyPolicyCommand(afterTax, {
+      kind: "commit",
+      commandId: "combo-works-command",
+      expectedStateHash: policyStateHash(afterTax),
+      draft: preview.previewedDraft!,
+    }).state;
+    const activated = activateDuePolicies(committed);
+    expect(
+      activated.state.effects.filter(
+        (effect) => effect.comboId === "growth-investment-package",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("can show a five-year counterfactual for a four-year game without extending its saved end", () => {
     const short = createSCN01InitialState({
       configSnapshot: state.configSnapshot,

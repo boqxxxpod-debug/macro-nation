@@ -8,6 +8,7 @@ export * from "./macro";
 export * from "./policy-registry";
 export * from "./policy-effects";
 export * from "./commands";
+export * from "./combos";
 export * from "./preview";
 export * from "./reactions";
 export * from "./fiscal-industries";

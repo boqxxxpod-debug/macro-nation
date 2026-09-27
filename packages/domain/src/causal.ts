@@ -1,7 +1,7 @@
 import type { IndicatorId } from "./state";
 
 export type CausalSourceType =
-  "policy" | "event" | "external" | "inertia" | "random";
+  "policy" | "combo" | "event" | "external" | "inertia" | "random";
 export type CausalMetricId =
   | IndicatorId
   | "consumption"

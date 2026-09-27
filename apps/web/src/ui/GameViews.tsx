@@ -667,14 +667,45 @@ export function Preview({
         <p>{output.uncertainty.note}</p>
       </section>
       <section className="panel" aria-labelledby="interaction-heading">
-        <h3 id="interaction-heading">既存政策との重なり</h3>
-        {output.interactions.length ? (
-          <p>
-            同種政策との重なりを検出：{output.interactions.join("、")}
-            。現在のモデルにはこの重なりによる追加効果や追加費用の定義はありません。
-          </p>
-        ) : (
-          <p>現在の実施中・予約中政策との同種の重なりはありません。</p>
+        <h3 id="interaction-heading">政策コンボ</h3>
+        {output.comboResults.map((combo) => {
+          const reason = combo.reason
+            ? {
+                "missing-required-policy": "必要な政策が揃っていません",
+                "forbidden-policy": "同時に使えない政策があります",
+                "insufficient-overlap": `重複期間が${combo.overlapMonths}か月で条件を満たしません`,
+                "insufficient-additional-cost":
+                  "コンボの追加費用が不足しています（政策自体は確定できます）",
+                "missing-required-combo": "前提となるコンボが発動していません",
+                "already-fired-this-month": "今月すでに発動済みです",
+              }[combo.reason]
+            : "すべての条件を満たします";
+          return (
+            <article className="combo-result" key={combo.comboId}>
+              <h4>
+                {combo.kind === "synergy" ? "相乗" : "相殺"}：{combo.comboId}
+              </h4>
+              <p>
+                条件：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
+                {combo.forbiddenPolicyIds.length
+                  ? `（併用不可：${combo.forbiddenPolicyIds.map(label).join("、")}）`
+                  : ""}
+              </p>
+              <p>
+                判定：{combo.activated ? "発動見込み" : "未発動見込み"} —{" "}
+                {reason}。
+              </p>
+              <p>
+                追加費用：政治資本 {combo.additionalCosts.politicalCapital}
+                、実施能力 {combo.additionalCosts.implementationCapacity}
+                、外貨準備 {combo.additionalCosts.foreignReserves}、予算{" "}
+                {combo.additionalCosts.immediateBudget}。
+              </p>
+            </article>
+          );
+        })}
+        {output.comboResults.length === 0 && (
+          <p>定義済みの政策コンボはありません。</p>
         )}
       </section>
       <section className="panel" aria-labelledby="advice-heading">
