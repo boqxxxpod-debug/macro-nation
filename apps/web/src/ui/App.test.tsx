@@ -96,6 +96,9 @@ describe("SCN-01 user journey", () => {
     expect(
       await screen.findByRole("heading", { name: "国家ホーム" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("ゲームを開始し、端末に保存しました。"),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "国家ホーム" })).toHaveFocus(),
     );
@@ -113,11 +116,24 @@ describe("SCN-01 user journey", () => {
       screen.getByRole("spinbutton", { name: "政策金利の設定値" }),
       { target: { value: "0.05" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "12か月を比較する" }));
+    fireEvent.click(screen.getAllByRole("checkbox", { name: /中央銀行/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "1年・5年を比較する" }));
     expect(
       await screen.findByRole("heading", { name: "政策プレビュー" }),
     ).toHaveFocus();
     expect(screen.getAllByText(/固定ショック分位/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: "反実仮想：別の判断なら" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "政策案と無介入の比較" }),
+    ).toHaveTextContent("何もしない");
+    expect(
+      screen.getByRole("heading", { name: "1年・5年の見通し" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "マクロ経済" }),
+    ).toBeInTheDocument();
     const button = screen.getByRole("button", { name: "政策を確定して保存" });
     fireEvent.click(button);
     fireEvent.click(button);
@@ -125,6 +141,10 @@ describe("SCN-01 user journey", () => {
       await screen.findByText("政策を確定し、端末に保存しました。"),
     ).toBeInTheDocument();
     expect(memory.saved?.policies.reserved).toHaveLength(1);
+    expect(memory.saved?.policies.reserved[0]?.selectedExpertIds).toEqual([
+      "macro",
+      "centralBank",
+    ]);
     expect(memory.saved?.policyAdministration?.receipts).toHaveLength(1);
     window.history.back();
     fireEvent.popState(window);
@@ -147,7 +167,7 @@ describe("SCN-01 user journey", () => {
     await createGame(memory.repository, "ui-save-failure");
     render(<App repository={memory.repository} />);
     fireEvent.click(await screen.findByRole("button", { name: "政策会議" }));
-    fireEvent.click(screen.getByRole("button", { name: "12か月を比較する" }));
+    fireEvent.click(screen.getByRole("button", { name: "1年・5年を比較する" }));
     await screen.findByRole("heading", { name: "政策プレビュー" });
     memory.fail();
     fireEvent.click(screen.getByRole("button", { name: "政策を確定して保存" }));

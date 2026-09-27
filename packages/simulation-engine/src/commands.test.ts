@@ -111,6 +111,33 @@ describe("quarterly policy commands", () => {
     ).toThrow(/Stale/);
   });
 
+  it("records the experts selected for a committed decision", () => {
+    const result = applyPolicyCommand(initial, {
+      ...commit(initial, "advised"),
+      selectedExpertIds: ["macro", "fiscal"],
+    });
+    expect(result.state.policies.reserved[0]).toMatchObject({
+      selectedExpertIds: ["macro", "fiscal"],
+      expertId: "macro",
+    });
+  });
+
+  it("rejects malformed expert selections before recording a decision", () => {
+    for (const selectedExpertIds of [
+      [] as string[],
+      ["macro", "macro"],
+      ["centralBank", "fiscal", "macro", "labor"],
+      [""],
+    ]) {
+      expect(() =>
+        applyPolicyCommand(initial, {
+          ...commit(initial, `invalid-experts-${selectedExpertIds.length}`),
+          selectedExpertIds,
+        }),
+      ).toThrow(/one to three unique experts/);
+    }
+  });
+
   it("holds costs at confirmation and releases the precise reservation on cancellation", () => {
     const limited = {
       ...initial,
@@ -212,7 +239,9 @@ describe("quarterly policy commands", () => {
     ).state;
     const pending = runPolicyHeadless({ initialState: booked, tickCount: 3 });
     expect(pending.failure).toBeNull();
-    expect(pending.finalState.economy.stocks.foreignReserves).toBeGreaterThanOrEqual(60);
+    expect(
+      pending.finalState.economy.stocks.foreignReserves,
+    ).toBeGreaterThanOrEqual(60);
     const activated = runPolicyHeadless({
       initialState: pending.finalState,
       tickCount: 1,

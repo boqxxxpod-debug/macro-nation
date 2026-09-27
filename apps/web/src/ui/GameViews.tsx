@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ordinaryNews, projectFacts } from "@macro-nation/advisor-core";
+import {
+  expertProfilesForContentVersion,
+  ordinaryNews,
+  projectFacts,
+} from "@macro-nation/advisor-core";
 import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
 import {
   createReservedPolicy,
@@ -281,10 +285,13 @@ export function PolicyForm({
   busy,
 }: {
   state: GameState;
-  onPreview(draft: PolicyDraft): void;
+  onPreview(draft: PolicyDraft, expertIds: readonly string[]): void;
   busy: boolean;
 }) {
   const rules = policyRules(state.configSnapshot);
+  const profiles = expertProfilesForContentVersion(
+    state.versions.contentVersion,
+  );
   const [ruleId, setRuleId] = useState(rules[0]?.policyId ?? "");
   const rule = rules.find((item) => item.policyId === ruleId);
   const [value, setValue] = useState(
@@ -292,6 +299,7 @@ export function PolicyForm({
   );
   const [ahead, setAhead] = useState(0);
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
+  const [expertIds, setExpertIds] = useState<readonly string[]>(["macro"]);
   const meeting = policyMeetingStatus(state);
   const shortage = (() => {
     try {
@@ -370,23 +378,49 @@ export function PolicyForm({
           ))}
         </select>
       </label>
-      <div className="expert-slot" aria-label="専門家選択の追加予定領域">
-        専門家の視点（今後追加）
-      </div>
+      <fieldset className="expert-picker">
+        <legend>解説を聞く専門家（1〜3人）</legend>
+        {profiles.map((expert) => (
+          <label key={expert.id}>
+            <input
+              type="checkbox"
+              checked={expertIds.includes(expert.id)}
+              disabled={
+                expertIds.includes(expert.id)
+                  ? expertIds.length === 1
+                  : expertIds.length === 3
+              }
+              onChange={() =>
+                setExpertIds((current) =>
+                  current.includes(expert.id)
+                    ? current.filter((id) => id !== expert.id)
+                    : [...current, expert.id],
+                )
+              }
+            />
+            <span>
+              <strong>{expert.role}</strong> — {expert.values}
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <button
         className="primary"
         disabled={busy || meeting.slotsRemaining === 0 || !!shortage}
         onClick={() =>
-          onPreview({
-            status: "draft",
-            policyId: draftId,
-            ruleId,
-            value,
-            quartersAhead: ahead,
-          })
+          onPreview(
+            {
+              status: "draft",
+              policyId: draftId,
+              ruleId,
+              value,
+              quartersAhead: ahead,
+            },
+            expertIds,
+          )
         }
       >
-        12か月を比較する
+        1年・5年を比較する
       </button>
       {meeting.slotsRemaining === 0 && (
         <p>今四半期の3枠を使い切りました。次の更新月までお待ちください。</p>
@@ -398,10 +432,16 @@ export function PolicyForm({
 
 export function Preview({
   output,
+  counterfactuals,
+  expertIds,
+  contentVersion,
   busy,
   onConfirm,
 }: {
   output: PreviewOutput | null;
+  counterfactuals: readonly PreviewOutput[];
+  expertIds: readonly string[];
+  contentVersion: string;
   busy: boolean;
   onConfirm(): void;
 }) {
@@ -409,6 +449,28 @@ export function Preview({
     return (
       <p className="panel">政策会議で案を作成し、プレビューしてください。</p>
     );
+  const forecast = (months: 12 | 60, indicatorId: string) =>
+    output.summaries.find(
+      (item) =>
+        item.horizonMonths === months && item.indicatorId === indicatorId,
+    );
+  const directionalRanges = output.indicators
+    .filter((item) =>
+      ["realGdp", "inflation", "unemployment"].includes(item.indicatorId),
+    )
+    .map(({ month12 }) =>
+      month12.deltaLow > 0 && month12.deltaHigh > 0
+        ? true
+        : month12.deltaLow < 0 && month12.deltaHigh < 0,
+    );
+  const directionalCount = directionalRanges.filter(Boolean).length;
+  const confidence =
+    directionalCount === directionalRanges.length
+      ? "高"
+      : directionalCount > 0
+        ? "中"
+        : "低";
+  const profiles = expertProfilesForContentVersion(contentVersion);
   return (
     <>
       <p className="quiet">
@@ -449,6 +511,81 @@ export function Preview({
             ))}
         </div>
       </section>
+      <section className="panel" aria-labelledby="forecast-heading">
+        <h3 id="forecast-heading">1年・5年の見通し</h3>
+        <p>
+          確信度：{confidence}。主な不確実性：
+          {output.uncertainty.majorDrivers.map(label).join("、")}。
+        </p>
+        <div className="forecast-grid">
+          {["realGdp", "inflation", "unemployment"].map((indicatorId) => (
+            <article key={indicatorId}>
+              <h4>{label(indicatorId)}</h4>
+              <p>
+                1年後の無介入との差：
+                {display(indicatorId, forecast(12, indicatorId)?.endDelta ?? 0)}
+              </p>
+              <p>
+                5年後の無介入との差：
+                {display(indicatorId, forecast(60, indicatorId)?.endDelta ?? 0)}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="panel" aria-labelledby="counterfactual-heading">
+        <h3 id="counterfactual-heading">反実仮想：別の判断なら</h3>
+        <p>
+          基準時点：ゲーム内{" "}
+          {output.activationMonth === null
+            ? "現在"
+            : `${output.activationMonth + 1}月目`}
+          。すべて同じsnapshot・固定ショックで比較しています。
+        </p>
+        <div
+          className="counterfactual-table"
+          role="table"
+          aria-label="政策案と無介入の比較"
+        >
+          <div role="row" className="table-head">
+            <span role="columnheader">判断</span>
+            <span role="columnheader">3か月</span>
+            <span role="columnheader">6か月</span>
+            <span role="columnheader">1年</span>
+            <span role="columnheader">5年</span>
+          </div>
+          {[output, ...counterfactuals].map((candidate) => {
+            const row = candidate.indicators.find(
+              (item) => item.indicatorId === "realGdp",
+            )!;
+            const fiveYear = candidate.summaries.find(
+              (item) =>
+                item.indicatorId === "realGdp" && item.horizonMonths === 60,
+            );
+            return (
+              <div role="row" key={candidate.draftHash}>
+                <span role="cell">
+                  {candidate.previewedDraft
+                    ? label(candidate.previewedDraft.ruleId)
+                    : "何もしない"}
+                </span>
+                {[
+                  row.month3.deltaBase,
+                  row.month6.deltaBase,
+                  row.month12.deltaBase,
+                  fiveYear?.endDelta ?? 0,
+                ].map((value, index) => (
+                  <span role="cell" key={index}>
+                    {value > 0 ? "+" : ""}
+                    {display("realGdp", value)}
+                  </span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        <small>表示値は成長の無介入との差です。</small>
+      </section>
       <section className="panel">
         <h3>効果と費用</h3>
         <p>
@@ -484,6 +621,46 @@ export function Preview({
           <p>同種の政策と重なります：{output.interactions.join("、")}</p>
         )}
         <p>{output.uncertainty.note}</p>
+      </section>
+      <section className="panel" aria-labelledby="interaction-heading">
+        <h3 id="interaction-heading">既存政策との重なり</h3>
+        {output.interactions.length ? (
+          <p>
+            同種政策との重なりを検出：{output.interactions.join("、")}
+            。現在のモデルにはこの重なりによる追加効果や追加費用の定義はありません。
+          </p>
+        ) : (
+          <p>現在の実施中・予約中政策との同種の重なりはありません。</p>
+        )}
+      </section>
+      <section className="panel" aria-labelledby="advice-heading">
+        <h3 id="advice-heading">選択した専門家の解説</h3>
+        {expertIds.map((expertId) => {
+          const expert = profiles.find((item) => item.id === expertId)!;
+          const priorities = expert.priorityIndicators ?? ["realGdp"];
+          const ranked = priorities
+            .map((id) => ({ id, value: forecast(60, id)?.endDelta ?? 0 }))
+            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+          return (
+            <article className="expert-advice" key={expertId}>
+              <h4>{expert.role}</h4>
+              <p>
+                <strong>結論：</strong>
+                {label(ranked[0]!.id)}への5年差{" "}
+                {display(ranked[0]!.id, ranked[0]!.value)}を重視します。
+              </p>
+              <p>
+                <strong>やさしい理由：</strong>
+                {expert.values}
+                の観点から、同じ予測値のうち重要な順に読みました。
+              </p>
+              <p>
+                <strong>注意点：</strong>
+                {output.uncertainty.note}
+              </p>
+            </article>
+          );
+        })}
       </section>
       <button className="primary" disabled={busy} onClick={onConfirm}>
         政策を確定して保存

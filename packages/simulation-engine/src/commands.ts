@@ -27,6 +27,7 @@ export type PolicyCommand =
       readonly commandId: string;
       readonly expectedStateHash: string;
       readonly draft: PolicyDraft;
+      readonly selectedExpertIds?: readonly string[];
     }
   | {
       readonly kind: "amend";
@@ -244,6 +245,15 @@ export function applyPolicyCommand(
   const causal: CausalContribution[] = [];
   if (command.kind === "commit") {
     requirePreview(command.draft, hash);
+    if (
+      command.selectedExpertIds &&
+      (command.selectedExpertIds.length < 1 ||
+        command.selectedExpertIds.length > 3 ||
+        new Set(command.selectedExpertIds).size !==
+          command.selectedExpertIds.length ||
+        command.selectedExpertIds.some((expertId) => !expertId.trim()))
+    )
+      throw new Error("A policy decision requires one to three unique experts");
     const id = command.draft.policyId;
     if (
       [
@@ -264,6 +274,12 @@ export function applyPolicyCommand(
     const booked: PolicyDecision = {
       ...policy,
       sourceCommandId: command.commandId,
+      ...(command.selectedExpertIds?.length
+        ? {
+            selectedExpertIds: [...command.selectedExpertIds],
+            expertId: command.selectedExpertIds[0],
+          }
+        : {}),
     };
     assertResources(state, reservations, booked.costs);
     reservations.push({
