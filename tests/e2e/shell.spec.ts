@@ -74,7 +74,9 @@ test("mobile policy journey persists through reload and browser back", async ({
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
-  await page.getByRole("button", { name: "政策会議" }).click();
+  await page
+    .getByRole("button", { name: "政策会議", exact: true })
+    .click();
   await expect(page.getByText(/残り 2 \/ 3枠/)).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();

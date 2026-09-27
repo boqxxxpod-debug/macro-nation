@@ -140,6 +140,30 @@ h4 {
 .panel li + li {
   margin-top: 0.5rem;
 }
+.brief-link {
+  width: 100%;
+  border: 0;
+  padding: 0.35rem 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+.indicator-improved {
+  border-top: 0.35rem solid #33735b;
+}
+.indicator-worsened {
+  border-top: 0.35rem solid #a94f35;
+}
+.indicator-neutral {
+  border-top: 0.35rem solid #718087;
+}
+.recommendations {
+  border-left: 0.35rem solid #c18b24;
+}
 .welcome {
   max-width: 68rem;
   margin-top: 2rem;
