@@ -4,6 +4,7 @@ import { selectNationView } from "../application/nation-view";
 import {
   advanceSprite,
   createSpritePool,
+  drawMotionFrame,
   frameRateStatus,
   initialQualityTier,
   nextQualityTier,
@@ -65,5 +66,25 @@ describe("nation motion budget", () => {
     expect(frameRateStatus(29)).toBe("minimum");
     expect(frameRateStatus(20)).toBe("minimum");
     expect(frameRateStatus(19)).toBe("slow");
+  });
+
+  it("reuses the same fixed pool during a long-running draw sequence", async () => {
+    const view = await model();
+    const pool = createSpritePool();
+    const identities = [...pool];
+    const context = {
+      clearRect() {},
+      drawImage() {},
+    } as unknown as CanvasRenderingContext2D;
+    const atlas = {} as HTMLCanvasElement;
+
+    for (let frame = 0; frame < 10_000; frame += 1) {
+      drawMotionFrame(context, atlas, pool, view, "high", 1 / 30);
+    }
+
+    expect(pool).toHaveLength(23);
+    expect(pool.every((sprite, index) => sprite === identities[index])).toBe(
+      true,
+    );
   });
 });
