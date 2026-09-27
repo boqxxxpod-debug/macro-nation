@@ -73,6 +73,11 @@ export function NationMotion({ model }: { model: NationViewModel }) {
       if (frameId) window.cancelAnimationFrame(frameId);
       frameId = 0;
       lastDraw = 0;
+      // A hidden/off-screen interval is not rendering time. Discard the
+      // partial sample so resuming after a long pause cannot be mistaken for
+      // a slow device and unnecessarily lower the automatic quality tier.
+      sampleStart = 0;
+      sampleFrames = 0;
     };
     const frame = (time: number) => {
       frameId = 0;
