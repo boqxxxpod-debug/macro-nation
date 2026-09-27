@@ -209,6 +209,9 @@ export interface PolicyDecision {
   readonly inputs?: Readonly<Record<string, number>>;
   readonly reservationId?: string;
   readonly sourceCommandId: string;
+  /** Experts selected when this decision was previewed. */
+  readonly selectedExpertIds?: readonly string[];
+  /** @deprecated Read from selectedExpertIds; retained for old saves. */
   readonly expertId?: string;
 }
 

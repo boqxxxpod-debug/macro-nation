@@ -111,6 +111,17 @@ describe("quarterly policy commands", () => {
     ).toThrow(/Stale/);
   });
 
+  it("records the experts selected for a committed decision", () => {
+    const result = applyPolicyCommand(initial, {
+      ...commit(initial, "advised"),
+      selectedExpertIds: ["macro", "fiscal"],
+    });
+    expect(result.state.policies.reserved[0]).toMatchObject({
+      selectedExpertIds: ["macro", "fiscal"],
+      expertId: "macro",
+    });
+  });
+
   it("holds costs at confirmation and releases the precise reservation on cancellation", () => {
     const limited = {
       ...initial,
@@ -212,7 +223,9 @@ describe("quarterly policy commands", () => {
     ).state;
     const pending = runPolicyHeadless({ initialState: booked, tickCount: 3 });
     expect(pending.failure).toBeNull();
-    expect(pending.finalState.economy.stocks.foreignReserves).toBeGreaterThanOrEqual(60);
+    expect(
+      pending.finalState.economy.stocks.foreignReserves,
+    ).toBeGreaterThanOrEqual(60);
     const activated = runPolicyHeadless({
       initialState: pending.finalState,
       tickCount: 1,

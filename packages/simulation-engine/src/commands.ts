@@ -27,6 +27,7 @@ export type PolicyCommand =
       readonly commandId: string;
       readonly expectedStateHash: string;
       readonly draft: PolicyDraft;
+      readonly selectedExpertIds?: readonly string[];
     }
   | {
       readonly kind: "amend";
@@ -264,6 +265,12 @@ export function applyPolicyCommand(
     const booked: PolicyDecision = {
       ...policy,
       sourceCommandId: command.commandId,
+      ...(command.selectedExpertIds?.length
+        ? {
+            selectedExpertIds: [...command.selectedExpertIds],
+            expertId: command.selectedExpertIds[0],
+          }
+        : {}),
     };
     assertResources(state, reservations, booked.costs);
     reservations.push({

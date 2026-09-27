@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DurationMode, GameState } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
+  policyDraftHash,
+  policyRules,
   policyStateHash,
   type PolicyDraft,
   type PreviewOutput,
@@ -103,6 +105,12 @@ export function App({
   const [route, setRoute] = useState<Route>(routeFromLocation);
   const [preview, setPreview] = useState<PreviewOutput | null>(null);
   const [comparisons, setComparisons] = useState<readonly PreviewOutput[]>([]);
+  const [counterfactuals, setCounterfactuals] = useState<
+    readonly PreviewOutput[]
+  >([]);
+  const [previewExpertIds, setPreviewExpertIds] = useState<readonly string[]>([
+    "macro",
+  ]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -239,14 +247,51 @@ export function App({
     setSlots((current) => new Map(current).set(slotId, created));
     navigate("home");
   }
-  async function previewDraft(draft: PolicyDraft) {
+  async function previewDraft(
+    draft: PolicyDraft,
+    expertIds: readonly string[],
+  ) {
     if (!state) return;
+    const shockPairingId = `ui05:${policyStateHash(state)}`;
     const result = await previewClient.current!.request({
       state,
       draft,
       horizonMonths: 60,
+      shockPairingId,
     });
+    const noPolicy = await previewClient.current!.request({
+      state,
+      draft: null,
+      horizonMonths: 60,
+      shockPairingId,
+    });
+    const alternateRule = policyRules(state.configSnapshot).find(
+      (rule) => rule.policyId !== draft.ruleId,
+    );
+    const alternate = alternateRule
+      ? await previewClient
+          .current!.request({
+            state,
+            draft: {
+              status: "draft",
+              policyId: `alternative-${draft.policyId}`,
+              ruleId: alternateRule.policyId,
+              value:
+                alternateRule.inputs?.[0]?.defaultValue ??
+                alternateRule.referenceValue ??
+                alternateRule.inputs?.[0]?.min ??
+                alternateRule.inputMin ??
+                0,
+              quartersAhead: draft.quartersAhead,
+            },
+            horizonMonths: 60,
+            shockPairingId,
+          })
+          .catch(() => null)
+      : null;
     setPreview(result);
+    setCounterfactuals([noPolicy, ...(alternate ? [alternate] : [])]);
+    setPreviewExpertIds(expertIds);
     confirmationId.current = crypto.randomUUID();
     setComparisons((items) =>
       [
@@ -258,13 +303,17 @@ export function App({
   }
   async function confirm() {
     if (!repository || !state || !preview?.previewedDraft) return;
-    if (preview.stateHash !== policyStateHash(state))
+    if (
+      preview.stateHash !== policyStateHash(state) ||
+      preview.draftHash !== policyDraftHash(preview.previewedDraft)
+    )
       throw new Error("ゲーム状態が変わりました。再試算してください");
     const saved = await confirmPolicy(repository, state.slotId, {
       kind: "commit",
       commandId: confirmationId.current ?? crypto.randomUUID(),
       expectedStateHash: preview.stateHash,
       draft: preview.previewedDraft,
+      selectedExpertIds: previewExpertIds,
     });
     setState(saved);
     setPreview(null);
@@ -642,7 +691,9 @@ export function App({
                 <PolicyForm
                   state={state}
                   busy={busy}
-                  onPreview={(draft) => void action(() => previewDraft(draft))}
+                  onPreview={(draft, expertIds) =>
+                    void action(() => previewDraft(draft, expertIds))
+                  }
                 />
                 {comparisons.length > 0 && (
                   <section className="panel">
@@ -670,6 +721,9 @@ export function App({
                 <h2 tabIndex={-1}>政策プレビュー</h2>
                 <Preview
                   output={preview}
+                  counterfactuals={counterfactuals}
+                  expertIds={previewExpertIds}
+                  contentVersion={state.versions.contentVersion}
                   busy={busy}
                   onConfirm={() => void action(confirm)}
                 />

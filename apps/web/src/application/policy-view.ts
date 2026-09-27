@@ -2,6 +2,7 @@
 export {
   createReservedPolicy,
   policyMeetingStatus,
+  policyDraftHash,
   policyRules,
   policyStateHash,
 } from "@macro-nation/simulation-engine";
