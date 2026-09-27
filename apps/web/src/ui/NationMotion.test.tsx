@@ -111,6 +111,79 @@ describe("NationMotion lifecycle", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not count time spent hidden as a slow frame-rate sample", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    Object.defineProperty(navigator, "hardwareConcurrency", {
+      configurable: true,
+      value: 8,
+    });
+    Object.defineProperty(navigator, "deviceMemory", {
+      configurable: true,
+      value: 8,
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    let nextFrameId = 0;
+    const frames = new Map<number, FrameRequestCallback>();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextFrameId += 1;
+      frames.set(nextFrameId, callback);
+      return nextFrameId;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((frameId) => {
+      frames.delete(frameId);
+    });
+
+    render(<NationMotion model={await model()} />);
+    const runNextFrame = (time: number) => {
+      const entry = frames.entries().next().value as
+        [number, FrameRequestCallback] | undefined;
+      expect(entry).toBeDefined();
+      frames.delete(entry![0]);
+      entry![1](time);
+    };
+    await act(async () => {
+      runNextFrame(100);
+      runNextFrame(1_100);
+    });
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    await act(async () => runNextFrame(100_000));
+
+    expect(
+      document.querySelector("canvas.nation-motion-canvas"),
+    ).toHaveAttribute("data-quality", "high");
+    expect(screen.getByText(/性能を計測中/)).toHaveAttribute(
+      "data-performance",
+      "measuring",
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("automatically lowers drawing quality when measured frame rate misses the minimum", async () => {
     vi.stubGlobal("matchMedia", () => ({
       matches: false,
