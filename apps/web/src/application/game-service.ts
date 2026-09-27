@@ -3,6 +3,7 @@ import type {
   DurationMode,
   GameState,
   MonthlyReportSnapshot,
+  ReactionSnapshot,
   VersionTuple,
 } from "@macro-nation/domain";
 import { endMonthForState } from "@macro-nation/domain";
@@ -42,6 +43,7 @@ export interface SlotLoadResult {
 export function reportSnapshot(
   state: GameState,
   causal: readonly CausalContribution[] = [],
+  reactions: readonly ReactionSnapshot[] = [],
 ): MonthlyReportSnapshot {
   const e = state.economy;
   return {
@@ -75,6 +77,7 @@ export function reportSnapshot(
       )
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 8),
+    reactions,
   };
 }
 
@@ -144,6 +147,9 @@ export async function advanceMonth(
   const result = runPolicyHeadless({
     initialState: { ...state, runState: "running" },
     tickCount: 1,
+    // Bulk offline catch-up prioritizes bounded persistence work. Reactions are
+    // explanation-only and resume on the next visible monthly advance.
+    deriveReactions: !fromOffline,
   });
   if (result.failure) throw new Error(result.failure.message);
   const rules = firstPlayableRules(state);
@@ -184,6 +190,7 @@ export async function advanceMonth(
         reportSnapshot(
           result.finalState,
           result.records[0]?.diagnostics.causal,
+          result.records[0]?.diagnostics.reactions,
         ),
       ],
     },

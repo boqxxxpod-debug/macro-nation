@@ -37,6 +37,8 @@ export interface NoPolicyRunInput {
   readonly rngProvider?: TickRngProvider;
   /** Set false for large seed batches that only need final indicators and failures. */
   readonly collectTrace?: boolean;
+  /** Skip explanation-only reactions in disposable calibration/preview runs. */
+  readonly deriveReactions?: boolean;
   readonly onTick?: (record: HeadlessTickRecord) => void;
   /** UI adapters may report progress without retaining every monthly snapshot. */
   readonly onProgress?: (completed: number, total: number) => void;
@@ -752,6 +754,9 @@ function runHeadless(
       clockConfig: state.clock.config,
       configSnapshot: state.configSnapshot,
       rngProvider: input.rngProvider ?? XOSHIRO_TICK_RNG_PROVIDER,
+      ...(input.deriveReactions === undefined
+        ? {}
+        : { deriveReactions: input.deriveReactions }),
       handlers: NO_POLICY_HANDLERS,
     });
     if (!result.ok) {

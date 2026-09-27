@@ -8,6 +8,7 @@ import type {
   StockLevel,
 } from "./numeric";
 import type { ConfigIdentity, VersionTuple } from "./version";
+import type { CausalRef } from "./causal";
 
 export const PRIMARY_INDICATOR_IDS = [
   "realGdp",
@@ -211,6 +212,8 @@ export interface PolicyDecision {
   readonly sourceCommandId: string;
   /** Experts selected when this decision was previewed. */
   readonly selectedExpertIds?: readonly string[];
+  /** Reactions derived from this decision's causal contributions. */
+  readonly reactionIds?: readonly string[];
   /** @deprecated Read from selectedExpertIds; retained for old saves. */
   readonly expertId?: string;
 }
@@ -323,6 +326,21 @@ export interface MonthlyReportSnapshot {
     readonly labelKey: string;
     readonly delta: number;
   }[];
+  /** Explanation-only results; these never feed back into economic state. */
+  readonly reactions?: readonly ReactionSnapshot[];
+}
+
+export type ReactionAudience = "citizens" | "business" | "market";
+
+export interface ReactionSnapshot {
+  readonly reactionId: string;
+  readonly month: number;
+  readonly audience: ReactionAudience;
+  readonly direction: -1 | 0 | 1;
+  readonly strength: 0 | 1 | 2 | 3;
+  readonly lagMonths: number;
+  readonly causeRefs: readonly CausalRef[];
+  readonly representativeTopicKey: string;
 }
 
 export interface ConfigSnapshot extends ConfigIdentity {
