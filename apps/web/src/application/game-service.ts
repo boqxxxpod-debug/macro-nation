@@ -147,9 +147,10 @@ export async function advanceMonth(
   const result = runPolicyHeadless({
     initialState: { ...state, runState: "running" },
     tickCount: 1,
-    // Bulk offline catch-up prioritizes bounded persistence work. Reactions are
-    // explanation-only and resume on the next visible monthly advance.
-    deriveReactions: !fromOffline,
+    // Offline progress is the same sequence of monthly ticks as foreground
+    // progress. Keep explanation data in the durable state as well as the
+    // economic result so replaying an elapsed period produces the same save.
+    deriveReactions: true,
   });
   if (result.failure) throw new Error(result.failure.message);
   const rules = firstPlayableRules(state);
