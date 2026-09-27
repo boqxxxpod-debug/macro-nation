@@ -8,6 +8,7 @@ import {
 } from "../application/nation-view";
 import { describeCause, label } from "./game-format";
 import { NationMotion } from "./NationMotion";
+import { NationVoice } from "./NationVoice";
 
 const STAGE_NAMES = ["低調", "安定", "活発", "非常に活発"] as const;
 const REGION_ICONS: Record<RegionId, string> = {
@@ -543,6 +544,7 @@ export function NationView({
           <small>暮らし</small> 消費 {economy.flows.consumption.toFixed(1)}
         </span>
       </div>
+      <NationVoice state={state} onOpenCause={onReport} />
       {model.eventMarkers.length > 0 && (
         <p className="crisis">
           出来事：{model.eventMarkers.join("・")}
