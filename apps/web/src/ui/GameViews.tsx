@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import {
+  expertPortraitManifest,
   expertProfilesForContentVersion,
   ordinaryNews,
   projectFacts,
+  RuleBasedExpertAdvisor,
 } from "@macro-nation/advisor-core";
 import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
 import {
@@ -22,6 +25,24 @@ import {
 } from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
 import { NationVoice } from "./NationVoice";
+
+function ExpertPortrait({ expertId }: { expertId: string }) {
+  const portrait = expertPortraitManifest.find(
+    (item) => item.expertId === expertId,
+  );
+  if (!portrait) return null;
+  return (
+    <img
+      className="expert-portrait"
+      src={portrait.src}
+      srcSet={`${portrait.src2x} 2x`}
+      alt={portrait.altText}
+      onError={(event) => {
+        event.currentTarget.hidden = true;
+      }}
+    />
+  );
+}
 
 export function Home({
   state,
@@ -384,7 +405,10 @@ export function PolicyForm({
       <fieldset className="expert-picker">
         <legend>解説を聞く専門家（1〜3人）</legend>
         {profiles.map((expert) => (
-          <label key={expert.id}>
+          <label
+            key={expert.id}
+            style={{ "--expert-color": expert.colorToken } as CSSProperties}
+          >
             <input
               type="checkbox"
               checked={expertIds.includes(expert.id)}
@@ -401,8 +425,13 @@ export function PolicyForm({
                 )
               }
             />
+            <ExpertPortrait expertId={expert.id} />
             <span>
-              <strong>{expert.role}</strong> — {expert.values}
+              <strong>{expert.displayName ?? expert.role}</strong>
+              <span className="expert-role">
+                {expert.role} · {expert.tone}
+              </span>
+              <span>{expert.values}</span>
             </span>
           </label>
         ))}
@@ -474,6 +503,18 @@ export function Preview({
         ? "中"
         : "低";
   const profiles = expertProfilesForContentVersion(contentVersion);
+  const advisor = new RuleBasedExpertAdvisor();
+  const adviceContext = {
+    effects: Object.fromEntries(
+      output.summaries
+        .filter((item) => item.horizonMonths === 60)
+        .map((item) => [item.indicatorId, item.endDelta]),
+    ),
+    uncertainty: output.uncertainty.note,
+  };
+  const dissentingExpert = profiles.find(
+    (profile) => !expertIds.includes(profile.id),
+  );
   return (
     <>
       <p className="quiet">
@@ -640,30 +681,50 @@ export function Preview({
         <h3 id="advice-heading">選択した専門家の解説</h3>
         {expertIds.map((expertId) => {
           const expert = profiles.find((item) => item.id === expertId)!;
-          const priorities = expert.priorityIndicators ?? ["realGdp"];
-          const ranked = priorities
-            .map((id) => ({ id, value: forecast(60, id)?.endDelta ?? 0 }))
-            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+          const advice = advisor.advise(expert, adviceContext);
           return (
-            <article className="expert-advice" key={expertId}>
+            <article
+              className="expert-advice"
+              key={expertId}
+              style={{ "--expert-color": expert.colorToken } as CSSProperties}
+            >
+              <ExpertPortrait expertId={expert.id} />
               <h4>{expert.role}</h4>
+              <p className="quiet">
+                {expert.displayName ?? expert.role} · 口調：{expert.tone}
+              </p>
               <p>
                 <strong>結論：</strong>
-                {label(ranked[0]!.id)}への5年差{" "}
-                {display(ranked[0]!.id, ranked[0]!.value)}を重視します。
+                {advice.conclusion}
               </p>
               <p>
                 <strong>やさしい理由：</strong>
-                {expert.values}
-                の観点から、同じ予測値のうち重要な順に読みました。
+                {advice.reason}
               </p>
               <p>
                 <strong>注意点：</strong>
-                {output.uncertainty.note}
+                {advice.caution}
               </p>
+              <details>
+                <summary>用語：無追加政策比</summary>
+                新しい政策を加えず、現在の政策だけを続けた場合との差です。
+              </details>
             </article>
           );
         })}
+        {dissentingExpert &&
+          (() => {
+            const dissent = advisor.advise(dissentingExpert, adviceContext);
+            return (
+              <aside className="expert-dissent">
+                <strong>
+                  別の視点 —{" "}
+                  {dissentingExpert.displayName ?? dissentingExpert.role}：
+                </strong>{" "}
+                {dissent.conclusion} {dissent.caution}
+              </aside>
+            );
+          })()}
       </section>
       <button className="primary" disabled={busy} onClick={onConfirm}>
         政策を確定して保存

@@ -14,11 +14,19 @@ export interface NationFacts {
 }
 export interface ExpertProfile {
   readonly id: string;
+  readonly displayName?: string;
   readonly role: string;
   readonly values: string;
   readonly tone: string;
   readonly portraitAssetKey?: string;
+  readonly portraitAltText?: string;
+  readonly colorToken?: string;
+  readonly toneKey?: string;
   readonly priorityIndicators?: readonly string[];
+}
+export interface RuleBasedAdviceContext {
+  readonly effects: Readonly<Record<string, number>>;
+  readonly uncertainty: string;
 }
 export interface Advice {
   readonly expertId: string;
