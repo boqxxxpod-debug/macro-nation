@@ -113,9 +113,13 @@ export function visibleCount(
     return model.timeOfDay === "night" ? clampCount(level, CAPACITY[kind]) : 0;
   const full = clampCount(level, CAPACITY[kind]);
   if (tier === "high") return full;
-  if (tier === "low" && (kind === "person" || kind === "cloud")) return 0;
-  if (tier === "medium" && kind === "person") return Math.ceil(full / 2);
-  return Math.max(1, Math.ceil(full / (tier === "low" ? 3 : 2)));
+  // Preserve the documented degradation order: people are reduced first,
+  // followed by traffic and finally decorative weather. Region state, event
+  // markers, construction and lighting remain available at every tier.
+  if (kind === "person") return tier === "medium" ? Math.ceil(full / 2) : 0;
+  if (tier === "medium") return full;
+  if (kind === "cloud") return 0;
+  return Math.max(1, Math.ceil(full / 3));
 }
 
 export function advanceSprite(sprite: Sprite, elapsedSeconds: number) {

@@ -28,8 +28,18 @@ describe("nation motion budget", () => {
     const pool = createSpritePool();
     expect(pool.length).toBe(23);
     expect(visibleCount("person", view, "high")).toBeGreaterThan(0);
+    expect(visibleCount("person", view, "medium")).toBeLessThan(
+      visibleCount("person", view, "high"),
+    );
+    expect(visibleCount("car", view, "medium")).toBe(
+      visibleCount("car", view, "high"),
+    );
     expect(visibleCount("person", view, "low")).toBe(0);
+    expect(visibleCount("cloud", view, "low")).toBe(0);
     expect(visibleCount("car", view, "low")).toBeGreaterThan(0);
+    expect(visibleCount("car", view, "low")).toBeLessThan(
+      visibleCount("car", view, "medium"),
+    );
     const sprite = pool[0]!;
     const initialX = sprite.x;
     advanceSprite(sprite, 0.05);
