@@ -67,6 +67,10 @@ describe("NationMotion lifecycle", () => {
     const { unmount } = render(<NationMotion model={view} />);
     expect(request).toHaveBeenCalled();
     expect(screen.getByLabelText("景観の画質")).toBeInTheDocument();
+    expect(screen.getByText(/性能を計測中/)).toHaveAttribute(
+      "data-performance",
+      "measuring",
+    );
     Object.defineProperty(document, "hidden", {
       configurable: true,
       value: true,

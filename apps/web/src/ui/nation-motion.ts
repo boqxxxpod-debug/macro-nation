@@ -1,6 +1,7 @@
 import type { NationViewModel, VisualStage } from "../application/nation-view";
 
 export type QualityTier = "high" | "medium" | "low";
+export type FrameRateStatus = "measuring" | "target" | "minimum" | "slow";
 export type SpriteKind =
   "car" | "train" | "ship" | "plane" | "person" | "crane" | "light" | "cloud";
 
@@ -13,6 +14,8 @@ export interface Sprite {
 
 export const MOTION_WIDTH = 1000;
 export const MOTION_HEIGHT = 1389;
+export const TARGET_FPS = 30;
+export const MINIMUM_FPS = 20;
 const ICON_SIZE = 32;
 const KINDS: readonly SpriteKind[] = [
   "car",
@@ -218,6 +221,14 @@ export function nextQualityTier(
   tier: QualityTier,
   measuredFps: number,
 ): QualityTier {
-  if (measuredFps >= 20) return tier;
+  if (measuredFps >= MINIMUM_FPS) return tier;
   return tier === "high" ? "medium" : "low";
+}
+
+/** Converts local frame sampling into the three performance gates shown in diagnostics. */
+export function frameRateStatus(fps: number | null): FrameRateStatus {
+  if (fps === null) return "measuring";
+  if (fps >= TARGET_FPS) return "target";
+  if (fps >= MINIMUM_FPS) return "minimum";
+  return "slow";
 }
