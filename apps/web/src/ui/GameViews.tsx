@@ -95,6 +95,19 @@ export function Home({
           ? "危機警告：物価または雇用が危険域です。"
           : "重大な危機警告はありません。"}
       </p>
+      {(state.events.warnings ?? []).map((warning) => (
+        <section className="panel" key={warning.eventId}>
+          <h3>イベントの兆候（警戒度 {warning.severity}）</h3>
+          <p>
+            {warning.eventId}：準備度 {Math.round(warning.preparedness * 100)}%
+          </p>
+          <p>
+            {warning.missingIndicatorIds.length > 0
+              ? `不足：${warning.missingIndicatorIds.join("、")}`
+              : "主要な備えは整っています。"}
+          </p>
+        </section>
+      ))}
       {prior && (
         <section className="panel">
           <h3>今月の3行報告</h3>

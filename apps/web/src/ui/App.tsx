@@ -13,6 +13,7 @@ import {
   browserGameRepository,
   confirmPolicy,
   createGame,
+  resolveEvent,
   resumeCrisis,
   type GameRepository,
 } from "../application/game-service";
@@ -620,6 +621,45 @@ export function App({
                     >
                       危機対応を確認して再開
                     </button>
+                  </section>
+                )}
+                {state.runState === "awaitingEvent" && (
+                  <section
+                    className="panel crisis"
+                    aria-labelledby="event-heading"
+                  >
+                    <h3 id="event-heading">突発イベント：対応を選択</h3>
+                    <p>
+                      {state.events.pendingChoiceEventId}{" "}
+                      が発生しました。準備度による軽減はすでに基準被害と分けて記録されています。
+                    </p>
+                    <div className="actions">
+                      {(
+                        [
+                          ["protect-households", "家計を優先"],
+                          ["protect-businesses", "企業を優先"],
+                          ["balanced", "均衡対応"],
+                        ] as const
+                      ).map(([choiceId, text]) => (
+                        <button
+                          key={choiceId}
+                          disabled={busy}
+                          onClick={() =>
+                            void action(async () => {
+                              const resolved = await resolveEvent(
+                                repository!,
+                                state.slotId,
+                                choiceId,
+                              );
+                              setState(resolved);
+                              setNotice("イベント対応を保存しました。");
+                            })
+                          }
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </div>
                   </section>
                 )}
                 {(state.runState === "completed" ||

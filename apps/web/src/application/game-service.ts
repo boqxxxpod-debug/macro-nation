@@ -160,9 +160,11 @@ export async function advanceMonth(
     ? priorCritical >= rules.unresolvedCrisisMonthsToFail
       ? "failed"
       : "crisisStopped"
-    : result.finalState.monthIndex >= endMonthForState(result.finalState)
-      ? "completed"
-      : "paused";
+    : result.finalState.runState === "awaitingEvent"
+      ? "awaitingEvent"
+      : result.finalState.monthIndex >= endMonthForState(result.finalState)
+        ? "completed"
+        : "paused";
   const next: GameState = {
     ...result.finalState,
     runState,
@@ -291,6 +293,56 @@ export async function resumeCrisis(
     throw new Error("再開できる危機がありません");
   const next: GameState = { ...state, runState: "paused" };
   await repository.save(policyStateHash(state), next);
+  return next;
+}
+
+/** Resolve the current event once. Choice impact is retained separately for audit. */
+export async function resolveEvent(
+  repository: GameRepository,
+  slotId: GameState["slotId"],
+  choiceId: "protect-households" | "protect-businesses" | "balanced",
+): Promise<GameState> {
+  const state = await repository.load(slotId);
+  const eventId = state?.events.pendingChoiceEventId;
+  if (!state || state.runState !== "awaitingEvent" || !eventId)
+    throw new Error("選択待ちのイベントがありません");
+  const expectedHash = policyStateHash(state);
+  const choiceRate = choiceId === "balanced" ? 0.15 : 0.2;
+  const occurrences = [...(state.events.occurrences ?? [])];
+  const index = occurrences.findLastIndex(
+    (item) => item.eventId === eventId && !item.choiceId,
+  );
+  if (index < 0) throw new Error("イベント記録が見つかりません");
+  const occurrence = occurrences[index]!;
+  const choiceMitigation = -occurrence.baselineDamage * choiceRate;
+  occurrences[index] = {
+    ...occurrence,
+    choiceId,
+    choiceMitigation,
+  };
+  const remainingEvents = Object.fromEntries(
+    Object.entries(state.events).filter(
+      ([key]) => key !== "pendingChoiceEventId",
+    ),
+  ) as unknown as GameState["events"];
+  const next: GameState = {
+    ...state,
+    runState: "paused",
+    events: {
+      ...remainingEvents,
+      occurrences,
+    },
+  };
+  const path = occurrence.targetPath.split(".");
+  let target: Record<string, unknown> = next as unknown as Record<
+    string,
+    unknown
+  >;
+  for (const part of path.slice(0, -1))
+    target = target[part] as Record<string, unknown>;
+  const key = path.at(-1)!;
+  target[key] = (target[key] as number) + choiceMitigation;
+  await repository.save(expectedHash, next);
   return next;
 }
 

@@ -7,9 +7,9 @@
   "calibrationVersion": "advanced-small-open-v1.0.0",
   "rngVersion": "xoshiro128ss-v1",
   "traceNumberDecimals": 8,
-  "configHash": "d777c25da31c9d5e1de3091195fbf9a4cf2ef9fdba0a816019344e649fde58bf",
+  "configHash": "ddba13e2fec5d6e7d8843a12a5deb75a842848783aa1e4a6242061f1017142fd",
   "traceSha256": {
-    "48": "5342f816a8b5cf76d191d3446a7c2ea893cf2b2d67aebd4d805248e35cc5fce7",
-    "96": "ba48fb44e0fb92ee9b5de16b1bc0d512488287b5cf8b246c2c3105be342f58e1"
+    "48": "5d673a0d578fe9ecbe9467efb7d54a5fe8eaf0f07709fc7b33929bfb3cf06b1c",
+    "96": "d1c6379b34ccc6565f5f264265bec6f9b2df19117ae899043fa10bc526cdae96"
   }
 }

@@ -21,6 +21,7 @@ import { RNG_VERSION } from "./rng";
 import { createContributionBuilder } from "./causal";
 import { ENGINE_VERSION } from "./version";
 import { activateDuePolicies } from "./policy-effects";
+import { evaluateEvents } from "./events";
 import {
   XOSHIRO_TICK_RNG_PROVIDER,
   tick,
@@ -746,7 +747,13 @@ function runHeadless(
   }
 
   for (let index = 0; index < input.tickCount; index += 1) {
-    if (state.runState === "completed" || state.runState === "failed") break;
+    if (
+      state.runState === "completed" ||
+      state.runState === "failed" ||
+      state.runState === "awaitingEvent" ||
+      state.runState === "crisisStopped"
+    )
+      break;
     const monthIndex = state.monthIndex;
     const result = tick({
       state,
@@ -757,7 +764,13 @@ function runHeadless(
       ...(input.deriveReactions === undefined
         ? {}
         : { deriveReactions: input.deriveReactions }),
-      handlers: NO_POLICY_HANDLERS,
+      handlers:
+        strategyId === "fixed-policy-v1"
+          ? {
+              ...NO_POLICY_HANDLERS,
+              evaluateEventsCrisisCompletion: evaluateEvents,
+            }
+          : NO_POLICY_HANDLERS,
     });
     if (!result.ok) {
       const invalidState =

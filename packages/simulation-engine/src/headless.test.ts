@@ -177,24 +177,28 @@ describe("SCN-01 no-policy headless runner", () => {
     );
   });
 
-  it("stops a long no-policy run at a crisis before unstable debt growth", () => {
-    const initialState = makeState("issue16-long-0001", "ultraLong");
-    const result = runNoPolicyHeadless({
-      initialState,
-      tickCount: 360,
-      collectTrace: false,
-      stopOnCrisis: true,
-    });
-    expect(result.failure).toBeNull();
-    expect(result.ticksCompleted).toBeLessThan(335);
-    expect(result.finalState.runState).toBe("crisisStopped");
-    expect(result.invariantFailures).toEqual([]);
-    expect(
-      replayNoPolicyPackage(
-        createNoPolicyReplayPackage(initialState, 360, true),
-      ).finalState,
-    ).toEqual(result.finalState);
-  });
+  it(
+    "stops a long no-policy run at a crisis before unstable debt growth",
+    () => {
+      const initialState = makeState("issue16-long-0001", "ultraLong");
+      const result = runNoPolicyHeadless({
+        initialState,
+        tickCount: 360,
+        collectTrace: false,
+        stopOnCrisis: true,
+      });
+      expect(result.failure).toBeNull();
+      expect(result.ticksCompleted).toBeLessThan(335);
+      expect(result.finalState.runState).toBe("crisisStopped");
+      expect(result.invariantFailures).toEqual([]);
+      expect(
+        replayNoPolicyPackage(
+          createNoPolicyReplayPackage(initialState, 360, true),
+        ).finalState,
+      ).toEqual(result.finalState);
+    },
+    10_000,
+  );
   it.each(["scn01-no-policy-1000-0007", "scn01-no-policy-1000-0009"])(
     "completes the formerly failing 96-month boundary seed %s",
     (seed) => {

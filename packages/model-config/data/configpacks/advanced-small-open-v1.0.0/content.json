@@ -21,11 +21,117 @@
   "events": [
     {
       "eventId": "evt-demand-slump",
-      "dependsOn": []
+      "dependsOn": [],
+      "title": "需要急減",
+      "condition": [
+        {
+          "path": "economy.sentiment.consumerConfidence",
+          "op": "lt",
+          "value": 48
+        }
+      ],
+      "leadingIndicators": [
+        {
+          "path": "economy.sentiment.consumerConfidence",
+          "op": "lt",
+          "value": 55
+        }
+      ],
+      "baseMonthlyProbability": 0.025,
+      "cooldownMonths": 18,
+      "requiresChoice": true,
+      "preparednessIndicators": [
+        {
+          "id": "fiscal-space",
+          "path": "resources.discretionaryBudget",
+          "goodAt": 8,
+          "badAt": 0,
+          "weight": 1
+        },
+        {
+          "id": "policy-trust",
+          "path": "economy.sentiment.policyTrust",
+          "goodAt": 65,
+          "badAt": 30,
+          "weight": 1
+        }
+      ],
+      "mitigationCurve": [
+        {
+          "preparedness": 0,
+          "mitigation": 0
+        },
+        {
+          "preparedness": 0.5,
+          "mitigation": 0.25
+        },
+        {
+          "preparedness": 1,
+          "mitigation": 0.5
+        }
+      ],
+      "damage": {
+        "indicatorId": "realGdp",
+        "path": "economy.indices.realGdp",
+        "amount": -1.5
+      }
     },
     {
       "eventId": "evt-energy-shock",
-      "dependsOn": []
+      "dependsOn": [],
+      "title": "エネルギー供給ショック",
+      "condition": [
+        {
+          "path": "economy.external.resourcePriceIndex",
+          "op": "gt",
+          "value": 102
+        }
+      ],
+      "leadingIndicators": [
+        {
+          "path": "economy.external.resourcePriceIndex",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "baseMonthlyProbability": 0.02,
+      "cooldownMonths": 24,
+      "requiresChoice": true,
+      "preparednessIndicators": [
+        {
+          "id": "energy-infrastructure",
+          "path": "economy.infrastructure.energy",
+          "goodAt": 115,
+          "badAt": 80,
+          "weight": 2
+        },
+        {
+          "id": "foreign-reserves",
+          "path": "economy.stocks.foreignReserves",
+          "goodAt": 25,
+          "badAt": 5,
+          "weight": 1
+        }
+      ],
+      "mitigationCurve": [
+        {
+          "preparedness": 0,
+          "mitigation": 0
+        },
+        {
+          "preparedness": 0.5,
+          "mitigation": 0.3
+        },
+        {
+          "preparedness": 1,
+          "mitigation": 0.6
+        }
+      ],
+      "damage": {
+        "indicatorId": "cpi",
+        "path": "economy.indices.cpi",
+        "amount": 2
+      }
     }
   ],
   "textKeys": [
