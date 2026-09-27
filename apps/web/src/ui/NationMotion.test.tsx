@@ -84,4 +84,43 @@ describe("NationMotion lifecycle", () => {
     });
     vi.unstubAllGlobals();
   });
+
+  it("reuses its fixed drawing resources across quality changes", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({
+        save: vi.fn(),
+        restore: vi.fn(),
+        translate: vi.fn(),
+        fillRect: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        fill: vi.fn(),
+        arc: vi.fn(),
+        clearRect: vi.fn(),
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(8);
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    render(<NationMotion model={await model()} />);
+    const canvas = document.querySelector("canvas.nation-motion-canvas");
+    expect(getContext).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByLabelText("景観の画質"), {
+      target: { value: "low" },
+    });
+
+    expect(canvas).toHaveAttribute("data-quality", "low");
+    // The visible canvas is reacquired by the restarted loop, but a second
+    // off-DOM atlas is not allocated.
+    expect(getContext).toHaveBeenCalledTimes(3);
+    vi.unstubAllGlobals();
+  });
 });

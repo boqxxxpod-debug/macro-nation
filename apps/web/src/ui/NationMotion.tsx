@@ -28,6 +28,8 @@ function prefersReducedMotion() {
 
 export function NationMotion({ model }: { model: NationViewModel }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const poolRef = useRef<ReturnType<typeof createSpritePool> | null>(null);
+  const atlasRef = useRef<HTMLCanvasElement | null>(null);
   const [setting, setSetting] = useState<QualitySetting>("auto");
   const [autoTier, setAutoTier] = useState(deviceTier);
   const [reduced, setReduced] = useState(prefersReducedMotion);
@@ -54,8 +56,11 @@ export function NationMotion({ model }: { model: NationViewModel }) {
     if (reduced || !canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
-    const atlas = createSpriteAtlas();
-    const pool = createSpritePool();
+    // The effect restarts when the monthly view model or quality changes. Keep
+    // drawing resources outside that lifecycle so a long-running view does not
+    // continually allocate identical sprites and atlas canvases.
+    const pool = (poolRef.current ??= createSpritePool());
+    const atlas = (atlasRef.current ??= createSpriteAtlas());
     let frameId = 0;
     let lastDraw = 0;
     let sampleStart = 0;
