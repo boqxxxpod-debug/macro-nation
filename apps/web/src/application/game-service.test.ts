@@ -11,6 +11,7 @@ import {
   confirmPolicy,
   createGame,
   evaluateEnding,
+  resolveEvent,
   resumeCrisis,
   type GameRepository,
 } from "./game-service";
@@ -42,43 +43,39 @@ function memory() {
 }
 
 describe("SCN-01 first playable", () => {
-  it(
-    "keeps the chosen duration through a save and defers offline steps beyond 96",
-    async () => {
-      const storage = memory();
-      const initial = await createGame(
-        storage.repository,
-        "baseline-96",
-        1,
-        "learning",
-        "long",
-      );
-      expect(initial.clock.endMonth).toBe(240);
-      storage.replace({ ...initial, runState: "running" });
-      const progress: number[] = [];
-      const first = await catchUpOffline(
-        storage.repository,
-        1,
-        100 * 300,
-        (completed) => {
-          progress.push(completed);
-        },
-      );
-      expect(first.monthIndex).toBe(96);
-      expect(first.pendingOfflineSteps).toBe(4);
-      expect(progress).toEqual([12, 24, 36, 48, 60, 72, 84, 96]);
-      const resumed = await catchUpOffline(storage.repository, 1, 0);
-      expect(resumed.monthIndex).toBe(100);
-      expect(resumed.pendingOfflineSteps).toBe(0);
-      expect(resumed.clock.endMonth).toBe(240);
-      expect(
-        (await storage.repository.load(1))?.history.reviews?.map(
-          (item) => item.monthIndex,
-        ),
-      ).toEqual([60]);
-    },
-    15_000,
-  );
+  it("keeps the chosen duration through a save and defers offline steps beyond 96", async () => {
+    const storage = memory();
+    const initial = await createGame(
+      storage.repository,
+      "baseline-96",
+      1,
+      "learning",
+      "long",
+    );
+    expect(initial.clock.endMonth).toBe(240);
+    storage.replace({ ...initial, runState: "running" });
+    const progress: number[] = [];
+    const first = await catchUpOffline(
+      storage.repository,
+      1,
+      100 * 300,
+      (completed) => {
+        progress.push(completed);
+      },
+    );
+    expect(first.monthIndex).toBe(96);
+    expect(first.pendingOfflineSteps).toBe(4);
+    expect(progress).toEqual([12, 24, 36, 48, 60, 72, 84, 96]);
+    const resumed = await catchUpOffline(storage.repository, 1, 0);
+    expect(resumed.monthIndex).toBe(100);
+    expect(resumed.pendingOfflineSteps).toBe(0);
+    expect(resumed.clock.endMonth).toBe(240);
+    expect(
+      (await storage.repository.load(1))?.history.reviews?.map(
+        (item) => item.monthIndex,
+      ),
+    ).toEqual([60]);
+  }, 15_000);
 
   it("does not accumulate offline time while paused", async () => {
     const storage = memory();
@@ -133,9 +130,11 @@ describe("SCN-01 first playable", () => {
     expect(offline).toEqual(sequential);
     expect(offline.history.reports).toHaveLength(49);
     expect(
-      offline.history.reports?.slice(1).every((report) =>
-        report.reactions?.every((reaction) => reaction.causeRefs.length > 0),
-      ),
+      offline.history.reports
+        ?.slice(1)
+        .every((report) =>
+          report.reactions?.every((reaction) => reaction.causeRefs.length > 0),
+        ),
     ).toBe(true);
   });
 
@@ -163,6 +162,41 @@ describe("SCN-01 first playable", () => {
     const failed = await advanceMonth(storage.repository, 1);
     expect(failed.runState).toBe("failed");
     expect(evaluateEnding(failed).rank).toBe("F");
+  });
+
+  it("persists one event choice and keeps its mitigation separate", async () => {
+    const storage = memory();
+    const initial = await createGame(storage.repository, "event-choice");
+    storage.replace({
+      ...initial,
+      runState: "awaitingEvent",
+      events: {
+        ...initial.events,
+        activeEventIds: ["evt-demand-slump"],
+        pendingChoiceEventId: "evt-demand-slump",
+        occurrences: [
+          {
+            eventId: "evt-demand-slump",
+            occurredMonth: 0,
+            preparedness: 0.5,
+            baselineDamage: -2,
+            preparednessMitigation: 0.5,
+            choiceMitigation: 0,
+            targetPath: "economy.indices.realGdp",
+          },
+        ],
+      },
+    });
+    const resolved = await resolveEvent(storage.repository, 1, "balanced");
+    expect(resolved.runState).toBe("paused");
+    expect(resolved.events.pendingChoiceEventId).toBeUndefined();
+    expect(resolved.events.occurrences?.[0]).toMatchObject({
+      choiceId: "balanced",
+      choiceMitigation: 0.3,
+    });
+    await expect(
+      resolveEvent(storage.repository, 1, "balanced"),
+    ).rejects.toThrow(/選択待ち/);
   });
 
   it("matches a twelve-month batch after the same committed policy command", async () => {

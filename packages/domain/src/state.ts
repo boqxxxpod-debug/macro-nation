@@ -270,6 +270,26 @@ export interface EventState {
   readonly activeEventIds: readonly string[];
   readonly pendingChoiceEventId?: string;
   readonly cooldownUntilMonth: Readonly<Record<string, number>>;
+  readonly warnings?: readonly EventWarning[];
+  readonly occurrences?: readonly EventOccurrence[];
+}
+
+export interface EventWarning {
+  readonly eventId: string;
+  readonly severity: 1 | 2 | 3;
+  readonly preparedness: number;
+  readonly missingIndicatorIds: readonly string[];
+}
+
+export interface EventOccurrence {
+  readonly eventId: string;
+  readonly occurredMonth: number;
+  readonly preparedness: number;
+  readonly baselineDamage: number;
+  readonly preparednessMitigation: number;
+  readonly choiceMitigation: number;
+  readonly targetPath: string;
+  readonly choiceId?: string;
 }
 
 export interface GovernmentResources {

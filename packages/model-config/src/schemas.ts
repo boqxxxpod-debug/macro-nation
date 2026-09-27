@@ -307,7 +307,54 @@ export const contentSchema = z.object({
     .optional()
     .default([]),
   events: z.array(
-    z.object({ eventId: z.string().min(1), dependsOn: z.array(z.string()) }),
+    z.object({
+      eventId: z.string().min(1),
+      dependsOn: z.array(z.string()),
+      title: z.string().min(1),
+      condition: z.array(
+        z.object({
+          path: z.string().min(1),
+          op: z.enum(["lt", "lte", "gt", "gte"]),
+          value: z.number().finite(),
+        }),
+      ),
+      leadingIndicators: z
+        .array(
+          z.object({
+            path: z.string().min(1),
+            op: z.enum(["lt", "lte", "gt", "gte"]),
+            value: z.number().finite(),
+          }),
+        )
+        .min(1),
+      baseMonthlyProbability: z.number().min(0).max(1),
+      cooldownMonths: z.number().int().nonnegative(),
+      requiresChoice: z.boolean(),
+      preparednessIndicators: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            path: z.string().min(1),
+            goodAt: z.number().finite(),
+            badAt: z.number().finite(),
+            weight: z.number().positive(),
+          }),
+        )
+        .min(1),
+      mitigationCurve: z
+        .array(
+          z.object({
+            preparedness: z.number().min(0).max(1),
+            mitigation: z.number().min(0).max(1),
+          }),
+        )
+        .min(2),
+      damage: z.object({
+        indicatorId: z.string().min(1),
+        path: z.string().min(1),
+        amount: z.number().finite(),
+      }),
+    }),
   ),
   textKeys: z.array(z.string().min(1)),
 });
