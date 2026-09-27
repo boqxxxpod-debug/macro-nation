@@ -308,9 +308,28 @@ label select {
   gap: 0.55rem;
   margin: 0.55rem 0;
   font-weight: 400;
+  border-left: 4px solid var(--expert-color, #176075);
+  padding: 0.45rem;
 }
 .expert-picker input {
   margin-top: 0.2rem;
+}
+.expert-picker label > span {
+  display: grid;
+  gap: 0.15rem;
+}
+.expert-role {
+  color: #496267;
+  font-size: 0.9rem;
+}
+.expert-portrait {
+  width: 4rem;
+  height: 4rem;
+  flex: 0 0 4rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid var(--expert-color, #176075);
+  background: #e4ece9;
 }
 .forecast-grid {
   display: grid;
@@ -319,9 +338,19 @@ label select {
 }
 .forecast-grid article,
 .expert-advice {
-  border-left: 3px solid #176075;
+  border-left: 3px solid var(--expert-color, #176075);
   padding: 0.4rem 0.8rem;
   background: #f5f8f6;
+}
+.expert-advice .expert-portrait {
+  float: right;
+  margin: 0 0 0.5rem 0.75rem;
+}
+.expert-dissent {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px dashed #667b80;
+  background: #fffaf0;
 }
 .counterfactual-table [role="row"] {
   display: grid;
