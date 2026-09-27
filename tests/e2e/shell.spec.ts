@@ -61,7 +61,7 @@ test("mobile policy journey persists through reload and browser back", async ({
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
   await page.getByRole("button", { name: "政策を考える" }).click();
   await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
-  await page.getByRole("button", { name: "12か月を比較する" }).click();
+  await page.getByRole("button", { name: "1年・5年を比較する" }).click();
   await expect(
     page.getByRole("heading", { name: "政策プレビュー" }),
   ).toBeFocused();
@@ -74,9 +74,7 @@ test("mobile policy journey persists through reload and browser back", async ({
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
-  await page
-    .getByRole("button", { name: "政策会議", exact: true })
-    .click();
+  await page.getByRole("button", { name: "政策会議", exact: true }).click();
   await expect(page.getByText(/残り 2 \/ 3枠/)).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
@@ -146,6 +144,9 @@ test("duration, difficulty, learning mode, seed, and slot survive reload", async
     .getByRole("textbox", { name: "再現用seed（任意）" })
     .fill("issue-17-seed");
   await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await expect(
+    page.getByText("ゲームを開始し、端末に保存しました。"),
+  ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
   await page.getByRole("button", { name: "保存スロット" }).click();

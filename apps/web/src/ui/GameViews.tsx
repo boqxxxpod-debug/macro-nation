@@ -622,12 +622,12 @@ export function Preview({
         )}
         <p>{output.uncertainty.note}</p>
       </section>
-      <section className="panel" aria-labelledby="combo-heading">
-        <h3 id="combo-heading">政策コンボ</h3>
+      <section className="panel" aria-labelledby="interaction-heading">
+        <h3 id="interaction-heading">既存政策との重なり</h3>
         {output.interactions.length ? (
           <p>
             同種政策との重なりを検出：{output.interactions.join("、")}
-            。この比較に設定済みのコンボ効果や追加費用はないため、表示値には含まれません。
+            。現在のモデルにはこの重なりによる追加効果や追加費用の定義はありません。
           </p>
         ) : (
           <p>現在の実施中・予約中政策との同種の重なりはありません。</p>

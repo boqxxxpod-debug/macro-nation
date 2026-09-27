@@ -246,6 +246,7 @@ export function App({
     setState(created);
     setSlots((current) => new Map(current).set(slotId, created));
     navigate("home");
+    setNotice("ゲームを開始し、端末に保存しました。");
   }
   async function previewDraft(
     draft: PolicyDraft,
@@ -287,7 +288,14 @@ export function App({
             horizonMonths: 60,
             shockPairingId,
           })
-          .catch(() => null)
+          .catch((cause: unknown) => {
+            if (
+              cause instanceof Error &&
+              cause.message.startsWith("Insufficient available ")
+            )
+              return null;
+            throw cause;
+          })
       : null;
     setPreview(result);
     setCounterfactuals([noPolicy, ...(alternate ? [alternate] : [])]);

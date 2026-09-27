@@ -122,6 +122,22 @@ describe("quarterly policy commands", () => {
     });
   });
 
+  it("rejects malformed expert selections before recording a decision", () => {
+    for (const selectedExpertIds of [
+      [] as string[],
+      ["macro", "macro"],
+      ["centralBank", "fiscal", "macro", "labor"],
+      [""],
+    ]) {
+      expect(() =>
+        applyPolicyCommand(initial, {
+          ...commit(initial, `invalid-experts-${selectedExpertIds.length}`),
+          selectedExpertIds,
+        }),
+      ).toThrow(/one to three unique experts/);
+    }
+  });
+
   it("holds costs at confirmation and releases the precise reservation on cancellation", () => {
     const limited = {
       ...initial,

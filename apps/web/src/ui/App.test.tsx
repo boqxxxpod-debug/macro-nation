@@ -96,6 +96,9 @@ describe("SCN-01 user journey", () => {
     expect(
       await screen.findByRole("heading", { name: "国家ホーム" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("ゲームを開始し、端末に保存しました。"),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "国家ホーム" })).toHaveFocus(),
     );
