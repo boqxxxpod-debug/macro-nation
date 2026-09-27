@@ -30,6 +30,8 @@ export function NationMotion({ model }: { model: NationViewModel }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poolRef = useRef<ReturnType<typeof createSpritePool> | null>(null);
   const atlasRef = useRef<HTMLCanvasElement | null>(null);
+  const modelRef = useRef(model);
+  modelRef.current = model;
   const [setting, setSetting] = useState<QualitySetting>("auto");
   const [autoTier, setAutoTier] = useState(deviceTier);
   const [reduced, setReduced] = useState(prefersReducedMotion);
@@ -56,9 +58,9 @@ export function NationMotion({ model }: { model: NationViewModel }) {
     if (reduced || !canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
-    // The effect restarts when the monthly view model or quality changes. Keep
-    // drawing resources outside that lifecycle so a long-running view does not
-    // continually allocate identical sprites and atlas canvases.
+    // Quality changes may restart the effect, while monthly model updates are
+    // read through modelRef. Keep drawing resources outside that lifecycle so
+    // a long-running view does not allocate identical sprites and atlases.
     const pool = (poolRef.current ??= createSpritePool());
     const atlas = (atlasRef.current ??= createSpriteAtlas());
     let frameId = 0;
@@ -80,7 +82,7 @@ export function NationMotion({ model }: { model: NationViewModel }) {
           context,
           atlas,
           pool,
-          model,
+          modelRef.current,
           tier,
           lastDraw ? (time - lastDraw) / 1000 : 0,
         );
@@ -124,7 +126,7 @@ export function NationMotion({ model }: { model: NationViewModel }) {
       observer?.disconnect();
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
-  }, [model, reduced, tier, setting]);
+  }, [reduced, tier, setting]);
 
   return (
     <>
