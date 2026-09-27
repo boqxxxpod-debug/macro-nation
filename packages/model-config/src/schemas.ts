@@ -267,6 +267,45 @@ export const contentSchema = z.object({
   /** Optional extension definitions; the nine built-in indicators retain their legacy mapping. */
   indicatorDefinitions: z.array(indicatorDefinitionSchema).optional(),
   policies: z.array(z.string().min(1)).min(1),
+  combos: z
+    .array(
+      z.object({
+        comboId: z.string().min(1),
+        requiredPolicies: z
+          .array(z.object({ policyId: z.string().min(1) }))
+          .min(2),
+        forbiddenPolicies: z
+          .array(z.object({ policyId: z.string().min(1) }))
+          .optional(),
+        requiresCombos: z.array(z.string().min(1)).optional(),
+        minOverlapMonths: z.number().int().positive(),
+        kind: z.enum(["synergy", "cancellation"]),
+        effects: z
+          .array(
+            z.object({
+              targetPath: z.string().min(1),
+              kernelId: z.string().min(1),
+              operation: z.enum(["addDelta", "addRate", "multiply"]),
+              baseStrength: z.number().finite(),
+              role: z.enum(["primary", "sideEffect"]),
+              labelKey: z.string().min(1),
+            }),
+          )
+          .min(1),
+        additionalCosts: z
+          .object({
+            politicalCapital: z.number().finite().nonnegative(),
+            implementationCapacity: z.number().finite().nonnegative(),
+            foreignReserves: z.number().finite().nonnegative(),
+            immediateBudget: z.number().finite().nonnegative(),
+          })
+          .optional(),
+        explanationKey: z.string().min(1),
+        priority: z.number().int(),
+      }),
+    )
+    .optional()
+    .default([]),
   events: z.array(
     z.object({ eventId: z.string().min(1), dependsOn: z.array(z.string()) }),
   ),

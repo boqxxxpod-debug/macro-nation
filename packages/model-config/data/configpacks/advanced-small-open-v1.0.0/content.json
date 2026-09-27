@@ -1,1 +1,125 @@
-{"indicators":["realGdp","inflation","unemployment","policyRate","fx","governmentDebtRatio","fiscalBalanceRatio","policyTrust","support","potentialGdp"],"policies":["interest-rate","tax-package","public-works","tariff","fx-intervention"],"events":[{"eventId":"evt-demand-slump","dependsOn":[]},{"eventId":"evt-energy-shock","dependsOn":[]}],"textKeys":["scenario.scn01.title","nation.standard.title","indicator.realGdp","indicator.inflation","indicator.unemployment","indicator.policyRate","indicator.fx","indicator.governmentDebtRatio","indicator.fiscalBalanceRatio","indicator.policyTrust","indicator.support","indicator.potentialGdp"],"indicatorDefinitions":[{"indicatorId":"potentialGdp","labelKey":"indicator.potentialGdp","unit":"IndexLevel","source":{"kind":"statePath","path":"economy.indices.potentialGdp"}}]}
+{
+  "indicators": [
+    "realGdp",
+    "inflation",
+    "unemployment",
+    "policyRate",
+    "fx",
+    "governmentDebtRatio",
+    "fiscalBalanceRatio",
+    "policyTrust",
+    "support",
+    "potentialGdp"
+  ],
+  "policies": [
+    "interest-rate",
+    "tax-package",
+    "public-works",
+    "tariff",
+    "fx-intervention"
+  ],
+  "events": [
+    {
+      "eventId": "evt-demand-slump",
+      "dependsOn": []
+    },
+    {
+      "eventId": "evt-energy-shock",
+      "dependsOn": []
+    }
+  ],
+  "textKeys": [
+    "scenario.scn01.title",
+    "nation.standard.title",
+    "indicator.realGdp",
+    "indicator.inflation",
+    "indicator.unemployment",
+    "indicator.policyRate",
+    "indicator.fx",
+    "indicator.governmentDebtRatio",
+    "indicator.fiscalBalanceRatio",
+    "indicator.policyTrust",
+    "indicator.support",
+    "indicator.potentialGdp"
+  ],
+  "indicatorDefinitions": [
+    {
+      "indicatorId": "potentialGdp",
+      "labelKey": "indicator.potentialGdp",
+      "unit": "IndexLevel",
+      "source": {
+        "kind": "statePath",
+        "path": "economy.indices.potentialGdp"
+      }
+    }
+  ],
+  "combos": [
+    {
+      "comboId": "growth-investment-package",
+      "requiredPolicies": [
+        {
+          "policyId": "tax-package"
+        },
+        {
+          "policyId": "public-works"
+        }
+      ],
+      "forbiddenPolicies": [
+        {
+          "policyId": "tariff"
+        }
+      ],
+      "minOverlapMonths": 6,
+      "kind": "synergy",
+      "effects": [
+        {
+          "targetPath": "economy.flows.investment",
+          "kernelId": "tax-investment-3-12-36",
+          "operation": "addDelta",
+          "baseStrength": 0.35,
+          "role": "primary",
+          "labelKey": "combo.growth-investment-package"
+        }
+      ],
+      "additionalCosts": {
+        "politicalCapital": 2,
+        "implementationCapacity": 3,
+        "foreignReserves": 0,
+        "immediateBudget": 1
+      },
+      "explanationKey": "combo.growth-investment-package.explanation",
+      "priority": 100
+    },
+    {
+      "comboId": "trade-demand-cancellation",
+      "requiredPolicies": [
+        {
+          "policyId": "tariff"
+        },
+        {
+          "policyId": "tax-package"
+        }
+      ],
+      "minOverlapMonths": 3,
+      "kind": "cancellation",
+      "effects": [
+        {
+          "targetPath": "economy.flows.consumption",
+          "kernelId": "tax-consumption-1-4-18",
+          "operation": "addDelta",
+          "baseStrength": -0.2,
+          "role": "sideEffect",
+          "labelKey": "combo.trade-demand-cancellation"
+        }
+      ],
+      "additionalCosts": {
+        "politicalCapital": 1,
+        "implementationCapacity": 0,
+        "foreignReserves": 0,
+        "immediateBudget": 0
+      },
+      "explanationKey": "combo.trade-demand-cancellation.explanation",
+      "priority": 50
+    }
+  ]
+}

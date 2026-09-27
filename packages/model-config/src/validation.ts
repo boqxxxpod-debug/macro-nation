@@ -135,6 +135,46 @@ function validateEventCycles(
   events.forEach((event) => visit(event.eventId));
 }
 
+function validateCombos(pack: ParsedConfigPack): void {
+  const policies = new Set(pack.content.policies);
+  const combos = new Map(
+    pack.content.combos.map((combo) => [combo.comboId, combo]),
+  );
+  if (combos.size !== pack.content.combos.length)
+    throw new Error("Duplicate combo ID");
+  const kernels = new Set(pack.lagKernels.map((kernel) => kernel.kernelId));
+  for (const combo of pack.content.combos) {
+    for (const predicate of [
+      ...combo.requiredPolicies,
+      ...(combo.forbiddenPolicies ?? []),
+    ]) {
+      if (!policies.has(predicate.policyId))
+        throw new Error(
+          `Unknown combo policy ${predicate.policyId} in ${combo.comboId}`,
+        );
+    }
+    for (const effect of combo.effects) {
+      if (!kernels.has(effect.kernelId))
+        throw new Error(
+          `Unknown combo kernel ${effect.kernelId} in ${combo.comboId}`,
+        );
+    }
+  }
+  const visiting = new Set<string>(),
+    visited = new Set<string>();
+  const visit = (id: string): void => {
+    if (visiting.has(id)) throw new Error(`Circular combo reference at ${id}`);
+    if (visited.has(id)) return;
+    const combo = combos.get(id);
+    if (!combo) throw new Error(`Missing combo reference ${id}`);
+    visiting.add(id);
+    for (const dependency of combo.requiresCombos ?? []) visit(dependency);
+    visiting.delete(id);
+    visited.add(id);
+  };
+  for (const id of combos.keys()) visit(id);
+}
+
 export function parseConfigPack(
   input: ConfigPackInput,
   indicatorSelectors: Readonly<Record<string, IndicatorSelector>> = {},
@@ -439,6 +479,7 @@ export function parseConfigPack(
   }
 
   validateEventCycles(pack.content.events);
+  validateCombos(pack);
   validateShockModel(pack);
   return pack;
 }

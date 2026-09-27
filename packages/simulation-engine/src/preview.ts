@@ -13,6 +13,7 @@ import { runPolicyHeadless, type NoPolicyRunResult } from "./headless";
 import { previewQuantile } from "./rng";
 import { ENGINE_VERSION } from "./version";
 import type { TickRngProvider } from "./tick";
+import { evaluatePolicyCombos, type ComboEvaluation } from "./combos";
 
 export const PREVIEW_INDICATORS = [
   "realGdp",
@@ -91,6 +92,7 @@ export interface PreviewOutput {
   readonly costs: PolicyCosts;
   readonly modeledNetPrimarySpending: number;
   readonly interactions: readonly string[];
+  readonly comboResults: readonly ComboEvaluation[];
   readonly uncertainty: {
     readonly method: "fixed-shock-quantiles";
     readonly quantiles: readonly [0.16, 0.5, 0.84];
@@ -246,6 +248,30 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
   const policy = variant.policies.reserved.find(
     (item) => item.policyId === previewedDraft?.policyId,
   );
+  const reservations = variant.policyAdministration?.reservations ?? [];
+  const availableForCombos = {
+    politicalCapital:
+      variant.resources.politicalCapital -
+      reservations.reduce((sum, item) => sum + item.costs.politicalCapital, 0),
+    implementationCapacity:
+      variant.resources.implementationCapacity -
+      reservations.reduce(
+        (sum, item) => sum + item.costs.implementationCapacity,
+        0,
+      ),
+    foreignReserves:
+      variant.economy.stocks.foreignReserves -
+      reservations.reduce((sum, item) => sum + item.costs.foreignReserves, 0),
+    immediateBudget:
+      variant.resources.discretionaryBudget -
+      reservations.reduce((sum, item) => sum + item.costs.immediateBudget, 0),
+  };
+  const comboResults = evaluatePolicyCombos(
+    variant,
+    [...variant.policies.active, ...variant.policies.reserved],
+    policy?.activationMonth ?? variant.monthIndex,
+    availableForCombos,
+  ).results;
   const levels = {} as Record<
     PreviewIndicator,
     Record<Scenario, readonly number[]>
@@ -378,6 +404,7 @@ export function previewPolicy(input: PreviewInput): PreviewOutput {
           .filter((existing) => existing.type === policy.type)
           .map((existing) => existing.policyId)
       : [],
+    comboResults,
     uncertainty: {
       method: "fixed-shock-quantiles",
       quantiles: [0.16, 0.5, 0.84],

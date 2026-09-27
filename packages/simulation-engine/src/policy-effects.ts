@@ -10,6 +10,7 @@ import {
   type ScheduledEffect,
 } from "@macro-nation/domain";
 import { createContributionBuilder } from "./causal";
+import { evaluatePolicyCombos } from "./combos";
 import {
   createPolicyHandlerRegistry,
   validatePolicyInputs,
@@ -526,6 +527,108 @@ export function activateDuePolicies(state: GameState): ActivationResult {
         policy.endMonth ??
         policy.activationMonth + (rule.defaultDurationMonths ?? 12) - 1,
     });
+  }
+  if (due.length > 0) {
+    const heldAfterActivation =
+      working.policyAdministration?.reservations.filter(
+        (reservation) =>
+          !due.some((policy) => policy.policyId === reservation.policyId),
+      ) ?? [];
+    const combo = evaluatePolicyCombos(working, active, state.monthIndex, {
+      politicalCapital:
+        working.resources.politicalCapital -
+        heldAfterActivation.reduce(
+          (sum, item) => sum + item.costs.politicalCapital,
+          0,
+        ),
+      implementationCapacity:
+        working.resources.implementationCapacity -
+        heldAfterActivation.reduce(
+          (sum, item) => sum + item.costs.implementationCapacity,
+          0,
+        ),
+      foreignReserves:
+        working.economy.stocks.foreignReserves -
+        heldAfterActivation.reduce(
+          (sum, item) => sum + item.costs.foreignReserves,
+          0,
+        ),
+      immediateBudget:
+        working.resources.discretionaryBudget -
+        heldAfterActivation.reduce(
+          (sum, item) => sum + item.costs.immediateBudget,
+          0,
+        ),
+    });
+    effects = [...effects, ...combo.effects];
+    const sourceFor = (metric: string) => ({
+      sourceType: "combo" as const,
+      sourceId:
+        combo.results.find((result) => result.activated)?.comboId ?? "combo",
+      labelKey: `combo.cost.${metric}`,
+      confidence: "high" as const,
+    });
+    const costs = combo.costs;
+    for (const [metric, before, delta] of [
+      [
+        "politicalCapital",
+        working.economy.institutions.politicalCapital,
+        -costs.politicalCapital,
+      ],
+      [
+        "implementationCapacity",
+        working.economy.institutions.implementationCapacity,
+        -costs.implementationCapacity,
+      ],
+      [
+        "foreignReserves",
+        working.economy.stocks.foreignReserves,
+        -costs.foreignReserves,
+      ],
+    ] as const) {
+      if (delta !== 0)
+        causal.push(
+          createContributionBuilder(metric, before)
+            .add(sourceFor(metric), delta)
+            .build(before + delta),
+        );
+    }
+    working = {
+      ...working,
+      resources: {
+        ...working.resources,
+        politicalCapital: scorePoint(
+          working.resources.politicalCapital - costs.politicalCapital,
+        ),
+        implementationCapacity: scorePoint(
+          working.resources.implementationCapacity -
+            costs.implementationCapacity,
+        ),
+        discretionaryBudget: stockLevel(
+          working.resources.discretionaryBudget - costs.immediateBudget,
+        ),
+      },
+      economy: {
+        ...working.economy,
+        institutions: {
+          ...working.economy.institutions,
+          politicalCapital: scorePoint(
+            working.economy.institutions.politicalCapital -
+              costs.politicalCapital,
+          ),
+          implementationCapacity: scorePoint(
+            working.economy.institutions.implementationCapacity -
+              costs.implementationCapacity,
+          ),
+        },
+        stocks: {
+          ...working.economy.stocks,
+          foreignReserves: stockLevel(
+            working.economy.stocks.foreignReserves - costs.foreignReserves,
+          ),
+        },
+      },
+    };
   }
   const reservations = working.policyAdministration?.reservations.filter(
     (reservation) =>

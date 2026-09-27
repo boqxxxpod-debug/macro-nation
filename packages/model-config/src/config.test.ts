@@ -21,7 +21,7 @@ describe("ConfigPack v1", () => {
     expect(SCN01_CONFIG_PACK.scenario.clock.policyCycleSteps).toBe(3);
     expect(SCN01_CONFIG_PACK.scenario.firstPlayable.tutorialQuarters).toBe(4);
     expect(SCN01_CONFIG_PACK.scenario.durationMonths).toBe(48);
-    expect(SCN01_CONFIG_PACK.manifest.configVersion).toBe("0.1.4");
+    expect(SCN01_CONFIG_PACK.manifest.configVersion).toBe("0.1.5");
     await expect(
       verifyConfigPackHashes(SCN01_CONFIG_PACK, SCN01_CONFIG_FILES),
     ).resolves.toBeUndefined();
@@ -269,6 +269,23 @@ describe("ConfigPack v1", () => {
     expect(() => parseConfigPack(forbiddenOverride)).toThrow(
       /override not allowed/,
     );
+  });
+
+  it("validates combo references and rejects combo dependency cycles", () => {
+    const unknownPolicy = structuredClone(SCN01_CONFIG_PACK);
+    unknownPolicy.content.combos[0]!.requiredPolicies[0]!.policyId = "missing";
+    expect(() => parseConfigPack(unknownPolicy)).toThrow(
+      /Unknown combo policy/,
+    );
+
+    const cycle = structuredClone(SCN01_CONFIG_PACK);
+    cycle.content.combos[0]!.requiresCombos = [
+      cycle.content.combos[1]!.comboId,
+    ];
+    cycle.content.combos[1]!.requiresCombos = [
+      cycle.content.combos[0]!.comboId,
+    ];
+    expect(() => parseConfigPack(cycle)).toThrow(/Circular combo reference/);
   });
   it("requires a definition for every new indicator and accepts a named-input policy", () => {
     expect(() =>

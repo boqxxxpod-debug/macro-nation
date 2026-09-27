@@ -248,8 +248,10 @@ export interface PolicyAdministration {
 export type EffectTarget = string;
 export interface ScheduledEffect {
   readonly effectId: string;
-  readonly sourceType: "policy" | "event";
+  readonly sourceType: "policy" | "combo" | "event";
   readonly sourceId: string;
+  /** Present when sourceType is combo, for audit and UI attribution. */
+  readonly comboId?: string;
   readonly targetPath: EffectTarget;
   readonly operation: "addDelta" | "addRate" | "multiply";
   readonly startMonth: number;
