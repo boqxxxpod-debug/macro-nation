@@ -4,6 +4,7 @@ import { selectNationView } from "../application/nation-view";
 import {
   advanceSprite,
   createSpritePool,
+  frameRateStatus,
   initialQualityTier,
   nextQualityTier,
   visibleCount,
@@ -46,5 +47,13 @@ describe("nation motion budget", () => {
     expect(nextQualityTier("high", 18)).toBe("medium");
     expect(nextQualityTier("medium", 18)).toBe("low");
     expect(nextQualityTier("medium", 25)).toBe("medium");
+  });
+
+  it("classifies the documented target and minimum frame-rate boundaries", () => {
+    expect(frameRateStatus(null)).toBe("measuring");
+    expect(frameRateStatus(30)).toBe("target");
+    expect(frameRateStatus(29)).toBe("minimum");
+    expect(frameRateStatus(20)).toBe("minimum");
+    expect(frameRateStatus(19)).toBe("slow");
   });
 });

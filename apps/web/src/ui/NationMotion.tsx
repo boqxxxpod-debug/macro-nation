@@ -4,6 +4,7 @@ import {
   createSpriteAtlas,
   createSpritePool,
   drawMotionFrame,
+  frameRateStatus,
   initialQualityTier,
   nextQualityTier,
   MOTION_HEIGHT,
@@ -32,6 +33,13 @@ export function NationMotion({ model }: { model: NationViewModel }) {
   const [reduced, setReduced] = useState(prefersReducedMotion);
   const [fps, setFps] = useState<number | null>(null);
   const tier = setting === "auto" ? autoTier : setting;
+  const performance = frameRateStatus(fps);
+  const performanceLabel = {
+    measuring: "性能を計測中",
+    target: "目標30fpsを達成",
+    minimum: "最低20fpsを達成",
+    slow: "20fps未満・画質を調整中",
+  }[performance];
 
   useEffect(() => {
     const preference = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -140,10 +148,14 @@ export function NationMotion({ model }: { model: NationViewModel }) {
             <option value="low">軽量</option>
           </select>
         </label>
-        <output className="nation-motion-diagnostics" aria-live="off">
+        <output
+          className="nation-motion-diagnostics"
+          aria-live="off"
+          data-performance={reduced ? "reduced" : performance}
+        >
           {reduced
             ? "動きの軽減: 静止表示"
-            : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`}`}
+            : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
         </output>
       </div>
     </>
