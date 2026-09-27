@@ -167,6 +167,15 @@ describe("ConfigPack v1", () => {
     ).toThrow(/out of range/);
   });
 
+  it("rejects reaction strength thresholds outside the clamped score range", () => {
+    const broken = structuredClone(SCN01_CONFIG_PACK);
+    broken.model.reactions.strengthThresholds = [0.12, 0.35, 1.1];
+
+    expect(() => parseConfigPack(broken)).toThrow(
+      /reaction strength thresholds must be strictly increasing and at most 1/,
+    );
+  });
+
   it("freezes a versioned snapshot with parameter metadata and SHA-256 identity", async () => {
     const snapshot = await createConfigSnapshot(SCN01_CONFIG_PACK);
     expect(snapshot.configHash).toMatch(/^[a-f0-9]{64}$/);

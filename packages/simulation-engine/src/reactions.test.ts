@@ -111,6 +111,41 @@ describe("reaction model", () => {
     );
   });
 
+  it("charges a policy decision cost once even when it has several causal terms", () => {
+    const costlyState: GameState = {
+      ...state,
+      policies: {
+        ...state.policies,
+        active: [
+          {
+            policyId: "policy-a",
+            type: "publicWorks",
+            decidedMonth: 0,
+            activationMonth: 0,
+            status: "active",
+            slotQuarter: 0,
+            costs: {
+              politicalCapital: 100,
+              implementationCapacity: 0,
+              foreignReserves: 0,
+              immediateBudget: 0,
+            },
+            sourceCommandId: "command-a",
+          },
+        ],
+      },
+    };
+    const oneTerm = evaluateReactions(costlyState, [
+      contribution("industryAggregateResidual", 1, "policy"),
+    ]);
+    const repeatedTerm = evaluateReactions(costlyState, [
+      contribution("industryAggregateResidual", 1, "policy"),
+      contribution("industryAggregateResidual", 1, "policy"),
+    ]);
+
+    expect(repeatedTerm).toEqual(oneTerm);
+  });
+
   it("retains no-policy economic causes without changing economic state", () => {
     const before = JSON.stringify(state.economy);
     const reactions = evaluateReactions(state, [contribution("realGdp", 0.2)]);
