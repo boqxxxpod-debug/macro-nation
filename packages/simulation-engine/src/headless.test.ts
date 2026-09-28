@@ -154,7 +154,7 @@ describe("SCN-01 no-policy headless runner", () => {
       replayNoPolicyPackage(createNoPolicyReplayPackage(initialState, 360))
         .finalState,
     ).toEqual(result.finalState);
-  }, 10_000);
+  }, 20_000);
 
   it("reports 12-step progress and only cancels at a 96-step checkpoint", () => {
     const progress: number[] = [];

@@ -20,7 +20,16 @@ export const LABELS: Record<string, string> = {
 export const label = (id: string) =>
   LABELS[id] ?? id.replace(/^economy\./, "").replaceAll(".", " ");
 export const display = (id: string, value: number) =>
-  ["inflation", "unemployment", "governmentDebtRatio"].includes(id)
+  [
+    "inflation",
+    "unemployment",
+    "governmentDebtRatio",
+    "fiscalBalanceRatio",
+    "marketRate",
+    "policyRate",
+    "foreignRate",
+    "currentAccountRatio",
+  ].includes(id)
     ? `${(value * 100).toFixed(1)}%`
     : value.toFixed(1);
 export const period = (state: GameState) =>

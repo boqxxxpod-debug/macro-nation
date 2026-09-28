@@ -11,6 +11,7 @@ import type { GameState } from "@macro-nation/domain";
 import { policyStateHash } from "../application/policy-view";
 import { createGame, type GameRepository } from "../application/game-service";
 import { App } from "./App";
+import { Developer } from "./Operations";
 
 beforeAll(() => {
   vi.stubGlobal("crypto", webcrypto);
@@ -51,6 +52,86 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("opens budget, market, and help without changing state or exposing development tools", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "operations-read-only");
+    const before = structuredClone(memory.saved);
+    render(<App repository={memory.repository} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "予算" }));
+    expect(screen.getByRole("heading", { name: "予算" })).toHaveFocus();
+    expect(
+      screen.getByRole("region", { name: "財政の主要指標" }),
+    ).toHaveTextContent("政府債務");
+    expect(
+      screen.getByText("現在政策を続けた12か月見通し"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("-1.8%", { exact: false }).length,
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "市場" }));
+    expect(screen.getByRole("heading", { name: "市場" })).toHaveFocus();
+    expect(
+      screen.getByRole("heading", { name: "海外金利" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "経常収支" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "因果ログで要因を見る" }),
+    );
+    expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "ヘルプ・設定" }));
+    expect(
+      screen.getByText(/現実経済の予測ではありません/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "開発者" })).toBeNull();
+    expect(memory.saved).toEqual(before);
+  });
+
+  it("renders reproducible developer diagnostics from state", async () => {
+    const memory = memoryRepository();
+    const state = await createGame(memory.repository, "developer-diagnostics");
+    render(<Developer state={state} />);
+
+    expect(screen.getByText("developer-diagnostics")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "現在の乱数ストリーム" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "予約中・実行中の効果キュー" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "当月の保存済み寄与" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("非有限値（NaN / Infinity）: 0件"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/npm run simulate -- --ticks 96/),
+    ).toBeInTheDocument();
+  });
+
+  it("persists an explanation-mode change from Help", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "help-settings", 1, "standard");
+    render(<App repository={memory.repository} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "ヘルプ・設定" }),
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "説明モード" }), {
+      target: { value: "learning" },
+    });
+
+    await waitFor(() => expect(memory.saved?.learningMode).toBe("learning"));
+    expect(
+      screen.getByText("説明モードを端末に保存しました。"),
+    ).toBeInTheDocument();
+  });
+
   it("shows empty launch history and offline usage guidance", async () => {
     const memory = memoryRepository();
     render(<App repository={memory.repository} />);

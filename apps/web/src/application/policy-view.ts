@@ -5,6 +5,7 @@ export {
   policyDraftHash,
   policyRules,
   policyStateHash,
+  previewPolicy,
 } from "@macro-nation/simulation-engine";
 export type {
   PolicyDraft,

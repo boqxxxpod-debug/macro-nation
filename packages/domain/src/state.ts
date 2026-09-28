@@ -384,15 +384,18 @@ export interface LongTermState {
 export interface MonthlyReportSnapshot {
   readonly monthIndex: number;
   readonly values: Readonly<Record<string, number>>;
-  readonly topCauses: readonly {
-    readonly indicatorId: string;
-    readonly sourceType: string;
-    readonly sourceId: string;
-    readonly labelKey: string;
-    readonly delta: number;
-  }[];
+  /** Complete for the latest report; older reports may retain only the top eight. */
+  readonly topCauses: readonly CausalTermSnapshot[];
   /** Explanation-only results; these never feed back into economic state. */
   readonly reactions?: readonly ReactionSnapshot[];
+}
+
+export interface CausalTermSnapshot {
+  readonly indicatorId: string;
+  readonly sourceType: string;
+  readonly sourceId: string;
+  readonly labelKey: string;
+  readonly delta: number;
 }
 
 export type ReactionAudience = "citizens" | "business" | "market";
