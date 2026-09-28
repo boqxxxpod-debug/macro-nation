@@ -287,6 +287,15 @@ describe("ConfigPack v1", () => {
     ];
     expect(() => parseConfigPack(cycle)).toThrow(/Circular combo reference/);
   });
+
+  it("validates sourced long-term calibration bands", () => {
+    expect(SCN01_CONFIG_PACK.calibrationTargets.longTerm).toHaveLength(5);
+    const invalid = structuredClone(SCN01_CONFIG_PACK);
+    invalid.calibrationTargets.longTerm[0]!.sourceIds = ["missing-source"];
+    expect(() => parseConfigPack(invalid)).toThrow(
+      /Missing source missing-source for long-term target/,
+    );
+  });
   it("requires a definition for every new indicator and accepts a named-input policy", () => {
     expect(() =>
       parseConfigPack({

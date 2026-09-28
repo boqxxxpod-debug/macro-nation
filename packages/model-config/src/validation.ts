@@ -242,6 +242,15 @@ export function parseConfigPack(
     if (!referencedSources.has(sourceId))
       throw new Error(`Orphan source ${sourceId}`);
   }
+  for (const target of pack.calibrationTargets.longTerm) {
+    for (const sourceId of target.sourceIds) {
+      if (!sourceIds.has(sourceId)) {
+        throw new Error(
+          `Missing source ${sourceId} for long-term target ${target.targetId}`,
+        );
+      }
+    }
+  }
 
   const indicatorSet = new Set(pack.content.indicators);
   for (const id of PRIMARY_INDICATOR_IDS) {
