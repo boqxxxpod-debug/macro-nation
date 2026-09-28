@@ -34,6 +34,7 @@
     "simulate:30y:100": "npm run simulate -- --ticks 360 --runs 100 --seed issue-31c-long-term-v1 --out artifacts/headless/100x360",
     "calibration:irf": "vite-node --script scripts/calibration.ts irf",
     "calibration:moments": "vite-node --script scripts/calibration.ts moments",
+    "calibration:longterm": "vite-node --script scripts/calibration.ts longterm",
     "calibration:diff": "vite-node --script scripts/calibration.ts diff",
     "calibration:report": "vite-node --script scripts/calibration.ts report",
     "golden:refresh": "vite-node --script scripts/generate-golden.ts",

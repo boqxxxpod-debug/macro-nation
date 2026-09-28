@@ -250,6 +250,25 @@ export const calibrationTargetsSchema = z.object({
       max: z.number(),
     }),
   ),
+  longTerm: z
+    .array(
+      z
+        .object({
+          targetId: z.string().min(1),
+          metric: z.enum([
+            "businessCycleMonths",
+            "financialCycleMonths",
+            "crisisEpisodeMonths",
+            "governmentDebtRatioP99",
+            "absoluteInflationP99",
+          ]),
+          min: z.number().finite(),
+          max: z.number().finite(),
+          sourceIds: z.array(z.string().min(1)).min(1),
+        })
+        .refine((target) => target.min <= target.max, "min must be <= max"),
+    )
+    .default([]),
 });
 
 export const sourceSchema = z.object({

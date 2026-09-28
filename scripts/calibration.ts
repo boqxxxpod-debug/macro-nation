@@ -27,7 +27,8 @@ for (let i = 3; i < process.argv.length; i += 2) {
 }
 const out = resolve(options.get("--out") ?? "artifacts/headless/calibration");
 const runs = Number(
-  options.get("--runs") ?? (command === "moments" ? "1000" : "16"),
+  options.get("--runs") ??
+    (command === "moments" ? "1000" : command === "longterm" ? "100" : "16"),
 );
 if (!Number.isInteger(runs) || runs < 1 || runs > 1000)
   throw Error("--runs must be 1..1000");
@@ -56,11 +57,12 @@ const identity = {
   configHash: snapshot.configHash,
   seed,
 };
-const fresh = (run: number) =>
+const fresh = (run: number, durationMode?: "ultraLong") =>
   createSCN01InitialState({
     configSnapshot: snapshot,
     versions,
     seed: `${seed}-${String(run + 1).padStart(4, "0")}`,
+    ...(durationMode ? { durationMode } : {}),
   });
 const policies = [
   { id: "interest-rate", value: 0.03 },
@@ -586,6 +588,113 @@ async function moments() {
     `No-policy moments: ${runs}/1000 seeds, ${gaps.length} post burn-in months, gates passed; ${out}/moments.json`,
   );
 }
+
+function cycleLengths(turningPoints: readonly number[]): number[] {
+  return turningPoints
+    .slice(1)
+    .map((month, index) => month - turningPoints[index]!);
+}
+
+async function longterm() {
+  type LongTermMetric =
+    | "businessCycleMonths"
+    | "financialCycleMonths"
+    | "crisisEpisodeMonths"
+    | "governmentDebtRatioP99"
+    | "absoluteInflationP99";
+  const observations: Record<LongTermMetric, number[]> = {
+    businessCycleMonths: [],
+    financialCycleMonths: [],
+    crisisEpisodeMonths: [],
+    governmentDebtRatioP99: [],
+    absoluteInflationP99: [],
+  };
+  for (let run = 0; run < runs; run++) {
+    const state = fresh(run, "ultraLong");
+    const gaps: number[] = [],
+      debts: number[] = [],
+      inflations: number[] = [];
+    let crisisLength = 0,
+      longestCrisis = 0;
+    const result = runNoPolicyHeadless({
+      initialState: state,
+      tickCount: 360,
+      collectTrace: false,
+      deriveReactions: false,
+      stopOnCrisis: false,
+      onTick(record) {
+        const economy = record.state.economy;
+        gaps.push(economy.indices.realGdp / economy.indices.potentialGdp - 1);
+        debts.push(economy.ratios.governmentDebtRatio);
+        inflations.push(Math.abs(economy.rates.inflationAnnual));
+        const crisis =
+          economy.rates.inflationAnnual >= 0.15 ||
+          economy.rates.unemployment >= 0.15 ||
+          economy.sentiment.support < 15 ||
+          economy.stocks.foreignReserves < 5;
+        crisisLength = crisis ? crisisLength + 1 : 0;
+        longestCrisis = Math.max(longestCrisis, crisisLength);
+      },
+    });
+    if (result.failure || result.ticksCompleted !== 360) {
+      await save(
+        "longterm-first-failure.json",
+        assertRun(result, createNoPolicyReplayPackage(state, 360), run),
+      );
+      throw Error("Long-term batch failed; replay saved");
+    }
+    const gapTurns: number[] = [],
+      debtTurns: number[] = [];
+    for (let month = 12; month < gaps.length; month++) {
+      if (Math.sign(gaps[month - 1]!) !== Math.sign(gaps[month]!))
+        gapTurns.push(month);
+      const priorDebtTrend = debts[month - 1]! - debts[month - 12]!;
+      const debtTrend = debts[month]! - debts[month - 11]!;
+      if (Math.sign(priorDebtTrend) !== Math.sign(debtTrend))
+        debtTurns.push(month);
+    }
+    observations.businessCycleMonths.push(...cycleLengths(gapTurns));
+    observations.financialCycleMonths.push(...cycleLengths(debtTurns));
+    observations.crisisEpisodeMonths.push(longestCrisis);
+    observations.governmentDebtRatioP99.push(...debts);
+    observations.absoluteInflationP99.push(...inflations);
+  }
+  const diagnostics: Record<LongTermMetric, number> = {
+    businessCycleMonths: observations.businessCycleMonths.length
+      ? median(observations.businessCycleMonths)
+      : 0,
+    financialCycleMonths: observations.financialCycleMonths.length
+      ? median(observations.financialCycleMonths)
+      : 0,
+    crisisEpisodeMonths: Math.max(...observations.crisisEpisodeMonths),
+    governmentDebtRatioP99: quantile(observations.governmentDebtRatioP99, 0.99),
+    absoluteInflationP99: quantile(observations.absoluteInflationP99, 0.99),
+  };
+  const checks = pack.calibrationTargets.longTerm.map((target) => ({
+    id: target.targetId,
+    metric: target.metric,
+    observed: diagnostics[target.metric],
+    min: target.min,
+    max: target.max,
+    pass:
+      diagnostics[target.metric] >= target.min &&
+      diagnostics[target.metric] <= target.max,
+  }));
+  await save("longterm.json", {
+    schemaVersion: 1,
+    kind: "long-term-calibration",
+    ...identity,
+    runs,
+    months: 360,
+    diagnostics,
+    checks,
+  });
+  if (checks.some((check) => !check.pass))
+    throw Error("Long-term calibration gate failed; inspect longterm.json");
+  console.log(
+    `Long-term calibration: ${runs} seeds × 360 months, all gates passed; ${out}/longterm.json`,
+  );
+}
 interface GateRow {
   readonly targetId?: string;
   readonly id?: string;
@@ -691,6 +800,9 @@ switch (command) {
   case "moments":
     await moments();
     break;
+  case "longterm":
+    await longterm();
+    break;
   case "diff":
     await diff();
     break;
@@ -698,5 +810,5 @@ switch (command) {
     await report();
     break;
   default:
-    throw Error("Use irf | moments | diff | report");
+    throw Error("Use irf | moments | longterm | diff | report");
 }
