@@ -53,6 +53,36 @@ test("foundation shell has no serious or critical axe violations", async ({
   expect(blocking).toEqual([]);
 });
 
+test("integrated information screens stay local, responsive, and production-safe", async ({
+  page,
+}) => {
+  const externalRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).origin !== "http://127.0.0.1:4173")
+      externalRequests.push(request.url());
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await page.getByRole("button", { name: "予算" }).click();
+  await expect(page.getByRole("heading", { name: "予算" })).toBeFocused();
+  await expect(
+    page.getByRole("region", { name: "財政の主要指標" }),
+  ).toContainText("財政収支");
+  await page.getByRole("button", { name: "市場" }).click();
+  await expect(
+    page.getByRole("heading", { name: "市場", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "ヘルプ・設定" }).click();
+  await expect(page.getByText(/外部へ自動送信しません/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "開発者" })).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  expect(externalRequests).toEqual([]);
+});
+
 test("mobile policy journey rejects a duplicate confirmation and persists through reload", async ({
   page,
 }) => {
@@ -85,9 +115,7 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
     page.getByRole("heading", { name: "今月の3行報告" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "理由を見る" }).click();
-  await expect(
-    page.getByRole("heading", { name: "なぜ起きた" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "なぜ起きた" })).toBeVisible();
   const hasOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,
   );

@@ -22,16 +22,33 @@ import { AIPreview } from "../devtools/AIPreview";
 import { Home, PolicyForm, Preview, Report } from "./GameViews";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
+import { Budget, Developer, Help, Market } from "./Operations";
 import { migrateFirstPlayableSave } from "../application/save-migration";
 import { label, period } from "./game-format";
 
-type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+type Route =
+  | "home"
+  | "policies"
+  | "preview"
+  | "budget"
+  | "market"
+  | "report"
+  | "ending"
+  | "nation"
+  | "help"
+  | "developer";
+const DEVTOOLS_ENABLED =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEVTOOLS === "true";
 const NAV_LABELS = {
   home: "ホーム",
   policies: "政策会議",
+  budget: "予算",
+  market: "市場",
   report: "レポート",
   nation: "国家ビュー",
   ending: "終了評価",
+  help: "ヘルプ・設定",
+  developer: "開発者",
 } as const;
 const SLOT_IDS = [1, 2, 3] as const;
 const DURATIONS: readonly {
@@ -81,6 +98,10 @@ function routeFromLocation(): Route {
   if (path.endsWith("/policies/preview")) return "preview";
   if (path.endsWith("/policies")) return "policies";
   if (path.endsWith("/report")) return "report";
+  if (path.endsWith("/budget")) return "budget";
+  if (path.endsWith("/market")) return "market";
+  if (path.endsWith("/help")) return "help";
+  if (path.endsWith("/developer") && DEVTOOLS_ENABLED) return "developer";
   if (path.endsWith("/ending")) return "ending";
   if (path.endsWith("/nation")) return "nation";
   return "home";
@@ -207,9 +228,17 @@ export function App({
             ? "game/1/policies/preview"
             : next === "report"
               ? "game/1/report"
-              : next === "nation"
-                ? "game/1/nation"
-                : "game/1/ending";
+              : next === "budget"
+                ? "game/1/budget"
+                : next === "market"
+                  ? "game/1/market"
+                  : next === "help"
+                    ? "game/1/help"
+                    : next === "developer"
+                      ? "game/1/developer"
+                      : next === "nation"
+                        ? "game/1/nation"
+                        : "game/1/ending";
     window.history[replace ? "replaceState" : "pushState"](
       {},
       "",
@@ -572,8 +601,12 @@ export function App({
               [
                 "home",
                 "policies",
+                "budget",
+                "market",
                 "report",
                 "nation",
+                "help",
+                ...(DEVTOOLS_ENABLED ? ["developer" as const] : []),
                 ...(state.runState === "completed" ||
                 state.runState === "failed"
                   ? ["ending" as const]
@@ -726,6 +759,30 @@ export function App({
                   </button>
                   <button onClick={() => navigate("report")}>理由を見る</button>
                 </div>
+              </>
+            )}
+            {route === "budget" && (
+              <>
+                <h2 tabIndex={-1}>予算</h2>
+                <Budget state={state} />
+              </>
+            )}
+            {route === "market" && (
+              <>
+                <h2 tabIndex={-1}>市場</h2>
+                <Market state={state} onOpenReport={() => navigate("report")} />
+              </>
+            )}
+            {route === "help" && (
+              <>
+                <h2 tabIndex={-1}>ヘルプ・設定</h2>
+                <Help state={state} />
+              </>
+            )}
+            {route === "developer" && DEVTOOLS_ENABLED && (
+              <>
+                <h2 tabIndex={-1}>開発者</h2>
+                <Developer state={state} />
               </>
             )}
             {route === "policies" && (
