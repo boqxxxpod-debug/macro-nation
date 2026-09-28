@@ -322,6 +322,20 @@ export interface HistoryIndex {
   readonly learningEntries?: readonly LearningEntry[];
   /** Read-only expert forecasts captured when a policy decision is committed. */
   readonly forecastRecords?: readonly ForecastRecord[];
+  /** Sparse, reference-first national timeline. Monthly prose is reconstructed. */
+  readonly entries?: readonly HistoryEntry[];
+}
+
+export type HistoryCategory =
+  "policy" | "event" | "crisis" | "review" | "structure" | "social" | "ending";
+
+/** A compact index into existing decisions, events, reviews, reactions and causes. */
+export interface HistoryEntry {
+  readonly entryId: string;
+  readonly month: number;
+  readonly categories: readonly HistoryCategory[];
+  readonly referenceIds: readonly string[];
+  readonly causeRefs: readonly string[];
 }
 
 export type LearningEntryKind = "term" | "theory" | "decision" | "verification";

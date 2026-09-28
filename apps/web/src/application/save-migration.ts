@@ -65,6 +65,7 @@ export async function migrateFirstPlayableSave(
       ...state.history,
       appliedMilestones: state.history.appliedMilestones ?? [],
       reviews: state.history.reviews ?? [],
+      entries: state.history.entries ?? [],
     },
     versions: {
       ...state.versions,
