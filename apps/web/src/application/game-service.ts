@@ -52,6 +52,7 @@ export function reportSnapshot(
   reactions: readonly ReactionSnapshot[] = [],
 ): MonthlyReportSnapshot {
   const e = state.economy;
+  const allCauses = monthlyReportCauses(causal);
   return {
     monthIndex: state.monthIndex,
     values: {
@@ -71,18 +72,7 @@ export function reportSnapshot(
       energy: e.infrastructure.energy,
       consumption: e.flows.consumption,
     },
-    topCauses: causal
-      .flatMap((item) =>
-        item.contributions.map((term) => ({
-          indicatorId: item.indicatorId,
-          sourceType: term.sourceType,
-          sourceId: term.sourceId,
-          labelKey: term.labelKey,
-          delta: term.delta,
-        })),
-      )
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, 8),
+    topCauses: allCauses,
     reactions,
   };
 }
@@ -200,7 +190,12 @@ export async function advanceMonth(
         result.finalState.monthIndex,
       ],
       reports: [
-        ...(state.history.reports ?? [reportSnapshot(state)]),
+        ...(state.history.reports ?? [reportSnapshot(state)]).map(
+          (report, index, reports) =>
+            index === reports.length - 1
+              ? { ...report, topCauses: report.topCauses.slice(0, 8) }
+              : report,
+        ),
         monthlyReport,
       ],
     },
@@ -217,6 +212,20 @@ export async function advanceMonth(
   });
   await repository.save(policyStateHash(state), next);
   return next;
+}
+
+function monthlyReportCauses(causal: readonly CausalContribution[]) {
+  return causal
+    .flatMap((item) =>
+      item.contributions.map((term) => ({
+        indicatorId: item.indicatorId,
+        sourceType: term.sourceType,
+        sourceId: term.sourceId,
+        labelKey: term.labelKey,
+        delta: term.delta,
+      })),
+    )
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 }
 
 /** The caller supplies elapsed seconds; the Engine never reads the browser clock. */

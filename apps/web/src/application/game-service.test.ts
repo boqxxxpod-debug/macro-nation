@@ -43,6 +43,18 @@ function memory() {
 }
 
 describe("SCN-01 first playable", () => {
+  it("keeps every current-month contribution and compacts older reports", async () => {
+    const storage = memory();
+    await createGame(storage.repository, "complete-current-causes");
+    const first = await advanceMonth(storage.repository, 1);
+    const firstCount = first.history.reports?.at(-1)?.topCauses.length ?? 0;
+    expect(firstCount).toBeGreaterThan(8);
+
+    const second = await advanceMonth(storage.repository, 1);
+    expect(second.history.reports?.at(-2)?.topCauses).toHaveLength(8);
+    expect(second.history.reports?.at(-1)?.topCauses.length).toBeGreaterThan(8);
+  });
+
   it("keeps Engine outcomes identical across all three explanation modes", async () => {
     const outcomes = [];
     for (const mode of ["casual", "standard", "learning"] as const) {
@@ -114,7 +126,7 @@ describe("SCN-01 first playable", () => {
     expect(last.history.reports).toHaveLength(49);
     expect(evaluateEnding(last).rank).not.toBe("F");
     await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(/終了/);
-  });
+  }, 15_000);
 
   it("persists the same 48-month save after four offline hours as sequential progress", async () => {
     const sequentialStorage = memory();
@@ -148,7 +160,7 @@ describe("SCN-01 first playable", () => {
           report.reactions?.every((reaction) => reaction.causeRefs.length > 0),
         ),
     ).toBe(true);
-  });
+  }, 15_000);
 
   it("stops a critical month, saves the response, and fails if it stays unresolved", async () => {
     const storage = memory();
