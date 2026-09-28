@@ -821,7 +821,7 @@ export function App({
                 state.runState === "failed" ? (
                   <Ending state={state} onReport={() => navigate("report")} />
                 ) : (
-                  <p>48か月の終了後に評価を表示します。</p>
+                  <p>{state.clock.endMonth}か月の終了後に評価を表示します。</p>
                 )}
               </>
             )}

@@ -26,6 +26,10 @@ import {
 import { describeCause, display, label } from "./game-format";
 import { NationVoice } from "./NationVoice";
 import { schoolLenses, visibleCauseCount } from "../application/learning";
+import {
+  HISTORY_CATEGORY_LABELS,
+  nationalHistory,
+} from "../application/history";
 
 function ExpertPortrait({ expertId }: { expertId: string }) {
   const portrait = expertPortraitManifest.find(
@@ -274,6 +278,32 @@ export function Report({ state }: { state: GameState }) {
         ))}
       </section>
       <NationVoice state={state} />
+      <section className="panel" aria-labelledby="national-history-heading">
+        <h3 id="national-history-heading">国家史</h3>
+        <p>
+          同じ月の出来事をまとめ、政策・イベント・反応・因果の参照IDから再構成しています。
+        </p>
+        {nationalHistory(state).length ? (
+          <ol className="history-timeline">
+            {nationalHistory(state).map((entry) => (
+              <li key={entry.entryId}>
+                <strong>
+                  {entry.month}月目：
+                  {entry.categories
+                    .map((category) => HISTORY_CATEGORY_LABELS[category])
+                    .join("・")}
+                </strong>
+                <div>参照：{entry.referenceIds.join("、")}</div>
+                {entry.causeRefs.length > 0 && (
+                  <small>因果：{entry.causeRefs.join("、")}</small>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>節目はまだありません。</p>
+        )}
+      </section>
       <section className="panel">
         <h3>なぜ起きた</h3>
         <p>

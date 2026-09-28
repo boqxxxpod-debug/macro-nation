@@ -25,6 +25,7 @@ import {
   learningEntriesForReport,
   type ForecastCapture,
 } from "./learning";
+import { withNationalHistory } from "./history";
 
 export function browserGameRepository(): GameRepository | null {
   return typeof indexedDB === "undefined"
@@ -204,7 +205,7 @@ export async function advanceMonth(
       ],
     },
   };
-  const next: GameState = {
+  const next: GameState = withNationalHistory({
     ...nextWithoutLearning,
     history: {
       ...nextWithoutLearning.history,
@@ -213,7 +214,7 @@ export async function advanceMonth(
         ...learningEntriesForReport(nextWithoutLearning, monthlyReport),
       ],
     },
-  };
+  });
   await repository.save(policyStateHash(state), next);
   return next;
 }
@@ -434,7 +435,7 @@ export async function confirmPolicy(
         decisionId: command.commandId,
         month: committed.monthIndex,
       });
-      return {
+      return withNationalHistory({
         ...committed,
         history: {
           ...committed.history,
@@ -445,7 +446,7 @@ export async function confirmPolicy(
             record,
           ],
         },
-      };
+      });
     })
   ).state;
 }
