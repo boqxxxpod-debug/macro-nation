@@ -318,6 +318,20 @@ export interface HistoryIndex {
   readonly reviews?: readonly ReviewSnapshot[];
   /** Compact, saved monthly values and causes for the report screen. */
   readonly reports?: readonly MonthlyReportSnapshot[];
+  /** Explanation-only learning records derived outside the simulation Engine. */
+  readonly learningEntries?: readonly LearningEntry[];
+}
+
+export type LearningEntryKind = "term" | "theory" | "decision" | "verification";
+
+export interface LearningEntry {
+  readonly entryId: string;
+  readonly month: number;
+  readonly kind: LearningEntryKind;
+  readonly concept: string;
+  readonly evidence: string;
+  readonly decisionId?: string;
+  readonly mode: NonNullable<GameState["learningMode"]>;
 }
 
 export interface ReviewSnapshot {

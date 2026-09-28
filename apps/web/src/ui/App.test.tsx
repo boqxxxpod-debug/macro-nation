@@ -155,8 +155,14 @@ describe("SCN-01 user journey", () => {
     fireEvent.click(screen.getByRole("button", { name: "理由を見る" }));
     expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
     expect(
-      screen.getByRole("heading", { name: "今月の主な原因" }),
+      screen.getByRole("heading", { name: "なぜ起きた" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "経済学ノート" }),
+    ).toBeInTheDocument();
+    expect(
+      memory.saved?.history.learningEntries?.map((item) => item.kind),
+    ).toEqual(["term", "theory", "decision", "verification"]);
     expect(
       screen.getAllByRole("heading", { name: "経済ニュース" }).length,
     ).toBeGreaterThan(0);
