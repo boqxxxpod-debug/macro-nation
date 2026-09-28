@@ -320,6 +320,8 @@ export interface HistoryIndex {
   readonly reports?: readonly MonthlyReportSnapshot[];
   /** Explanation-only learning records derived outside the simulation Engine. */
   readonly learningEntries?: readonly LearningEntry[];
+  /** Read-only expert forecasts captured when a policy decision is committed. */
+  readonly forecastRecords?: readonly ForecastRecord[];
 }
 
 export type LearningEntryKind = "term" | "theory" | "decision" | "verification";
@@ -332,6 +334,19 @@ export interface LearningEntry {
   readonly evidence: string;
   readonly decisionId?: string;
   readonly mode: NonNullable<GameState["learningMode"]>;
+}
+
+export interface ForecastRecord {
+  readonly recordId: string;
+  readonly decisionId: string;
+  readonly recordedMonth: number;
+  readonly expertIds: readonly string[];
+  readonly confidence: "low" | "medium" | "high";
+  readonly uncertainty: string;
+  readonly horizons: readonly {
+    readonly months: 12 | 60;
+    readonly indicators: Readonly<Record<string, number>>;
+  }[];
 }
 
 export interface ReviewSnapshot {

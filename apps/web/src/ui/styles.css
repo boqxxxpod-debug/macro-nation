@@ -336,6 +336,18 @@ label select {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0.7rem;
 }
+
+.school-lens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+}
+
+.school-lens-grid article {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
 .forecast-grid article,
 .expert-advice {
   border-left: 3px solid var(--expert-color, #176075);
