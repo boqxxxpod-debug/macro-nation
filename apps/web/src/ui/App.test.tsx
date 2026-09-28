@@ -51,6 +51,34 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("opens budget, market, help, and development diagnostics without changing state", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "operations-read-only");
+    const before = structuredClone(memory.saved);
+    render(<App repository={memory.repository} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "予算" }));
+    expect(screen.getByRole("heading", { name: "予算" })).toHaveFocus();
+    expect(
+      screen.getByRole("region", { name: "財政の主要指標" }),
+    ).toHaveTextContent("政府債務");
+
+    fireEvent.click(screen.getByRole("button", { name: "市場" }));
+    expect(screen.getByRole("heading", { name: "市場" })).toHaveFocus();
+    fireEvent.click(
+      screen.getByRole("button", { name: "因果ログで要因を見る" }),
+    );
+    expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "ヘルプ・設定" }));
+    expect(
+      screen.getByText(/現実経済の予測ではありません/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "開発者" }));
+    expect(screen.getByText("operations-read-only")).toBeInTheDocument();
+    expect(memory.saved).toEqual(before);
+  });
+
   it("shows empty launch history and offline usage guidance", async () => {
     const memory = memoryRepository();
     render(<App repository={memory.repository} />);
