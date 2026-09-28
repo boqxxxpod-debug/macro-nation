@@ -86,7 +86,7 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
   ).toBeVisible();
   await page.getByRole("button", { name: "理由を見る" }).click();
   await expect(
-    page.getByRole("heading", { name: "今月の主な原因" }),
+    page.getByRole("heading", { name: "なぜ起きた" }),
   ).toBeVisible();
   const hasOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,

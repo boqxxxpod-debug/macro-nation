@@ -43,6 +43,18 @@ function memory() {
 }
 
 describe("SCN-01 first playable", () => {
+  it("keeps Engine outcomes identical across all three explanation modes", async () => {
+    const outcomes = [];
+    for (const mode of ["casual", "standard", "learning"] as const) {
+      const storage = memory();
+      await createGame(storage.repository, "mode-invariance", 1, mode);
+      const advanced = await advanceMonth(storage.repository, 1);
+      outcomes.push({ economy: advanced.economy, rng: advanced.rng });
+    }
+    expect(outcomes[1]).toEqual(outcomes[0]);
+    expect(outcomes[2]).toEqual(outcomes[0]);
+  });
+
   it("keeps the chosen duration through a save and defers offline steps beyond 96", async () => {
     const storage = memory();
     const initial = await createGame(

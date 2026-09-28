@@ -25,6 +25,7 @@ import {
 } from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
 import { NationVoice } from "./NationVoice";
+import { visibleCauseCount } from "../application/learning";
 
 function ExpertPortrait({ expertId }: { expertId: string }) {
   const portrait = expertPortraitManifest.find(
@@ -263,6 +264,9 @@ export function Report({ state }: { state: GameState }) {
   };
   return (
     <>
+      <p className="quiet">
+        ゲームモデル上の試算であり、現実経済の予測ではありません。
+      </p>
       <section className="panel">
         <h3>経済の推移</h3>
         {["realGdp", "inflation", "unemployment"].map((id) => (
@@ -271,21 +275,51 @@ export function Report({ state }: { state: GameState }) {
       </section>
       <NationVoice state={state} />
       <section className="panel">
-        <h3>今月の主な原因</h3>
+        <h3>なぜ起きた</h3>
+        <p>
+          基準時点：前月からの変化。寄与の絶対値が大きい順に
+          {visibleCauseCount(state.learningMode ?? "standard")}件を表示します。
+        </p>
         {latest?.topCauses.length ? (
           <ol>
-            {latest.topCauses.slice(0, 3).map((cause, index) => (
-              <li key={index}>
-                {label(cause.indicatorId)}：{describeCause(cause, state)}、寄与{" "}
-                {cause.delta > 0 ? "+" : ""}
-                {cause.delta.toFixed(2)}
-              </li>
-            ))}
+            {latest.topCauses
+              .slice(0, visibleCauseCount(state.learningMode ?? "standard"))
+              .map((cause, index) => (
+                <li key={index}>
+                  {label(cause.indicatorId)}：{describeCause(cause, state)}
+                  、寄与 {cause.delta > 0 ? "+" : ""}
+                  {cause.delta.toFixed(2)}
+                </li>
+              ))}
           </ol>
         ) : (
           <p>まだ月次の因果記録はありません。</p>
         )}
       </section>
+      {state.learningMode === "learning" && (
+        <section className="panel" aria-labelledby="notebook-heading">
+          <h3 id="notebook-heading">経済学ノート</h3>
+          {(state.history.learningEntries ?? []).length ? (
+            <ol>
+              {(state.history.learningEntries ?? [])
+                .slice(-8)
+                .reverse()
+                .map((entry) => (
+                  <li key={entry.entryId}>
+                    <strong>{entry.concept}</strong>（{entry.month}月目・
+                    {entry.kind}）<br />
+                    <small>根拠：{entry.evidence}</small>
+                  </li>
+                ))}
+            </ol>
+          ) : (
+            <p>月を進めると、用語・理論・判断・結果検証を自動保存します。</p>
+          )}
+          <p className="quiet">
+            ノートは説明用であり、政策効果や勝敗には影響しません。
+          </p>
+        </section>
+      )}
       <section className="panel">
         <h3>経済ニュース</h3>
         <h4>{story.headline}</h4>

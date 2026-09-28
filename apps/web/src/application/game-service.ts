@@ -20,6 +20,7 @@ import {
   type PolicyCommand,
 } from "@macro-nation/simulation-engine";
 import { IndexedDbGameRepository } from "../infrastructure/game-repository";
+import { learningEntriesForReport } from "./learning";
 
 export function browserGameRepository(): GameRepository | null {
   return typeof indexedDB === "undefined"
@@ -165,7 +166,12 @@ export async function advanceMonth(
       : result.finalState.monthIndex >= endMonthForState(result.finalState)
         ? "completed"
         : "paused";
-  const next: GameState = {
+  const monthlyReport = reportSnapshot(
+    result.finalState,
+    result.records[0]?.diagnostics.causal,
+    result.records[0]?.diagnostics.reactions,
+  );
+  const nextWithoutLearning: GameState = {
     ...result.finalState,
     runState,
     ...(fromOffline
@@ -190,11 +196,17 @@ export async function advanceMonth(
       ],
       reports: [
         ...(state.history.reports ?? [reportSnapshot(state)]),
-        reportSnapshot(
-          result.finalState,
-          result.records[0]?.diagnostics.causal,
-          result.records[0]?.diagnostics.reactions,
-        ),
+        monthlyReport,
+      ],
+    },
+  };
+  const next: GameState = {
+    ...nextWithoutLearning,
+    history: {
+      ...nextWithoutLearning.history,
+      learningEntries: [
+        ...(state.history.learningEntries ?? []),
+        ...learningEntriesForReport(nextWithoutLearning, monthlyReport),
       ],
     },
   };
