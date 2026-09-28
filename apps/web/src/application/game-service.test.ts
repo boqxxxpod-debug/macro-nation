@@ -228,12 +228,35 @@ describe("SCN-01 first playable", () => {
       },
       horizonMonths: 12,
     });
-    const committed = await confirmPolicy(storage.repository, 1, {
-      kind: "commit",
-      commandId: "decision-1",
-      expectedStateHash: preview.stateHash,
-      draft: preview.previewedDraft!,
-    });
+    const committed = await confirmPolicy(
+      storage.repository,
+      1,
+      {
+        kind: "commit",
+        commandId: "decision-1",
+        expectedStateHash: preview.stateHash,
+        draft: preview.previewedDraft!,
+      },
+      {
+        expertIds: ["macro", "fiscal"],
+        confidence: "medium",
+        uncertainty: "固定ショック幅",
+        summaries: [
+          { horizonMonths: 12, indicatorId: "realGdp", endDelta: 1 },
+          { horizonMonths: 60, indicatorId: "realGdp", endDelta: 2 },
+        ],
+      },
+    );
+    expect(committed.history.forecastRecords).toEqual([
+      expect.objectContaining({
+        recordId: "forecast:decision-1",
+        expertIds: ["macro", "fiscal"],
+        horizons: [
+          { months: 12, indicators: { realGdp: 1 } },
+          { months: 60, indicators: { realGdp: 2 } },
+        ],
+      }),
+    ]);
     const batch = runPolicyHeadless({
       initialState: { ...committed, runState: "running" },
       tickCount: 12,

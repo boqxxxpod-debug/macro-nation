@@ -25,7 +25,7 @@ import {
 } from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
 import { NationVoice } from "./NationVoice";
-import { visibleCauseCount } from "../application/learning";
+import { schoolLenses, visibleCauseCount } from "../application/learning";
 
 function ExpertPortrait({ expertId }: { expertId: string }) {
   const portrait = expertPortraitManifest.find(
@@ -296,6 +296,77 @@ export function Report({ state }: { state: GameState }) {
           <p>まだ月次の因果記録はありません。</p>
         )}
       </section>
+      {state.learningMode === "learning" && (
+        <section className="panel" aria-labelledby="school-lenses-heading">
+          <h3 id="school-lenses-heading">思想比較</h3>
+          <p>
+            同じゲーム内の結果を、異なる目的と前提から読む比較レンズです。正解・順位・勝敗を示すものではありません。
+          </p>
+          <div className="school-lens-grid">
+            {schoolLenses.map((lens) => (
+              <article key={lens.schoolId}>
+                <h4>{lens.displayName}</h4>
+                <p>
+                  <strong>重視する目的：</strong>
+                  {lens.goals.join("、")}
+                </p>
+                <p>
+                  <strong>前提：</strong>
+                  {lens.premises.join("、")}
+                </p>
+                <p>
+                  <strong>政策への見方：</strong>
+                  {lens.view}
+                </p>
+                <p>
+                  <strong>想定する利点：</strong>
+                  {lens.benefits.join("、")}
+                </p>
+                <p>
+                  <strong>想定するリスク：</strong>
+                  {lens.risks.join("、")}
+                </p>
+              </article>
+            ))}
+          </div>
+          <p className="quiet">
+            ゲームモデル上の説明であり、現実の思想・政策の優劣判定や現実経済の予測ではありません。
+          </p>
+        </section>
+      )}
+      {state.learningMode === "learning" && (
+        <section className="panel" aria-labelledby="forecast-records-heading">
+          <h3 id="forecast-records-heading">専門家の予測記録</h3>
+          {(state.history.forecastRecords ?? []).length ? (
+            <ol>
+              {(state.history.forecastRecords ?? [])
+                .slice()
+                .reverse()
+                .map((record) => (
+                  <li key={record.recordId}>
+                    <strong>{record.recordedMonth}月目の政策判断</strong>
+                    （専門家：{record.expertIds.join("、")}、確信度：
+                    {record.confidence}）
+                    <ul>
+                      {record.horizons.map((horizon) => (
+                        <li key={horizon.months}>
+                          {horizon.months === 12 ? "1年" : "5年"}：GDP差{" "}
+                          {display("realGdp", horizon.indicators.realGdp ?? 0)}
+                        </li>
+                      ))}
+                    </ul>
+                    <small>主な不確実性：{record.uncertainty}</small>
+                  </li>
+                ))}
+            </ol>
+          ) : (
+            <p>政策会議で試算を確定すると、1年・5年の見通しを保存します。</p>
+          )}
+          <p className="quiet">
+            予測値は全専門家で共通です。専門家は説明の焦点だけを変え、経済結果には影響しません。
+          </p>
+        </section>
+      )}
       {state.learningMode === "learning" && (
         <section className="panel" aria-labelledby="notebook-heading">
           <h3 id="notebook-heading">経済学ノート</h3>

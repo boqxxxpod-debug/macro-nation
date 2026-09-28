@@ -1,8 +1,56 @@
 import type {
+  ForecastRecord,
   GameState,
   LearningEntry,
   MonthlyReportSnapshot,
 } from "@macro-nation/domain";
+import schoolLensData from "./school-lenses.json";
+
+export interface SchoolLens {
+  readonly schoolId: string;
+  readonly displayName: string;
+  readonly goals: readonly string[];
+  readonly premises: readonly string[];
+  readonly view: string;
+  readonly benefits: readonly string[];
+  readonly risks: readonly string[];
+}
+
+export const schoolLenses: readonly SchoolLens[] = schoolLensData;
+
+export interface ForecastCapture {
+  readonly decisionId: string;
+  readonly month: number;
+  readonly expertIds: readonly string[];
+  readonly confidence: ForecastRecord["confidence"];
+  readonly uncertainty: string;
+  readonly summaries: readonly {
+    readonly horizonMonths: number;
+    readonly indicatorId: string;
+    readonly endDelta: number;
+  }[];
+}
+
+export function forecastRecord(capture: ForecastCapture): ForecastRecord {
+  const indicatorsFor = (months: 12 | 60) =>
+    Object.fromEntries(
+      capture.summaries
+        .filter((item) => item.horizonMonths === months)
+        .map((item) => [item.indicatorId, item.endDelta]),
+    );
+  return {
+    recordId: `forecast:${capture.decisionId}`,
+    decisionId: capture.decisionId,
+    recordedMonth: capture.month,
+    expertIds: [...capture.expertIds],
+    confidence: capture.confidence,
+    uncertainty: capture.uncertainty,
+    horizons: [
+      { months: 12, indicators: indicatorsFor(12) },
+      { months: 60, indicators: indicatorsFor(60) },
+    ],
+  };
+}
 
 export function visibleCauseCount(
   mode: NonNullable<GameState["learningMode"]>,

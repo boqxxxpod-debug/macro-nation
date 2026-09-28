@@ -390,14 +390,19 @@ export async function submitPolicyCommand(
   repository: PolicyStateRepository,
   slotId: GameState["slotId"],
   command: PolicyCommand,
+  projectCommittedState: (state: GameState) => GameState = (state) => state,
 ): Promise<PolicyCommandResult> {
   const state = await repository.load(slotId);
   if (!state) throw new Error(`No saved game in slot ${slotId}`);
   const result = applyPolicyCommand(state, command);
   if (!result.applied) return result;
+  const persistedResult = {
+    ...result,
+    state: projectCommittedState(result.state),
+  };
   try {
-    await repository.save(policyStateHash(state), result.state);
-    return result;
+    await repository.save(policyStateHash(state), persistedResult.state);
+    return persistedResult;
   } catch (error) {
     const latest = await repository.load(slotId);
     if (latest && policyStateHash(latest) !== policyStateHash(state)) {

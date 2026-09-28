@@ -317,13 +317,33 @@ export function App({
       preview.draftHash !== policyDraftHash(preview.previewedDraft)
     )
       throw new Error("ゲーム状態が変わりました。再試算してください");
-    const saved = await confirmPolicy(repository, state.slotId, {
-      kind: "commit",
-      commandId: confirmationId.current ?? crypto.randomUUID(),
-      expectedStateHash: preview.stateHash,
-      draft: preview.previewedDraft,
-      selectedExpertIds: previewExpertIds,
-    });
+    const saved = await confirmPolicy(
+      repository,
+      state.slotId,
+      {
+        kind: "commit",
+        commandId: confirmationId.current ?? crypto.randomUUID(),
+        expectedStateHash: preview.stateHash,
+        draft: preview.previewedDraft,
+        selectedExpertIds: previewExpertIds,
+      },
+      {
+        expertIds: previewExpertIds,
+        confidence: preview.indicators
+          .filter((item) =>
+            ["realGdp", "inflation", "unemployment"].includes(item.indicatorId),
+          )
+          .every(
+            ({ month12 }) =>
+              (month12.deltaLow > 0 && month12.deltaHigh > 0) ||
+              (month12.deltaLow < 0 && month12.deltaHigh < 0),
+          )
+          ? "high"
+          : "medium",
+        uncertainty: preview.uncertainty.note,
+        summaries: preview.summaries,
+      },
+    );
     setState(saved);
     setPreview(null);
     confirmationId.current = null;

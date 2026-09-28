@@ -20,7 +20,11 @@ import {
   type PolicyCommand,
 } from "@macro-nation/simulation-engine";
 import { IndexedDbGameRepository } from "../infrastructure/game-repository";
-import { learningEntriesForReport } from "./learning";
+import {
+  forecastRecord,
+  learningEntriesForReport,
+  type ForecastCapture,
+} from "./learning";
 
 export function browserGameRepository(): GameRepository | null {
   return typeof indexedDB === "undefined"
@@ -420,6 +424,28 @@ export async function confirmPolicy(
   repository: GameRepository,
   slotId: GameState["slotId"],
   command: PolicyCommand,
+  forecast?: Omit<ForecastCapture, "decisionId" | "month">,
 ): Promise<GameState> {
-  return (await submitPolicyCommand(repository, slotId, command)).state;
+  return (
+    await submitPolicyCommand(repository, slotId, command, (committed) => {
+      if (!forecast) return committed;
+      const record = forecastRecord({
+        ...forecast,
+        decisionId: command.commandId,
+        month: committed.monthIndex,
+      });
+      return {
+        ...committed,
+        history: {
+          ...committed.history,
+          forecastRecords: [
+            ...(committed.history.forecastRecords ?? []).filter(
+              (item) => item.recordId !== record.recordId,
+            ),
+            record,
+          ],
+        },
+      };
+    })
+  ).state;
 }
