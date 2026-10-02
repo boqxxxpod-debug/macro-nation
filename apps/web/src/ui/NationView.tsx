@@ -376,7 +376,7 @@ export function NationView({
       : null;
   const scenario = state.configSnapshot.normalizedConfig.scenario as
     { durationMonths?: number } | undefined;
-  const duration = scenario?.durationMonths ?? 48;
+  const duration = state.clock.endMonth ?? scenario?.durationMonths ?? 48;
   const progress = Math.min(100, Math.round((model.month / duration) * 100));
   const cards = [
     {

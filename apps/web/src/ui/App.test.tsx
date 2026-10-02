@@ -233,15 +233,17 @@ describe("SCN-01 user journey", () => {
       },
     };
     await createGame(repository, "nation-slot-one", 1);
-    await createGame(repository, "nation-slot-two", 2);
+    await createGame(repository, "nation-slot-two", 2, "learning", "long");
     window.history.replaceState({}, "", "/game/2");
     const { unmount } = render(<App repository={repository} />);
     await screen.findByRole("heading", { name: "国家ビュー" });
     expect(window.location.pathname).toBe("/game/2/nation");
+    expect(screen.getByText("0 / 240か月")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1か月進める" }));
     await screen.findByText(/まで進み、保存しました/);
     expect(saved.get(2)?.monthIndex).toBe(1);
     expect(saved.get(1)?.monthIndex).toBe(0);
+    expect(screen.getByText("1 / 240か月")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /保存スロット/ }));
     fireEvent.click(
       screen.getByRole("button", { name: "スロット2の続きから" }),
