@@ -685,7 +685,8 @@ calculating中は状態変更コマンドを拒否し、閲覧操作だけ許可
 awaitingEventではイベント選択、help、reportを許可し、通常政策確定と再開を禁止する。
 crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開まで進めない。
 ブラウザ戻るでは未確定draftだけ破棄確認し、保存済みコマンドを再実行しない。
-13 3 ホーム画面
+13 3 経済指標画面（従来のホーム、UI03）
+ゲームの入口はUI14国家ビューとする。本節の情報は国家ビューから開く経済指標画面に保持する。
 1. 危機警告を1行表示する。警告がなければ重大な警告なしと明記する。
 2. 国民生活 成長 物価 雇用 信頼の5カードを表示する。色に加え矢印、状態語、比較期間を付ける。
 3. 帰還時だけ3行報告を先頭付近に表示し、各行から根拠レポートへ遷移する。
@@ -936,7 +937,9 @@ toneKeyに対応する語尾 語彙 比喩テンプレートへ安全な値だ�
 選択変更時は300msのdebounce後に既存PreviewWorker requestを中止し、政策draft hashが同じなら予測値をキャッシュして助言の並べ替えだけを行う。選択専門家が結果を変更してはならない。
 23 国家ビュー設計
 23 1 ルートと責務
-UI14のrouteは /game/:slot/nation とする。下部ナビの国家またはホーム上の景観カードから開く。画面はNationViewSelectorが返す読み取り専用view modelだけを受け取り、engineやIndexedDBへ直接触れない。
+UI14のrouteは /game/:slot/nation とし、新規開始・再開・政策確定後のメイン画面とする。/game/:slot と保存済みゲームの起動もこの画面へ接続する。経済指標（UI03）は /game/:slot/indicators に配置し、既存の政策・レポート・終了評価への直リンクは維持する。URLに指定された保存スロットを読み込み、各遷移先でも同じスロットIDを使用する。
+国家ビューに政策会議、経済指標、レポート、保存スロットへの入口を設け、各詳細画面から国家ビューへ戻れるようにする。危機停止時は /game/:slot/crisis、イベント選択待ちでは /game/:slot/events へ誘導し、再開・イベント選択は対応画面でのみ行う。
+景観の描画はNationViewSelectorの読み取り専用view modelから行い、engineやIndexedDBへ直接触れない。月を進める操作はAppのApplication commandを通じて行い、計算・保存の成功後に景観を更新する。描画や画面遷移だけで時間を進めない。
 interface NationViewModel {
   month: number; timeOfDay: 'day' | 'evening' | 'night'; weatherKey: string;
   regions: Record<RegionId, RegionVisualState>;
@@ -993,7 +996,7 @@ interface SchoolLens {
 26 画面状態とルーティング追補
 UI04を開く時点でrunningをpausedへ保存し 離脱時も明示操作なしに再開しない。
 専門家選択はpolicy draftのUI状態だが 確定時にdecision logへ保存する。
-UI14は閲覧画面でありrunStateを変更しない。危機時も見られるが再開操作はUI10だけに置く。
+UI14の描画・画面遷移はrunStateを変更しない。明示的な「1か月進める」だけがAppからApplication commandを呼ぶ。危機時も見られるが再開操作はUI10だけに置く。
 戻る操作でworker結果を再commitしないようrequestId draftHash commandIdを分離する。
 27 保存 バージョン 移行
 saveSchemaVersionを上げるmigrationでは既存セーブにstandard duration 96か月を設定せず、scenarioIdがSCN-01なら48、それ以外の既存シナリオなら96をendMonthとして補完する。ExpertProfile本文や画像は保存せずexpertIdとtemplateVersionだけを保存する。

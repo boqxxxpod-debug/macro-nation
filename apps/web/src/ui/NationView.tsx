@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { GameState } from "@macro-nation/domain";
 import {
   REGION_IDS,
@@ -359,9 +359,11 @@ function RegionDetails({
 export function NationView({
   state,
   onReport,
+  children,
 }: {
   state: GameState;
   onReport(): void;
+  children?: ReactNode;
 }) {
   const model = useMemo(() => selectNationView(state), [state]);
   const [selected, setSelected] = useState<RegionId>("city");
@@ -453,6 +455,7 @@ export function NationView({
         ))}
       </div>
 
+      {children}
       <div
         className="nation-scene"
         data-time={model.timeOfDay}
@@ -546,10 +549,7 @@ export function NationView({
       </div>
       <NationVoice state={state} onOpenCause={onReport} />
       {model.eventMarkers.length > 0 && (
-        <p className="crisis">
-          出来事：{model.eventMarkers.join("・")}
-          。この画面から時間は進みません。
-        </p>
+        <p className="crisis">出来事：{model.eventMarkers.join("・")}。</p>
       )}
       <div className="nation-columns">
         <RegionDetails
