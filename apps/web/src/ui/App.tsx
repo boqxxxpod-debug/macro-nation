@@ -22,12 +22,21 @@ import { AIPreview } from "../devtools/AIPreview";
 import { Home, PolicyForm, Preview, Report } from "./GameViews";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
+import { NationMenu } from "./NationMenu";
 import { migrateFirstPlayableSave } from "../application/save-migration";
 import { label, period } from "./game-format";
 
-type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+type Route =
+  | "home"
+  | "policies"
+  | "preview"
+  | "report"
+  | "ending"
+  | "nation"
+  | "events"
+  | "crisis";
 const NAV_LABELS = {
-  home: "ホーム",
+  home: "経済指標",
   policies: "政策会議",
   report: "レポート",
   nation: "国家ビュー",
@@ -82,8 +91,14 @@ function routeFromLocation(): Route {
   if (path.endsWith("/policies")) return "policies";
   if (path.endsWith("/report")) return "report";
   if (path.endsWith("/ending")) return "ending";
-  if (path.endsWith("/nation")) return "nation";
-  return "home";
+  if (path.endsWith("/indicators")) return "home";
+  if (path.endsWith("/events")) return "events";
+  if (path.endsWith("/crisis")) return "crisis";
+  return "nation";
+}
+function slotFromLocation(): GameState["slotId"] | null {
+  const match = window.location.pathname.match(/\/game\/([1-3])(?:\/|$)/);
+  return match ? (Number(match[1]) as GameState["slotId"]) : null;
 }
 
 export function App({
@@ -157,8 +172,18 @@ export function App({
           for (const item of loaded)
             if (item.saved) available.set(item.id, item.saved);
           setSlots(available);
-          const first = loaded.find((item) => item.saved)?.saved ?? null;
+          const requestedSlot = slotFromLocation();
+          const first = requestedSlot
+            ? (available.get(requestedSlot) ?? null)
+            : (loaded.find((item) => item.saved)?.saved ?? null);
           setState(first);
+          if (first && routeFromLocation() === "nation")
+            window.history.replaceState(
+              {},
+              "",
+              `${import.meta.env.BASE_URL}game/${first.slotId}/nation`,
+            );
+          if (requestedSlot) setSlotId(requestedSlot);
           const recovery = loaded.find((item) => item.recovered);
           if (recovery?.reason) setNotice(recovery.reason);
           const corrupt = loaded.find((item) => !item.saved && item.reason);
@@ -182,34 +207,44 @@ export function App({
     };
   }, [repository]);
   useEffect(() => {
+    if (state) setSlots((current) => new Map(current).set(state.slotId, state));
+  }, [state]);
+  useEffect(() => {
     const pop = () => {
       previewClient.current?.cancel();
+      const requestedSlot = slotFromLocation();
+      setState((current) =>
+        requestedSlot
+          ? current?.slotId === requestedSlot
+            ? current
+            : (slots.get(requestedSlot) ?? null)
+          : null,
+      );
       setRoute(routeFromLocation());
       setError("");
     };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
-  }, []);
+  }, [slots]);
   useEffect(() => {
     if (!loading && state)
       document.querySelector<HTMLElement>(".game-view h2")?.focus();
   }, [route, loading, state]);
   useEffect(() => () => previewClient.current?.cancel(), []);
 
-  function navigate(next: Route, replace = false) {
+  function navigate(
+    next: Route,
+    replace = false,
+    targetSlot = state?.slotId ?? slotId,
+  ) {
     const base = import.meta.env.BASE_URL;
-    const suffix =
+    const suffix = `game/${targetSlot}/${
       next === "home"
-        ? "game/1"
-        : next === "policies"
-          ? "game/1/policies"
-          : next === "preview"
-            ? "game/1/policies/preview"
-            : next === "report"
-              ? "game/1/report"
-              : next === "nation"
-                ? "game/1/nation"
-                : "game/1/ending";
+        ? "indicators"
+        : next === "preview"
+          ? "policies/preview"
+          : next
+    }`;
     window.history[replace ? "replaceState" : "pushState"](
       {},
       "",
@@ -217,6 +252,10 @@ export function App({
     );
     setRoute(next);
     setError("");
+  }
+  function openSlots() {
+    window.history.pushState({}, "", import.meta.env.BASE_URL);
+    setState(null);
   }
   async function action(work: () => Promise<void>) {
     if (inFlight.current) return;
@@ -246,7 +285,7 @@ export function App({
     );
     setState(created);
     setSlots((current) => new Map(current).set(slotId, created));
-    navigate("home");
+    navigate("nation", false, created.slotId);
     setNotice("ゲームを開始し、端末に保存しました。");
   }
   async function previewDraft(
@@ -348,7 +387,7 @@ export function App({
     setPreview(null);
     confirmationId.current = null;
     setNotice("政策を確定し、端末に保存しました。");
-    navigate("home", true);
+    navigate("nation", true);
   }
 
   return (
@@ -462,7 +501,7 @@ export function App({
                     <button
                       onClick={() => {
                         setState(saved);
-                        navigate("home");
+                        navigate("nation", false, saved.slotId);
                       }}
                     >
                       スロット{id}の続きから
@@ -565,25 +604,15 @@ export function App({
       ) : (
         <>
           <nav className="nav" aria-label="ゲーム画面">
-            <button type="button" onClick={() => setState(null)}>
-              保存スロット
-            </button>
-            {(
-              [
-                "home",
-                "policies",
-                "report",
-                "nation",
-                ...(state.runState === "completed" ||
-                state.runState === "failed"
-                  ? ["ending" as const]
-                  : []),
-              ] as const
-            ).map((id) => (
+            {(["nation", "policies", "home", "report"] as const).map((id) => (
               <button
                 key={id}
                 type="button"
-                aria-label={NAV_LABELS[id]}
+                aria-label={
+                  id === "nation" && route !== "nation"
+                    ? "国家ビューに戻る"
+                    : NAV_LABELS[id]
+                }
                 aria-current={
                   route === id || (id === "policies" && route === "preview")
                     ? "page"
@@ -606,18 +635,19 @@ export function App({
             </p>
             {route === "home" && (
               <>
-                <h2 tabIndex={-1}>国家ホーム</h2>
+                <h2 tabIndex={-1}>経済指標</h2>
                 <Home
                   state={state}
                   onOpenReport={() => navigate("report")}
                   onOpenPolicies={() => navigate("policies")}
                 />
-                <button onClick={() => navigate("nation")}>
-                  国家の景観を見る
-                </button>
-                {state.runState === "crisisStopped" && (
+              </>
+            )}
+            {route === "crisis" && (
+              <>
+                <h2 tabIndex={-1}>緊急会議</h2>
+                {state.runState === "crisisStopped" ? (
                   <section className="panel crisis">
-                    <h3>緊急会議</h3>
                     <p>
                       危機条件に達したため進行を停止しました。政策会議で対策を検討し、明示的に再開してください。次の月も危機が続くと失敗になります。
                     </p>
@@ -636,14 +666,22 @@ export function App({
                           setNotice(
                             "危機対応を保存し、再開できる状態になりました。",
                           );
+                          navigate("nation");
                         })
                       }
                     >
                       危機対応を確認して再開
                     </button>
                   </section>
+                ) : (
+                  <p>いまは緊急対応が必要な危機はありません。</p>
                 )}
-                {state.runState === "awaitingEvent" && (
+              </>
+            )}
+            {route === "events" && (
+              <>
+                <h2 tabIndex={-1}>イベント対応</h2>
+                {state.runState === "awaitingEvent" ? (
                   <section
                     className="panel crisis"
                     aria-labelledby="event-heading"
@@ -673,6 +711,7 @@ export function App({
                               );
                               setState(resolved);
                               setNotice("イベント対応を保存しました。");
+                              navigate("nation");
                             })
                           }
                         >
@@ -681,51 +720,9 @@ export function App({
                       ))}
                     </div>
                   </section>
+                ) : (
+                  <p>いまは対応を選ぶ必要のあるイベントはありません。</p>
                 )}
-                {(state.runState === "completed" ||
-                  state.runState === "failed") && (
-                  <section className="panel">
-                    <h3>運営の終了</h3>
-                    <button
-                      className="primary"
-                      onClick={() => navigate("ending")}
-                    >
-                      終了評価を見る
-                    </button>
-                  </section>
-                )}
-                <div className="actions">
-                  <button
-                    className="primary"
-                    disabled={
-                      busy ||
-                      state.runState === "crisisStopped" ||
-                      state.runState === "completed" ||
-                      state.runState === "failed"
-                    }
-                    onClick={() =>
-                      void action(async () => {
-                        const saved = await advanceMonth(
-                          repository!,
-                          state.slotId,
-                        );
-                        setState(saved);
-                        setNotice(`${period(saved)}まで進み、保存しました。`);
-                        if (
-                          saved.runState === "completed" ||
-                          saved.runState === "failed"
-                        )
-                          navigate("ending");
-                      })
-                    }
-                  >
-                    1か月進める
-                  </button>
-                  <button onClick={() => navigate("policies")}>
-                    政策を考える
-                  </button>
-                  <button onClick={() => navigate("report")}>理由を見る</button>
-                </div>
               </>
             )}
             {route === "policies" && (
@@ -811,7 +808,34 @@ export function App({
                 <h2 tabIndex={-1} className="nation-page-heading">
                   国家ビュー
                 </h2>
-                <NationView state={state} onReport={() => navigate("report")} />
+                <NationView state={state} onReport={() => navigate("report")}>
+                  <NationMenu
+                    state={state}
+                    busy={busy}
+                    onPolicies={() => navigate("policies")}
+                    onIndicators={() => navigate("home")}
+                    onReport={() => navigate("report")}
+                    onSlots={openSlots}
+                    onCrisis={() => navigate("crisis")}
+                    onEvents={() => navigate("events")}
+                    onEnding={() => navigate("ending")}
+                    onAdvance={() =>
+                      void action(async () => {
+                        const saved = await advanceMonth(
+                          repository!,
+                          state.slotId,
+                        );
+                        setState(saved);
+                        setNotice(`${period(saved)}まで進み、保存しました。`);
+                        if (
+                          saved.runState === "completed" ||
+                          saved.runState === "failed"
+                        )
+                          navigate("ending");
+                      })
+                    }
+                  />
+                </NationView>
               </>
             )}
             {route === "ending" && (

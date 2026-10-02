@@ -25,8 +25,8 @@ function memoryRepository() {
   let saved: GameState | null = null;
   let failSave = false;
   const repository: GameRepository = {
-    async load() {
-      return saved ? structuredClone(saved) : null;
+    async load(slotId) {
+      return saved?.slotId === slotId ? structuredClone(saved) : null;
     },
     async create(state) {
       if (saved) throw new Error("slot occupied");
@@ -43,6 +43,9 @@ function memoryRepository() {
     repository,
     get saved() {
       return saved;
+    },
+    replace(state: GameState) {
+      saved = structuredClone(state);
     },
     fail() {
       failSave = true;
@@ -65,15 +68,16 @@ describe("SCN-01 user journey", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the nation view from home and reaches the same region from its DOM list", async () => {
+  it("resumes at the nation main screen and reaches the same region from its DOM list", async () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "nation-view-accessibility");
     render(<App repository={memory.repository} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "国家の景観を見る" }),
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus(),
     );
-    expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus();
     expect(window.location.pathname).toBe("/game/1/nation");
+    const savedHash = policyStateHash(memory.saved!);
     fireEvent.click(screen.getByRole("button", { name: /港湾 安定/ }));
     expect(
       screen.getByRole("region", { name: "港湾の地域詳細" }),
@@ -82,6 +86,9 @@ describe("SCN-01 user journey", () => {
       screen.getByRole("button", { name: "経済レポートで理由を見る" }),
     );
     expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
+    expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus();
+    expect(policyStateHash(memory.saved!)).toBe(savedHash);
     expect(memory.saved?.runState).toBe("paused");
   });
 
@@ -94,14 +101,16 @@ describe("SCN-01 user journey", () => {
       await screen.findByRole("button", { name: "ゲームを始める" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "国家ホーム" }),
+      await screen.findByRole("heading", { name: "国家ビュー" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("ゲームを開始し、端末に保存しました。"),
     ).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "国家ホーム" })).toHaveFocus(),
+      expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus(),
     );
+    expect(window.location.pathname).toBe("/game/1/nation");
+    fireEvent.click(screen.getByRole("button", { name: /経済指標を見る/ }));
     expect(screen.getAllByRole("article")).toHaveLength(5);
     expect(
       screen.getByRole("heading", { name: "最大変化要因" }),
@@ -110,7 +119,8 @@ describe("SCN-01 user journey", () => {
       screen.getByRole("heading", { name: "首席補佐官の提案" }),
     ).toBeInTheDocument();
     expect(screen.getByText("48月目：シナリオ終了")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "政策を考える" }));
+    fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
+    fireEvent.click(screen.getByRole("button", { name: /政策を考える/ }));
     expect(screen.getByText(/残り 3 \/ 3枠/)).toBeInTheDocument();
     fireEvent.change(
       screen.getByRole("spinbutton", { name: "政策金利の設定値" }),
@@ -147,9 +157,13 @@ describe("SCN-01 user journey", () => {
     ]);
     expect(memory.saved?.policyAdministration?.receipts).toHaveLength(1);
     window.history.back();
-    fireEvent.popState(window);
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("heading", { name: "政策会議" })[0],
+      ).toHaveFocus(),
+    );
     expect(memory.saved?.policyAdministration?.receipts).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
+    fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
     fireEvent.click(screen.getByRole("button", { name: "1か月進める" }));
     await waitFor(() => expect(memory.saved?.monthIndex).toBe(1));
     fireEvent.click(screen.getByRole("button", { name: "理由を見る" }));
@@ -185,4 +199,129 @@ describe("SCN-01 user journey", () => {
       screen.getByRole("button", { name: "政策を確定して保存" }),
     ).toBeEnabled();
   });
+
+  it("preserves a report deep link and returns to the nation main screen", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "nation-report-deep-link");
+    window.history.replaceState({}, "", "/game/1/report");
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "経済レポート" });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "経済レポート" }),
+      ).toHaveFocus(),
+    );
+    expect(window.location.pathname).toBe("/game/1/report");
+    fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
+    expect(window.location.pathname).toBe("/game/1/nation");
+    expect(memory.saved?.monthIndex).toBe(0);
+  });
+
+  it("loads the requested slot and keeps its latest progress when reopened", async () => {
+    const saved = new Map<number, GameState>();
+    const repository: GameRepository = {
+      async load(id) {
+        return saved.has(id) ? structuredClone(saved.get(id)!) : null;
+      },
+      async create(state) {
+        saved.set(state.slotId, structuredClone(state));
+      },
+      async save(expected, state) {
+        if (policyStateHash(saved.get(state.slotId)!) !== expected)
+          throw new Error("stale state");
+        saved.set(state.slotId, structuredClone(state));
+      },
+    };
+    await createGame(repository, "nation-slot-one", 1);
+    await createGame(repository, "nation-slot-two", 2, "learning", "long");
+    window.history.replaceState({}, "", "/game/2");
+    const { unmount } = render(<App repository={repository} />);
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(window.location.pathname).toBe("/game/2/nation");
+    expect(screen.getByText("0 / 240か月")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "1か月進める" }));
+    await screen.findByText(/まで進み、保存しました/);
+    expect(saved.get(2)?.monthIndex).toBe(1);
+    expect(saved.get(1)?.monthIndex).toBe(0);
+    expect(screen.getByText("1 / 240か月")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /保存スロット/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "スロット2の続きから" }),
+    );
+    expect(screen.getByText(/スロット2 · 1年目 2月/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /経済指標を見る/ }));
+    expect(window.location.pathname).toBe("/game/2/indicators");
+    unmount();
+    render(<App repository={repository} />);
+    await screen.findByRole("heading", { name: "経済指標" });
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "経済指標" })).toHaveFocus(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
+    expect(window.location.pathname).toBe("/game/2/nation");
+    expect(screen.getByText(/スロット2 · 1年目 2月/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["crisisStopped", "緊急会議を開く", "緊急会議", "crisis"],
+    ["awaitingEvent", "イベントの対応を選ぶ", "イベント対応", "events"],
+  ] as const)(
+    "keeps %s stopped and links to its response screen",
+    async (status, button, heading, path) => {
+      const memory = memoryRepository();
+      const initial = await createGame(memory.repository, `nation-${status}`);
+      memory.replace({
+        ...initial,
+        runState: status,
+        events:
+          status === "awaitingEvent"
+            ? {
+                ...initial.events,
+                pendingChoiceEventId: "evt-demand-slump",
+                occurrences: [
+                  {
+                    eventId: "evt-demand-slump",
+                    occurredMonth: 0,
+                    preparedness: 0.5,
+                    baselineDamage: -2,
+                    preparednessMitigation: 0.5,
+                    choiceMitigation: 0,
+                    targetPath: "economy.indices.realGdp",
+                  },
+                ],
+              }
+            : initial.events,
+      });
+      render(<App repository={memory.repository} />);
+      await screen.findByRole("heading", { name: "国家ビュー" });
+      expect(
+        screen.getByRole("button", { name: "1か月進める" }),
+      ).toBeDisabled();
+      const hash = policyStateHash(memory.saved!);
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      expect(screen.getByRole("heading", { name: heading })).toHaveFocus();
+      expect(window.location.pathname).toBe(`/game/1/${path}`);
+      fireEvent.click(screen.getByRole("button", { name: "国家ビューに戻る" }));
+      expect(policyStateHash(memory.saved!)).toBe(hash);
+      expect(
+        screen.getByRole("button", { name: "1か月進める" }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            status === "crisisStopped" ? "危機対応を確認して再開" : "均衡対応",
+        }),
+      );
+      await screen.findByRole("heading", { name: "国家ビュー" });
+      await waitFor(() =>
+        expect(
+          screen.getByRole("heading", { name: "国家ビュー" }),
+        ).toHaveFocus(),
+      );
+      expect(memory.saved?.runState).toBe("paused");
+      expect(memory.saved?.monthIndex).toBe(0);
+      expect(screen.getByRole("button", { name: "1か月進める" })).toBeEnabled();
+    },
+  );
 });

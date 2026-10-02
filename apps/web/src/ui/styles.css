@@ -630,6 +630,7 @@ label select {
   z-index: 7;
   top: 1.1rem;
   left: calc(50% - min(50%, 29rem) + 4.3rem);
+  max-width: calc(min(100vw, 58rem) - 5rem);
   margin: 0;
   color: #fff;
   font-family: inherit;
@@ -675,7 +676,7 @@ label select {
   border-right: 0;
 }
 .app-shell-nation .nav button::before {
-  content: "⌂";
+  content: "◈";
   font-size: 1.55rem;
   line-height: 1.1;
 }
@@ -686,10 +687,7 @@ label select {
   content: "▥";
 }
 .app-shell-nation .nav button:nth-child(4)::before {
-  content: "◈";
-}
-.app-shell-nation .nav button:nth-child(5)::before {
-  content: "★";
+  content: "▧";
 }
 .app-shell-nation .nav button[aria-current="page"],
 .app-shell-nation .nav button[aria-current="page"]:hover:not(:disabled) {
@@ -702,8 +700,60 @@ label select {
   background: #0a3149;
   color: #f7fbff;
 }
+.nation-hub {
+  padding: 0.65rem;
+  background: #123f5d;
+}
+.nation-hub-menu {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+.nation-hub-menu button {
+  min-width: 0;
+  padding: 0.6rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: #f4fafb;
+}
+.nation-hub-menu small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.nation-hub-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+.nation-hub-progress span {
+  font-size: 0.85rem;
+}
+.nation-hub-progress button.primary {
+  background: #fff3c7;
+  border-color: #fff3c7;
+  color: #173440;
+}
+.nation-hub-progress button.primary:hover:not(:disabled) {
+  background: #ffe8a1;
+}
+.nation-attention {
+  padding: 0.75rem;
+  margin-bottom: 0.65rem;
+  border-radius: 0.65rem;
+  background: #fff3d9;
+  color: #173440;
+}
+.nation-attention p {
+  margin: 0 0 0.5rem;
+}
 .nation-masthead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
@@ -738,7 +788,7 @@ label select {
 .nation-brand strong {
   font-size: clamp(1.2rem, 3.6vw, 2.1rem);
   line-height: 1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .nation-brand small {
   padding-top: 0.25rem;
@@ -1091,6 +1141,7 @@ label select {
     font-size: 0.72rem;
   }
   .nation-scoreboard {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
     gap: 0.25rem;
     padding: 0.3rem 0.3rem 0.6rem;
   }
@@ -1121,6 +1172,8 @@ label select {
     font-size: 0.63rem;
   }
   .nation-view .nation-motion-controls {
+    max-width: calc(100% - 0.9rem);
+    flex-wrap: wrap;
     font-size: 0.62rem;
   }
   .nation-view .nation-columns {
