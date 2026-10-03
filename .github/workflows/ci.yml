@@ -38,13 +38,14 @@ jobs:
         run: npm run build:pages
 
       - name: Install Playwright Chromium
+        id: playwright
         run: npx playwright install --with-deps chromium
 
       - name: PWA and accessibility E2E
         run: npm run test:e2e
 
       - name: Capture mobile layout before and after
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request' && steps.playwright.outcome == 'success'
         env:
           SCREENSHOT_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: node scripts/capture-viewport-comparison.mjs

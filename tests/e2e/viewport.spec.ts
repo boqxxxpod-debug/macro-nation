@@ -41,6 +41,7 @@ async function expectViewport(page: Page) {
                 issue: "content height",
                 scroll: element.scrollHeight,
                 client: element.clientHeight,
+                html: element.outerHTML.slice(0, 350),
                 bounds: {
                   top: bounds.top,
                   bottom: bounds.bottom,

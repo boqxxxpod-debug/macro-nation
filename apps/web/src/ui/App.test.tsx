@@ -154,6 +154,8 @@ describe("SCN-01 user journey", () => {
     expect(memory.saved?.runState).toBe("paused");
   });
 
+  // This journey runs the real 12- and 60-month Engine previews. Hosted CI
+  // shares CPU with the other suites and can take over 20 seconds.
   it("starts, previews, saves once, advances, and explains the result after browser back", async () => {
     const memory = memoryRepository();
     render(
@@ -254,7 +256,7 @@ describe("SCN-01 user journey", () => {
     expect(
       roleOnPage("経済レポート", "heading", "経済ニュース"),
     ).toBeInTheDocument();
-  }, 20_000);
+  }, 60_000);
 
   it("keeps policy inputs and experts while paging and switching screens", async () => {
     const memory = memoryRepository();
