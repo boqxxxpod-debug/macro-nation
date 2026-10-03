@@ -156,6 +156,26 @@ function state(): GameState {
 }
 
 describe("domain invariants", () => {
+  it("accepts legacy clocks and validates schema 3 checkpoints and fractions", () => {
+    const legacy = state();
+    expect(validateState(legacy)).toEqual([]);
+    const valid: GameState = {
+      ...legacy,
+      clock: { ...legacy.clock, progressionMode: "auto", lastProcessedWallClockMs: 42, remainderMs: 100 },
+    };
+    expect(validateState(valid)).toEqual([]);
+    for (const clock of [
+      { ...valid.clock, lastProcessedWallClockMs: Number.NaN },
+      { ...valid.clock, lastProcessedWallClockMs: -1 },
+      { ...valid.clock, remainderMs: -1 },
+      { ...valid.clock, remainderMs: valid.clock.config.realSecondsPerStep * 1000 },
+      { ...valid.clock, remainderMs: Number.POSITIVE_INFINITY },
+    ]) {
+      expect(validateState({ ...valid, clock })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "INVALID_CLOCK" }),
+      ]));
+    }
+  });
   it("accepts valid state and hard-clamp boundary values", () => {
     const valid = state();
     const boundary: GameState = {

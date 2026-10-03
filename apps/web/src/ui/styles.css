@@ -132,6 +132,54 @@ h4 {
 .panel p {
   line-height: 1.55;
 }
+.time-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+.time-controls-summary {
+  flex: 1 1 15rem;
+  min-width: 0;
+}
+.time-controls-summary > strong {
+  margin-right: 0.75rem;
+}
+.time-controls-summary p {
+  margin: 0.35rem 0;
+}
+.time-controls-summary small {
+  display: block;
+}
+.time-controls-actions {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.time-controls-actions label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.time-controls-actions select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.5rem;
+}
+.time-controls-actions .actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
+.time-controls-actions button {
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.time-controls-note {
+  width: 100%;
+  margin: 0;
+}
 .panel ul,
 .panel ol {
   padding-left: 1.4rem;
@@ -702,6 +750,11 @@ label select {
   background: #0a3149;
   color: #f7fbff;
 }
+.app-shell-nation .time-controls,
+.app-shell-nation .return-report {
+  margin: 0.8rem;
+  color: #172a33;
+}
 .nation-masthead {
   display: flex;
   align-items: center;
@@ -1091,6 +1144,7 @@ label select {
     font-size: 0.72rem;
   }
   .nation-scoreboard {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
     gap: 0.25rem;
     padding: 0.3rem 0.3rem 0.6rem;
   }

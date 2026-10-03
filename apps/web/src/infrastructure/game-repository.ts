@@ -107,7 +107,7 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
     }
   }
 
-  async save(expectedStateHash: string, next: GameState): Promise<void> {
+  async save(expectedStateHash: string, next: GameState, shouldCommit?: () => boolean): Promise<void> {
     const database = await this.open();
     try {
       await new Promise<void>((resolve, reject) => {
@@ -116,6 +116,11 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
         const request = store.get(next.slotId);
         let reason: Error | null = null;
         request.onsuccess = () => {
+          if (shouldCommit?.() === false) {
+            reason = new Error("保存前にゲームが切り替わりました");
+            transaction.abort();
+            return;
+          }
           const record = asRecord(request.result, next.slotId);
           const current = isGameState(record?.current, next.slotId)
             ? record.current

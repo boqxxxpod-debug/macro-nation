@@ -72,7 +72,17 @@ export interface GameClock {
   /** Added in save schema 2; absent only on older saves awaiting migration. */
   readonly endMonth?: number;
   readonly durationMode?: DurationMode;
+  /** Added in save schema 3. Missing fields are migrated to manual and paused. */
+  readonly progressionMode?: "manual" | "auto";
+  /** Wall-clock checkpoint owned by the web Clock Adapter, never by Engine. */
+  readonly lastProcessedWallClockMs?: number | null;
+  readonly remainderMs?: number;
+  readonly stopReason?: ClockStopReason;
 }
+
+export type ClockStopReason =
+  | "manual" | "policy" | "event" | "crisis" | "error"
+  | "completed" | "failed" | "offlineLimit" | "tutorial";
 
 export interface IndustryState {
   readonly productionIndex: IndexLevel;

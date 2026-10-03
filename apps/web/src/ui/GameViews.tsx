@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   expertPortraitManifest,
   expertProfilesForContentVersion,
@@ -26,6 +26,7 @@ import {
 import { describeCause, display, label } from "./game-format";
 import { NationVoice } from "./NationVoice";
 import { schoolLenses, visibleCauseCount } from "../application/learning";
+import { isTutorialTime, tutorialStepLimit } from "../application/game-clock";
 import {
   HISTORY_CATEGORY_LABELS,
   nationalHistory,
@@ -51,10 +52,12 @@ function ExpertPortrait({ expertId }: { expertId: string }) {
 
 export function Home({
   state,
+  timeControls,
   onOpenReport,
   onOpenPolicies,
 }: {
   state: GameState;
+  timeControls?: ReactNode;
   onOpenReport(): void;
   onOpenPolicies(): void;
 }) {
@@ -77,11 +80,20 @@ export function Home({
   const milestones = selectHomeMilestones(state);
   const recommendations = selectHomeRecommendations(state);
   const primaryCause = topCause(latest);
+  const policyCycle = state.clock.config.policyCycleSteps;
+  const tutorialQuarters = tutorialStepLimit(state) / policyCycle;
+  const tutorialQuarter = Math.floor(state.monthIndex / policyCycle);
   return (
     <>
-      {state.monthIndex < 12 && state.learningMode === "learning" && (
-        <section className="panel tutorial" aria-label="4四半期チュートリアル">
-          <h3>はじめの4四半期・第{Math.floor(state.monthIndex / 3) + 1}回</h3>
+      {timeControls}
+      {isTutorialTime(state) && (
+        <section
+          className="panel tutorial"
+          aria-label={`${tutorialQuarters}四半期チュートリアル`}
+        >
+          <h3>
+            はじめの{tutorialQuarters}四半期・第{tutorialQuarter + 1}回
+          </h3>
           <p>
             {
               [
@@ -89,7 +101,7 @@ export function Home({
                 "数か月進め、前月比と3行報告を確認しましょう。",
                 "別の政策を試算し、12か月の副作用と費用を比べましょう。",
                 "レポートで最大の変化要因を確認し、次の判断に備えましょう。",
-              ][Math.floor(state.monthIndex / 3)]
+              ][Math.min(tutorialQuarter, 3)]
             }
           </p>
           <p>この案内は説明だけです。計算は通常の月次Engineで進みます。</p>

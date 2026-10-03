@@ -43,6 +43,40 @@ function memory() {
 }
 
 describe("SCN-01 first playable", () => {
+  it("does not spend already earned offline steps while paused or waiting for an event", async () => {
+    const storage = memory();
+    const initial = await createGame(storage.repository, "offline-stopped-budget");
+    for (const runState of ["paused", "awaitingEvent", "crisisStopped", "completed", "failed"] as const) {
+      const stopped: GameState = {
+        ...initial, runState, pendingOfflineSteps: 5,
+        clock: { ...initial.clock, progressionMode: "auto", remainderMs: 123 },
+      };
+      storage.replace(stopped);
+      expect(await catchUpOffline(storage.repository, 1, 10 * 300)).toEqual(stopped);
+    }
+    storage.replace({ ...initial, runState: "awaitingEvent" });
+    await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(/イベント/);
+  });
+
+  it("rejects policy confirmation while the automatic clock is running", async () => {
+    const storage = memory();
+    const initial = await createGame(storage.repository, "policy-auto-guard");
+    const running: GameState = {
+      ...initial, runState: "running",
+      clock: { ...initial.clock, progressionMode: "auto", lastProcessedWallClockMs: 1_000 },
+    };
+    storage.replace(running);
+    const preview = previewPolicy({
+      state: running,
+      draft: { status: "draft", policyId: "rate", ruleId: "interest-rate", value: 0.05, quartersAhead: 0 },
+      horizonMonths: 12,
+    });
+    await expect(confirmPolicy(storage.repository, 1, {
+      kind: "commit", commandId: "running-policy", expectedStateHash: preview.stateHash,
+      draft: preview.previewedDraft!,
+    })).rejects.toThrow(/時間を止め/);
+    expect(await storage.repository.load(1)).toEqual(running);
+  });
   it("keeps Engine outcomes identical across all three explanation modes", async () => {
     const outcomes = [];
     for (const mode of ["casual", "standard", "learning"] as const) {
@@ -61,11 +95,11 @@ describe("SCN-01 first playable", () => {
       storage.repository,
       "baseline-96",
       1,
-      "learning",
+      "standard",
       "long",
     );
     expect(initial.clock.endMonth).toBe(240);
-    storage.replace({ ...initial, runState: "running" });
+    storage.replace({ ...initial, runState: "running", clock: { ...initial.clock, progressionMode: "auto" } });
     const progress: number[] = [];
     const first = await catchUpOffline(
       storage.repository,
@@ -77,7 +111,8 @@ describe("SCN-01 first playable", () => {
     );
     expect(first.monthIndex).toBe(96);
     expect(first.pendingOfflineSteps).toBe(4);
-    expect(progress).toEqual([12, 24, 36, 48, 60, 72, 84, 96]);
+    expect(progress).toEqual(Array.from({ length: 24 }, (_, index) => (index + 1) * 4));
+    storage.replace({ ...first, runState: "running" });
     const resumed = await catchUpOffline(storage.repository, 1, 0);
     expect(resumed.monthIndex).toBe(100);
     expect(resumed.pendingOfflineSteps).toBe(0);
@@ -122,24 +157,31 @@ describe("SCN-01 first playable", () => {
     const sequentialInitial = await createGame(
       sequentialStorage.repository,
       "first-playable-offline-equivalence",
+      1,
+      "standard",
     );
     const offlineInitial = await createGame(
       offlineStorage.repository,
       "first-playable-offline-equivalence",
+      1,
+      "standard",
     );
 
     let sequential = sequentialInitial;
     for (let month = 0; month < 48; month += 1)
       sequential = await advanceMonth(sequentialStorage.repository, 1);
 
-    offlineStorage.replace({ ...offlineInitial, runState: "running" });
+    offlineStorage.replace({ ...offlineInitial, runState: "running", clock: { ...offlineInitial.clock, progressionMode: "auto" } });
     const offline = await catchUpOffline(
       offlineStorage.repository,
       1,
       4 * 60 * 60,
     );
 
-    expect(offline).toEqual(sequential);
+    expect(offline.economy).toEqual(sequential.economy);
+    expect(offline.rng).toEqual(sequential.rng);
+    expect(offline.history).toEqual(sequential.history);
+    expect(offline.runState).toBe(sequential.runState);
     expect(offline.history.reports).toHaveLength(49);
     expect(
       offline.history.reports
