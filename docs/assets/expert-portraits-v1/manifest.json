@@ -1,11 +1,13 @@
 {
-  "assetVersion": "expert-portraits-v1",
-  "createdDate": "2026-10-02",
+  "assetVersion": "expert-portraits-anime-v2",
+  "createdDate": "2026-10-03",
   "profileSource": "packages/advisor-core/src/profiles.ts",
   "profileSourceCommit": "68b8f15465e42b9068aedf82b264eb3340546825",
   "generator": "ChatGPT built-in image generation",
   "scope": "Portrait assets only; character roles, values and tones remain in the existing content master.",
   "originalsAvailability": "PNG originals are in the accompanying ZIP; the asset branch contains optimized WebP files.",
+  "style": "Cute Japanese anime chibi portraits; large sparkling eyes, rounded faces, small mouths, cheerful cel colors.",
+  "supersedes": "expert-portraits-v1",
   "experts": [
     {
       "expertId": "centralBank",
@@ -18,7 +20,7 @@
         "file": "sources/central-bank.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "1018f9e6fefcd3847b543f944e156f804aa1b87fb108f0b0898c0dd28d4775d9"
+        "sha256": "c32b9434b4834b6a7f21136f09e44ffa7ce639a1675b60da63b5d16184224957"
       },
       "variants": [
         {
@@ -26,16 +28,16 @@
           "file": "apps/web/public/experts/central-bank.webp",
           "width": 256,
           "height": 256,
-          "bytes": 18004,
-          "sha256": "152686de18f988be975ed2c5291ecec089c11022608c48f171392d749813bc40"
+          "bytes": 26638,
+          "sha256": "3447871a5f756864c438476a936b2736cf4167ee038d99d58085661c6e506350"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/central-bank@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 47896,
-          "sha256": "f2bee22df4ce2dc3e88d221bb7aeaa79460e3d3a828f1b1bd57f365c074f7678"
+          "bytes": 66076,
+          "sha256": "c8f304bd67e5c5b2223c744119519dd15b6316ad62feb6a1b62daa8ee97bcfa4"
         }
       ]
     },
@@ -50,7 +52,7 @@
         "file": "sources/fiscal.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "c186b33eed23a862ca419c03c7ef4b14d1e7a52d4b380b7eae66a824aba53d24"
+        "sha256": "f66d4c520c1bc5a9877b94e0a75bf085771877fb70bab6746a8149c6c4454396"
       },
       "variants": [
         {
@@ -58,16 +60,16 @@
           "file": "apps/web/public/experts/fiscal.webp",
           "width": 256,
           "height": 256,
-          "bytes": 16152,
-          "sha256": "66ce0f50e93595c646486cd064367cecbf8a6c806d2b982eb7220036c6026a32"
+          "bytes": 24308,
+          "sha256": "ebeca994f55770f38f3b7cc0cb2c9fc78a099f189f25ffc534f5f5b0f5dfb345"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/fiscal@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 44556,
-          "sha256": "c111f63b3ef1b95dccd7a46a2bea643e3b2a65d2df01bb7b6b053fed7ae45191"
+          "bytes": 62526,
+          "sha256": "82f29cdfd51da7268e23433c950e4c264ad655da886b945a09c3d85624549644"
         }
       ]
     },
@@ -82,7 +84,7 @@
         "file": "sources/macro.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "9281819fe8253c547ed91de786fbab60dd4675c1c6439dbbbb59288914394b73"
+        "sha256": "52d90853737bb6560a6e507d4aaaac2fcb6453dc400f0c17bca904ba96002ce4"
       },
       "variants": [
         {
@@ -90,16 +92,16 @@
           "file": "apps/web/public/experts/macro.webp",
           "width": 256,
           "height": 256,
-          "bytes": 21972,
-          "sha256": "febdd0c69e07794fd01540084c3771eef7842abefb71365d9b91f978760fbe4f"
+          "bytes": 28752,
+          "sha256": "ff0b562bd5fe6569b2db121b69d2c12fdcd6f56519de6cbd68d4eaa330d9bfca"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/macro@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 60196,
-          "sha256": "97b1de1dd0ef4c3d19a3ec27dc56acd06fcdf364c4a765dd3347eafed925d54d"
+          "bytes": 77168,
+          "sha256": "d29936e07fbc3dd01d6530b0326e5372050e23cc7963ed85e8614ee4b54b68b5"
         }
       ]
     },
@@ -114,7 +116,7 @@
         "file": "sources/industry.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "216e137f901d17f651d262a1ffb5d025905065925f4112007e97fc6e3e363880"
+        "sha256": "c634640184cceeed3bba6bb19dd65314b56a93b80be46e37908e7e80f861a51e"
       },
       "variants": [
         {
@@ -122,16 +124,16 @@
           "file": "apps/web/public/experts/industry.webp",
           "width": 256,
           "height": 256,
-          "bytes": 18652,
-          "sha256": "62101031ca427c3463be36c86f8570916dc9b7dc5cd50ea3282fb53a89fef98c"
+          "bytes": 24008,
+          "sha256": "0c7e8fcc5e6e6672ce50953980a9de7da65e5d213539ae6037525628116827a6"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/industry@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 50870,
-          "sha256": "7528b0e164f287d2770c6b0cde2580ed3f5d53ca541fb5c487df1f9efd89aaec"
+          "bytes": 62036,
+          "sha256": "78ce886398c96f2549cc0ed3a4aa8b31bb8980d3bbd6b9466a18441ad96df922"
         }
       ]
     },
@@ -146,7 +148,7 @@
         "file": "sources/labor.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "a20f4b107607407a024832d32526b3067c63f7fa7d41e5109e91fd8db82873b4"
+        "sha256": "48391335ac24578a20dbda606b03298c32d566a967242cf2322098e872a7c926"
       },
       "variants": [
         {
@@ -154,16 +156,16 @@
           "file": "apps/web/public/experts/labor.webp",
           "width": 256,
           "height": 256,
-          "bytes": 21354,
-          "sha256": "a87a0701aee10d412179283974b4d0d23c5f7ae1ce72efe607f445512776f4a5"
+          "bytes": 27178,
+          "sha256": "8a2568a97bc989e88a0f33f8824f5d23c5c2a0b1e5000656cf0c1bebf34c15a3"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/labor@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 61972,
-          "sha256": "e0629e8760db9236e7a53cbeeb06012aaa591a2bc21e80568cc487c2590b8b68"
+          "bytes": 70828,
+          "sha256": "25e1a8833671cdbe89628b3eb771215a066277dbbf0657ee9c4441a2bba79c11"
         }
       ]
     },
@@ -178,7 +180,7 @@
         "file": "sources/social.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "279be45567d57c33a9209c6fac6465fbf9e247c2c8c3246d880d86eb5d4d354f"
+        "sha256": "a979b38133e3a861155050d00926959bfe11b1cbf624169583c36797010f1ac8"
       },
       "variants": [
         {
@@ -186,16 +188,16 @@
           "file": "apps/web/public/experts/social.webp",
           "width": 256,
           "height": 256,
-          "bytes": 16252,
-          "sha256": "756c19273e487eae31c4df204244b62051e08c947b9bede19415c90b65857189"
+          "bytes": 21228,
+          "sha256": "2cedc527d738f8ecfecbf1d1ecbba2dafd05e1cf03cea497781f5d12cc2a0831"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/social@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 44132,
-          "sha256": "f90c3bbc9585433c44dd2922bec026805133010c94bb1ff9320f581f4379332a"
+          "bytes": 56104,
+          "sha256": "26d7ac0871653646959a92b0873f3b9013bb148473ca966cb5f3f7207ea451c2"
         }
       ]
     },
@@ -210,7 +212,7 @@
         "file": "sources/demography.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "f79810eb9d3f8eea2b22ac0c65d0852f0d064ef570282e43d06140676ce88fa0"
+        "sha256": "06127e9ea17ffcdd90f4bb0990e3778b9187730c7c749b857159d5f945bd9618"
       },
       "variants": [
         {
@@ -218,16 +220,16 @@
           "file": "apps/web/public/experts/demography.webp",
           "width": 256,
           "height": 256,
-          "bytes": 19222,
-          "sha256": "cb95ce6a9114fb43c348bd1d1bb5289c769222be22a18942e0ad0680a759e6c7"
+          "bytes": 24796,
+          "sha256": "1aa061c6ca3b6e15d95b9703208217293d388f9f076218d4e35fa901d3e0ecf8"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/demography@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 54884,
-          "sha256": "1e94925fb5394c84fcfe6378f7a9ff392a1af074c249033123b3df300d1a8456"
+          "bytes": 67508,
+          "sha256": "c47a66962a425deae972533ed82904e9d339c2a0b5853ddeaa7b3dc42e375a03"
         }
       ]
     },
@@ -242,7 +244,7 @@
         "file": "sources/environment-energy.png",
         "width": 1254,
         "height": 1254,
-        "sha256": "02379e9931086e302bcd622be5a4e64bf57b5767130192b1bd31ec557f077dc9"
+        "sha256": "ccd0c34f3614e0e4ba41ff4558049a8a42738fb22158e1f740239c4bd2830831"
       },
       "variants": [
         {
@@ -250,16 +252,16 @@
           "file": "apps/web/public/experts/environment-energy.webp",
           "width": 256,
           "height": 256,
-          "bytes": 15646,
-          "sha256": "17605266ebd3791eab4059292ef73dcee0ff443ed8df51aea81e841d9f0bd614"
+          "bytes": 23022,
+          "sha256": "4207517d4f2b5cee6335d9df2b9978da9a1c55035c7156e7876309886f3c37a6"
         },
         {
           "density": "2x",
           "file": "apps/web/public/experts/environment-energy@2x.webp",
           "width": 512,
           "height": 512,
-          "bytes": 41500,
-          "sha256": "b659e93fa393dce8c2ed8c4d00624868df021d0317b5008603de9306cf61b84f"
+          "bytes": 60334,
+          "sha256": "c31be08a2e879c1b8d07b34d7ad700b62d6925ed5b8b74cec8ba632a833f2a9d"
         }
       ]
     }
