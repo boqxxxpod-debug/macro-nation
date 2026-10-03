@@ -164,9 +164,9 @@ describe("SCN-01 user journey", () => {
       await waitFor(() => expect(shell).not.toHaveClass("enlarged-text"));
     } finally {
       cleanup();
-      expect(callbacks.size).toBe(0);
       stylesheet.remove();
       vi.stubGlobal("ResizeObserver", originalResizeObserver);
+      expect(callbacks.size).toBe(0);
     }
   });
 

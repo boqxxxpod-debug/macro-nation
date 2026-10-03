@@ -555,7 +555,8 @@ for (const viewport of VIEWPORTS) {
     await page.goto("/game/1/ending");
     await expect(page.getByRole("heading", { name: "終了評価" })).toBeFocused();
     await inspectPages(page);
-    await reach(page, page.getByText("119月目：イベント", { exact: true }));
+    // Durable history merges simultaneous events and social reactions by month.
+    await reach(page, page.getByText(/^119月目：イベント(?:・強い社会反応)?$/));
     await page.getByRole("button", { name: "レポートで理由を見る" }).click();
     await expect(
       page.getByRole("heading", { name: "経済レポート" }),
