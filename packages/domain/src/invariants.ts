@@ -122,6 +122,19 @@ export function validateState(state: GameState): ValidationIssue[] {
     (!Number.isInteger(state.clock.endMonth) || state.clock.endMonth < 1 || state.monthIndex > state.clock.endMonth || state.clock.durationMode !== state.durationMode)) {
     add(issues, "INVALID_CLOCK", "clock.endMonth", "duration and end month must match the saved clock");
   }
+  if (state.clock.progressionMode !== undefined &&
+    state.clock.progressionMode !== "manual" && state.clock.progressionMode !== "auto") {
+    add(issues, "INVALID_CLOCK", "clock.progressionMode", "progression mode must be manual or auto");
+  }
+  const anchor = state.clock.lastProcessedWallClockMs;
+  if (anchor !== undefined && anchor !== null && (!Number.isFinite(anchor) || anchor < 0)) {
+    add(issues, "INVALID_CLOCK", "clock.lastProcessedWallClockMs", "wall-clock checkpoint must be finite and non-negative");
+  }
+  if (state.clock.remainderMs !== undefined &&
+    (!Number.isFinite(state.clock.remainderMs) || state.clock.remainderMs < 0 ||
+      state.clock.remainderMs >= state.clock.config.realSecondsPerStep * 1000)) {
+    add(issues, "INVALID_CLOCK", "clock.remainderMs", "fraction must be below one configured step");
+  }
   const milestones = state.history.appliedMilestones ?? [];
   if (new Set(milestones).size !== milestones.length ||
     (state.history.reviews ?? []).some((review) => review.monthIndex > state.monthIndex)) {

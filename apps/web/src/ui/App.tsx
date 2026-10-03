@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DurationMode, GameState } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
@@ -9,7 +9,6 @@ import {
   type PreviewOutput,
 } from "../application/policy-view";
 import {
-  advanceMonth,
   browserGameRepository,
   confirmPolicy,
   createGame,
@@ -23,7 +22,11 @@ import { Home, PolicyForm, Preview, Report } from "./GameViews";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
 import { migrateFirstPlayableSave } from "../application/save-migration";
-import { label, period } from "./game-format";
+import { display, label, period } from "./game-format";
+import { GameClockController } from "../application/game-clock";
+import { selectHomeIndicators } from "../application/home-view";
+import { TimeControls } from "./TimeControls";
+import { clockStatus } from "./time-status";
 
 type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
 const NAV_LABELS = {
@@ -34,6 +37,7 @@ const NAV_LABELS = {
   ending: "終了評価",
 } as const;
 const SLOT_IDS = [1, 2, 3] as const;
+const wallClockNow = () => Date.now();
 const DURATIONS: readonly {
   id: Exclude<DurationMode, "custom">;
   years: number;
@@ -85,20 +89,34 @@ function routeFromLocation(): Route {
   if (path.endsWith("/nation")) return "nation";
   return "home";
 }
+function slotFromLocation(): GameState["slotId"] | null {
+  const matched = window.location.pathname.match(/\/game\/([123])(?:\/|$)/);
+  return matched ? (Number(matched[1]) as GameState["slotId"]) : null;
+}
 
 export function App({
   repository: suppliedRepository,
   seedFactory = () => crypto.randomUUID(),
+  nowMs = wallClockNow,
 }: {
   repository?: GameRepository;
   seedFactory?: () => string;
+  nowMs?: () => number;
 }) {
   const repository = useMemo<GameRepository | null>(
     () => suppliedRepository ?? browserGameRepository(),
     [suppliedRepository],
   );
+  const gameClock = useMemo(
+    () => (repository ? new GameClockController(repository, { nowMs }) : null),
+    [repository, nowMs],
+  );
   const previewClient = useRef<PreviewClient | null>(null);
   const inFlight = useRef(false);
+  const session = useRef(0);
+  const actionSequence = useRef(0);
+  const navigationSequence = useRef(0);
+  const previousClockState = useRef<GameState | null>(null);
   const confirmationId = useRef<string | null>(null);
   const startCommandId = useRef(crypto.randomUUID());
   if (!previewClient.current) previewClient.current = new PreviewClient();
@@ -113,7 +131,16 @@ export function App({
     "macro",
   ]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [clockSnapshot, setClockSnapshot] = useState(() => gameClock?.snapshot);
+  const [autoHasStarted, setAutoHasStarted] = useState(false);
+  const [offlineProgress, setOfflineProgress] = useState("");
+  const [returnReport, setReturnReport] = useState<{
+    months: number;
+    status: string;
+    changes: readonly string[];
+  } | null>(null);
+  const busy = actionBusy || (clockSnapshot?.busy ?? false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [startSeed, setStartSeed] = useState("");
@@ -128,6 +155,151 @@ export function App({
   const [launchPanel, setLaunchPanel] = useState<"history" | "help" | null>(
     null,
   );
+
+  const selectGame = useCallback(
+    (selected: GameState | null) => {
+      session.current += 1;
+      actionSequence.current += 1;
+      navigationSequence.current += 1;
+      inFlight.current = false;
+      setActionBusy(false);
+      previewClient.current?.cancel();
+      setPreview(null);
+      setComparisons([]);
+      setCounterfactuals([]);
+      setPreviewExpertIds(["macro"]);
+      setReturnReport(null);
+      setOfflineProgress("");
+      setError("");
+      setNotice("");
+      confirmationId.current = null;
+      setAutoHasStarted(selected?.clock.progressionMode === "auto");
+      previousClockState.current = selected;
+      gameClock?.selectGame(selected);
+      setState(gameClock ? gameClock.snapshot.state : selected);
+      setClockSnapshot(gameClock?.snapshot);
+    },
+    [gameClock],
+  );
+
+  const reconcileOffline = useCallback(async () => {
+    const before = gameClock?.snapshot.state;
+    if (
+      !before ||
+      before.clock.progressionMode !== "auto" ||
+      before.runState !== "running"
+    )
+      return;
+    const selectedSession = session.current;
+    try {
+      const saved = await gameClock!.synchronize({
+        offline: true,
+        onProgress: (processed, pending) => {
+          if (selectedSession === session.current)
+            setOfflineProgress(
+              `${processed}か月を反映しました（残り${pending}か月）`,
+            );
+        },
+      });
+      if (!saved || selectedSession !== session.current) return;
+      const months = saved.monthIndex - before.monthIndex;
+      if (months > 0) {
+        const previous = selectHomeIndicators(before);
+        const changes = selectHomeIndicators(saved)
+          .map((item) => {
+            const prior = previous.find((old) => old.id === item.id)!.current;
+            const delta = item.current - prior;
+            return {
+              id: item.id,
+              delta,
+              relative: Math.abs(delta) / (Math.abs(prior) || 1),
+            };
+          })
+          .sort((left, right) => right.relative - left.relative)
+          .slice(0, 3)
+          .map(
+            (item) =>
+              `${label(item.id)} ${item.delta >= 0 ? "+" : ""}${display(item.id, item.delta)}`,
+          );
+        setReturnReport({ months, status: clockStatus(saved), changes });
+      }
+    } catch {
+      // The controller publishes the durable state and a recoverable error.
+    } finally {
+      if (selectedSession === session.current) setOfflineProgress("");
+    }
+  }, [gameClock]);
+
+  const navigate = useCallback(
+    async (next: Route, replace = false) => {
+      previewClient.current?.cancel();
+      const selectedSession = session.current;
+      const request = ++navigationSequence.current;
+      const current = gameClock?.snapshot.state;
+      if (
+        (next === "policies" || next === "preview") &&
+        current &&
+        (current.runState === "running" ||
+          (current.clock.progressionMode === "auto" &&
+            current.runState === "paused" &&
+            current.clock.stopReason !== "policy"))
+      ) {
+        try {
+          if (!(await gameClock!.pause("policy"))) return;
+        } catch {
+          return;
+        }
+      }
+      if (
+        selectedSession !== session.current ||
+        request !== navigationSequence.current
+      )
+        return;
+      const base = import.meta.env.BASE_URL;
+      const selectedSlot = gameClock?.snapshot.state?.slotId ?? slotId;
+      const suffix =
+        next === "home"
+          ? `game/${selectedSlot}`
+          : next === "policies"
+            ? `game/${selectedSlot}/policies`
+            : next === "preview"
+              ? `game/${selectedSlot}/policies/preview`
+              : next === "report"
+                ? `game/${selectedSlot}/report`
+                : next === "nation"
+                  ? `game/${selectedSlot}/nation`
+                  : `game/${selectedSlot}/ending`;
+      window.history[replace ? "replaceState" : "pushState"](
+        {},
+        "",
+        `${base}${suffix}`,
+      );
+      setRoute(next);
+      setError("");
+    },
+    [gameClock, slotId],
+  );
+  useEffect(() => {
+    if (!gameClock) return;
+    return gameClock.subscribe(() => {
+      const snapshot = gameClock.snapshot;
+      const previous = previousClockState.current;
+      previousClockState.current = snapshot.state;
+      setClockSnapshot(snapshot);
+      setState(snapshot.state);
+      if (snapshot.state) {
+        const saved = snapshot.state;
+        setSlots((current) => new Map(current).set(saved.slotId, saved));
+        if (saved.runState === "running") setAutoHasStarted(true);
+        if (
+          previous?.runState === "running" &&
+          (saved.runState === "completed" || saved.runState === "failed")
+        )
+          void navigate("ending", true);
+      }
+      if (snapshot.error) setError(snapshot.error);
+    });
+  }, [gameClock, navigate]);
 
   useEffect(() => {
     let active = true;
@@ -151,14 +323,35 @@ export function App({
         };
       }),
     )
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (active) {
           const available = new Map<number, GameState>();
           for (const item of loaded)
             if (item.saved) available.set(item.id, item.saved);
           setSlots(available);
-          const first = loaded.find((item) => item.saved)?.saved ?? null;
-          setState(first);
+          const requestedSlot = slotFromLocation();
+          const first = requestedSlot
+            ? (loaded.find((item) => item.id === requestedSlot)?.saved ?? null)
+            : (loaded.find((item) => item.saved)?.saved ?? null);
+          selectGame(first);
+          if (
+            first &&
+            (routeFromLocation() === "policies" ||
+              routeFromLocation() === "preview")
+          )
+            try {
+              await gameClock?.pause("policy");
+            } catch (cause) {
+              setRoute("home");
+              window.history.replaceState(
+                {},
+                "",
+                `${import.meta.env.BASE_URL}game/${first.slotId}`,
+              );
+              throw cause;
+            }
+          else if (first) await reconcileOffline();
+          if (!active) return;
           const recovery = loaded.find((item) => item.recovered);
           if (recovery?.reason) setNotice(recovery.reason);
           const corrupt = loaded.find((item) => !item.saved && item.reason);
@@ -180,72 +373,89 @@ export function App({
     return () => {
       active = false;
     };
-  }, [repository]);
+  }, [repository, gameClock, selectGame, reconcileOffline]);
   useEffect(() => {
     const pop = () => {
       previewClient.current?.cancel();
-      setRoute(routeFromLocation());
-      setError("");
+      void navigate(routeFromLocation(), true);
     };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
-  }, []);
+  }, [navigate]);
+  const activeGameId = state?.gameId;
   useEffect(() => {
-    if (!loading && state)
+    if (!loading && activeGameId)
       document.querySelector<HTMLElement>(".game-view h2")?.focus();
-  }, [route, loading, state]);
+  }, [route, loading, activeGameId]);
   useEffect(() => () => previewClient.current?.cancel(), []);
 
-  function navigate(next: Route, replace = false) {
-    const base = import.meta.env.BASE_URL;
-    const suffix =
-      next === "home"
-        ? "game/1"
-        : next === "policies"
-          ? "game/1/policies"
-          : next === "preview"
-            ? "game/1/policies/preview"
-            : next === "report"
-              ? "game/1/report"
-              : next === "nation"
-                ? "game/1/nation"
-                : "game/1/ending";
-    window.history[replace ? "replaceState" : "pushState"](
-      {},
-      "",
-      `${base}${suffix}`,
-    );
-    setRoute(next);
-    setError("");
-  }
+  useEffect(() => {
+    if (!gameClock) return;
+    const update = () => {
+      if (document.visibilityState === "hidden") return;
+      const snapshot = gameClock.snapshot;
+      if (snapshot.state?.runState !== "running") return;
+      setClockSnapshot(snapshot);
+      if (snapshot.busy) return;
+      if ((snapshot.state.pendingOfflineSteps ?? 0) > 0)
+        void reconcileOffline();
+      else if (snapshot.remainingMs <= 0)
+        void gameClock.synchronize().catch(() => undefined);
+    };
+    const visibility = () => {
+      if (document.visibilityState === "hidden")
+        void gameClock.checkpoint().catch(() => undefined);
+      else void reconcileOffline();
+    };
+    const pagehide = () => {
+      void gameClock.checkpoint().catch(() => undefined);
+    };
+    const timer = window.setInterval(update, 1_000);
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", pagehide);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", pagehide);
+      gameClock.selectGame(null);
+    };
+  }, [gameClock, reconcileOffline]);
+
   async function action(work: () => Promise<void>) {
     if (inFlight.current) return;
+    const request = ++actionSequence.current;
     inFlight.current = true;
-    setBusy(true);
+    setActionBusy(true);
     setError("");
     setNotice("");
     try {
       await work();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "処理に失敗しました");
+      if (request === actionSequence.current)
+        setError(cause instanceof Error ? cause.message : "処理に失敗しました");
     } finally {
-      setBusy(false);
-      inFlight.current = false;
+      if (request === actionSequence.current) {
+        setActionBusy(false);
+        inFlight.current = false;
+      }
     }
   }
   async function start() {
     if (!repository) throw new Error("この端末では保存機能を利用できません");
+    const selectedSession = session.current;
+    const requestedSlot = slotId;
     const created = await createGame(
       repository,
       startSeed.trim() || seedFactory(),
-      slotId,
+      requestedSlot,
       learningMode,
       durationMode,
       difficulty,
       startCommandId.current,
     );
-    setState(created);
-    setSlots((current) => new Map(current).set(slotId, created));
+    if (selectedSession !== session.current) return;
+    selectGame(created);
+    setSlots((current) => new Map(current).set(requestedSlot, created));
     navigate("home");
     setNotice("ゲームを開始し、端末に保存しました。");
   }
@@ -254,26 +464,44 @@ export function App({
     expertIds: readonly string[],
   ) {
     if (!state) return;
-    const shockPairingId = `ui05:${policyStateHash(state)}`;
+    const selectedSession = session.current;
+    const request = navigationSequence.current;
+    const previewState = (await gameClock?.pause("policy")) ?? state;
+    if (
+      selectedSession !== session.current ||
+      request !== navigationSequence.current
+    )
+      return;
+    const shockPairingId = `ui05:${policyStateHash(previewState)}`;
     const result = await previewClient.current!.request({
-      state,
+      state: previewState,
       draft,
       horizonMonths: 60,
       shockPairingId,
     });
+    if (
+      selectedSession !== session.current ||
+      request !== navigationSequence.current
+    )
+      return;
     const noPolicy = await previewClient.current!.request({
-      state,
+      state: previewState,
       draft: null,
       horizonMonths: 60,
       shockPairingId,
     });
-    const alternateRule = policyRules(state.configSnapshot).find(
+    if (
+      selectedSession !== session.current ||
+      request !== navigationSequence.current
+    )
+      return;
+    const alternateRule = policyRules(previewState.configSnapshot).find(
       (rule) => rule.policyId !== draft.ruleId,
     );
     const alternate = alternateRule
       ? await previewClient
           .current!.request({
-            state,
+            state: previewState,
             draft: {
               status: "draft",
               policyId: `alternative-${draft.policyId}`,
@@ -298,6 +526,11 @@ export function App({
             throw cause;
           })
       : null;
+    if (
+      selectedSession !== session.current ||
+      request !== navigationSequence.current
+    )
+      return;
     setPreview(result);
     setCounterfactuals([noPolicy, ...(alternate ? [alternate] : [])]);
     setPreviewExpertIds(expertIds);
@@ -312,44 +545,86 @@ export function App({
   }
   async function confirm() {
     if (!repository || !state || !preview?.previewedDraft) return;
+    const confirmedPreview = preview;
+    const draft = preview.previewedDraft;
     if (
       preview.stateHash !== policyStateHash(state) ||
       preview.draftHash !== policyDraftHash(preview.previewedDraft)
     )
       throw new Error("ゲーム状態が変わりました。再試算してください");
-    const saved = await confirmPolicy(
-      repository,
-      state.slotId,
-      {
-        kind: "commit",
-        commandId: confirmationId.current ?? crypto.randomUUID(),
-        expectedStateHash: preview.stateHash,
-        draft: preview.previewedDraft,
-        selectedExpertIds: previewExpertIds,
-      },
-      {
-        expertIds: previewExpertIds,
-        confidence: preview.indicators
-          .filter((item) =>
-            ["realGdp", "inflation", "unemployment"].includes(item.indicatorId),
-          )
-          .every(
-            ({ month12 }) =>
-              (month12.deltaLow > 0 && month12.deltaHigh > 0) ||
-              (month12.deltaLow < 0 && month12.deltaHigh < 0),
-          )
-          ? "high"
-          : "medium",
-        uncertainty: preview.uncertainty.note,
-        summaries: preview.summaries,
-      },
+    const saved = await gameClock?.mutate((activeRepository, activeSlot) =>
+      confirmPolicy(
+        activeRepository,
+        activeSlot,
+        {
+          kind: "commit",
+          commandId: confirmationId.current ?? crypto.randomUUID(),
+          expectedStateHash: confirmedPreview.stateHash,
+          draft,
+          selectedExpertIds: previewExpertIds,
+        },
+        {
+          expertIds: previewExpertIds,
+          confidence: confirmedPreview.indicators
+            .filter((item) =>
+              ["realGdp", "inflation", "unemployment"].includes(
+                item.indicatorId,
+              ),
+            )
+            .every(
+              ({ month12 }) =>
+                (month12.deltaLow > 0 && month12.deltaHigh > 0) ||
+                (month12.deltaLow < 0 && month12.deltaHigh < 0),
+            )
+            ? "high"
+            : "medium",
+          uncertainty: confirmedPreview.uncertainty.note,
+          summaries: confirmedPreview.summaries,
+        },
+      ),
     );
-    setState(saved);
+    if (!saved) return;
     setPreview(null);
     confirmationId.current = null;
     setNotice("政策を確定し、端末に保存しました。");
     navigate("home", true);
   }
+
+  const timeControls = state && (
+    <TimeControls
+      state={state}
+      remainingMs={
+        clockSnapshot?.remainingMs ??
+        state.clock.config.realSecondsPerStep * 1_000
+      }
+      busy={busy}
+      hasStarted={autoHasStarted}
+      onModeChange={(mode) =>
+        void action(async () => {
+          await gameClock?.selectMode(mode);
+        })
+      }
+      onStart={() =>
+        void action(async () => {
+          await gameClock?.start();
+        })
+      }
+      onPause={() =>
+        void action(async () => {
+          await gameClock?.pause();
+        })
+      }
+      onManualStep={() =>
+        void action(async () => {
+          const saved = await gameClock?.manualStep();
+          if (!saved) return;
+          setNotice(`${period(saved)}まで進み、保存しました。`);
+          if (saved.runState === "completed" || saved.runState === "failed")
+            void navigate("ending");
+        })
+      }
+    />
+  );
 
   return (
     <main
@@ -461,14 +736,16 @@ export function App({
                   {saved ? (
                     <button
                       onClick={() => {
-                        setState(saved);
-                        navigate("home");
+                        selectGame(saved);
+                        void navigate("home");
+                        void reconcileOffline();
                       }}
                     >
                       スロット{id}の続きから
                     </button>
                   ) : (
                     <button
+                      disabled={busy}
                       aria-pressed={slotId === id}
                       onClick={() => setSlotId(id)}
                     >
@@ -565,7 +842,7 @@ export function App({
       ) : (
         <>
           <nav className="nav" aria-label="ゲーム画面">
-            <button type="button" onClick={() => setState(null)}>
+            <button type="button" onClick={() => selectGame(null)}>
               保存スロット
             </button>
             {(
@@ -609,6 +886,7 @@ export function App({
                 <h2 tabIndex={-1}>国家ホーム</h2>
                 <Home
                   state={state}
+                  timeControls={timeControls}
                   onOpenReport={() => navigate("report")}
                   onOpenPolicies={() => navigate("policies")}
                 />
@@ -628,11 +906,11 @@ export function App({
                       disabled={busy}
                       onClick={() =>
                         void action(async () => {
-                          const resumed = await resumeCrisis(
-                            repository!,
-                            state.slotId,
+                          const resumed = await gameClock?.mutate(
+                            (activeRepository, activeSlot) =>
+                              resumeCrisis(activeRepository, activeSlot),
                           );
-                          setState(resumed);
+                          if (!resumed) return;
                           setNotice(
                             "危機対応を保存し、再開できる状態になりました。",
                           );
@@ -666,12 +944,15 @@ export function App({
                           disabled={busy}
                           onClick={() =>
                             void action(async () => {
-                              const resolved = await resolveEvent(
-                                repository!,
-                                state.slotId,
-                                choiceId,
+                              const resolved = await gameClock?.mutate(
+                                (activeRepository, activeSlot) =>
+                                  resolveEvent(
+                                    activeRepository,
+                                    activeSlot,
+                                    choiceId,
+                                  ),
                               );
-                              setState(resolved);
+                              if (!resolved) return;
                               setNotice("イベント対応を保存しました。");
                             })
                           }
@@ -695,32 +976,6 @@ export function App({
                   </section>
                 )}
                 <div className="actions">
-                  <button
-                    className="primary"
-                    disabled={
-                      busy ||
-                      state.runState === "crisisStopped" ||
-                      state.runState === "completed" ||
-                      state.runState === "failed"
-                    }
-                    onClick={() =>
-                      void action(async () => {
-                        const saved = await advanceMonth(
-                          repository!,
-                          state.slotId,
-                        );
-                        setState(saved);
-                        setNotice(`${period(saved)}まで進み、保存しました。`);
-                        if (
-                          saved.runState === "completed" ||
-                          saved.runState === "failed"
-                        )
-                          navigate("ending");
-                      })
-                    }
-                  >
-                    1か月進める
-                  </button>
                   <button onClick={() => navigate("policies")}>
                     政策を考える
                   </button>
@@ -811,7 +1066,11 @@ export function App({
                 <h2 tabIndex={-1} className="nation-page-heading">
                   国家ビュー
                 </h2>
-                <NationView state={state} onReport={() => navigate("report")} />
+                <NationView
+                  state={state}
+                  timeControls={timeControls}
+                  onReport={() => navigate("report")}
+                />
               </>
             )}
             {route === "ending" && (
@@ -829,6 +1088,18 @@ export function App({
         </>
       )}
       {busy && <p role="status">計算・保存中…</p>}
+      {offlineProgress && (
+        <p role="status">離席中の時間を反映中 · {offlineProgress}</p>
+      )}
+      {returnReport && state && (
+        <section className="panel return-report" aria-label="帰還報告">
+          <h3>おかえりなさい</h3>
+          <p>
+            {returnReport.months}か月を反映しました。{returnReport.status}
+          </p>
+          <p>主な変化：{returnReport.changes.join("、")}</p>
+        </section>
+      )}
       {notice && (
         <p role="status" className="notice">
           {notice}
