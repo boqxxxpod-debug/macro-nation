@@ -1,0 +1,628 @@
+{
+  "baseCommit": "68b8f15465e42b9068aedf82b264eb3340546825",
+  "viewport": {
+    "width": 360,
+    "height": 640
+  },
+  "seed": "issue-89-viewport-comparison",
+  "reducedMotion": "reduce",
+  "capturedAt": "2026-10-03T11:54:47.277Z",
+  "results": [
+    {
+      "variant": "before",
+      "screen": "home",
+      "filename": "before-home.png",
+      "bytes": 57439,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 2381
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "国家ホーム",
+      "controls": [
+        {
+          "label": "保存スロット",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 274.5625,
+          "bottom": 318.5625,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 274.5625,
+          "bottom": 318.5625,
+          "inViewport": true
+        },
+        {
+          "label": "因果ログで根拠を見る",
+          "top": 1507.578125,
+          "bottom": 1551.578125,
+          "inViewport": false
+        },
+        {
+          "label": "政策会議で比較する",
+          "top": 1932.359375,
+          "bottom": 1976.359375,
+          "inViewport": false
+        },
+        {
+          "label": "国家の景観を見る",
+          "top": 2009.359375,
+          "bottom": 2053.359375,
+          "inViewport": false
+        },
+        {
+          "label": "1か月進める",
+          "top": 2077.359375,
+          "bottom": 2121.359375,
+          "inViewport": false
+        },
+        {
+          "label": "政策を考える",
+          "top": 2131.75,
+          "bottom": 2175.75,
+          "inViewport": false
+        },
+        {
+          "label": "理由を見る",
+          "top": 2186.140625,
+          "bottom": 2230.140625,
+          "inViewport": false
+        }
+      ]
+    },
+    {
+      "variant": "before",
+      "screen": "nation",
+      "filename": "before-nation.png",
+      "bytes": 322987,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 2078
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "国家ビュー",
+      "controls": [
+        {
+          "label": "保存スロット",
+          "top": 504.109375,
+          "bottom": 567.15625,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 504.109375,
+          "bottom": 567.15625,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 504.109375,
+          "bottom": 567.15625,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 504.109375,
+          "bottom": 567.15625,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 567.15625,
+          "bottom": 630.203125,
+          "inViewport": true
+        },
+        {
+          "label": "都市と暮らしを選択：安定",
+          "top": 376.734375,
+          "bottom": 420.734375,
+          "inViewport": true
+        },
+        {
+          "label": "工業地帯を選択：安定",
+          "top": 431.734375,
+          "bottom": 475.734375,
+          "inViewport": true
+        },
+        {
+          "label": "農村を選択：安定",
+          "top": 306.734375,
+          "bottom": 350.734375,
+          "inViewport": true
+        },
+        {
+          "label": "港湾を選択：安定",
+          "top": 531.734375,
+          "bottom": 575.734375,
+          "inViewport": true
+        },
+        {
+          "label": "空港を選択：安定",
+          "top": 531.734375,
+          "bottom": 575.734375,
+          "inViewport": true
+        },
+        {
+          "label": "交通網を選択：安定",
+          "top": 471.734375,
+          "bottom": 515.734375,
+          "inViewport": true
+        },
+        {
+          "label": "エネルギーを選択：安定",
+          "top": 256.734375,
+          "bottom": 300.734375,
+          "inViewport": true
+        },
+        {
+          "label": "ニュースの理由を見る",
+          "top": 659.75,
+          "bottom": 705.328125,
+          "inViewport": false
+        },
+        {
+          "label": "経済レポートで理由を見る",
+          "top": 1104.40625,
+          "bottom": 1148.40625,
+          "inViewport": false
+        },
+        {
+          "label": "都市と暮らし安定 · 100.0",
+          "top": 1313.578125,
+          "bottom": 1377.765625,
+          "inViewport": false
+        },
+        {
+          "label": "工業地帯安定 · 100.0",
+          "top": 1385.765625,
+          "bottom": 1449.953125,
+          "inViewport": false
+        },
+        {
+          "label": "農村安定 · 100.0",
+          "top": 1457.953125,
+          "bottom": 1522.140625,
+          "inViewport": false
+        },
+        {
+          "label": "港湾安定 · 25.0",
+          "top": 1530.140625,
+          "bottom": 1594.328125,
+          "inViewport": false
+        },
+        {
+          "label": "空港安定 · 23.0",
+          "top": 1602.328125,
+          "bottom": 1666.515625,
+          "inViewport": false
+        },
+        {
+          "label": "交通網安定 · 100.0",
+          "top": 1674.515625,
+          "bottom": 1738.703125,
+          "inViewport": false
+        },
+        {
+          "label": "エネルギー安定 · 100.0",
+          "top": 1746.703125,
+          "bottom": 1810.890625,
+          "inViewport": false
+        }
+      ]
+    },
+    {
+      "variant": "before",
+      "screen": "preview",
+      "filename": "before-preview.png",
+      "bytes": 53595,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 4053
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "政策プレビュー",
+      "controls": [
+        {
+          "label": "保存スロット",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 203.375,
+          "bottom": 266.5625,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 274.5625,
+          "bottom": 318.5625,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 274.5625,
+          "bottom": 318.5625,
+          "inViewport": true
+        },
+        {
+          "label": "政策を確定して保存",
+          "top": 3941.484375,
+          "bottom": 3985.484375,
+          "inViewport": false
+        },
+        {
+          "label": "政策会議へ戻る",
+          "top": 3941.484375,
+          "bottom": 3985.484375,
+          "inViewport": false
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "screen": "home",
+      "filename": "after-home.png",
+      "bytes": 69538,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 640
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "国家ホーム",
+      "controls": [
+        {
+          "label": "通知の詳細",
+          "top": 6,
+          "bottom": 50,
+          "inViewport": true
+        },
+        {
+          "label": "メニュー",
+          "top": 6,
+          "bottom": 50,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "最大変化要因：前のページ",
+          "top": 534,
+          "bottom": 578,
+          "inViewport": true
+        },
+        {
+          "label": "最大変化要因：次のページ",
+          "top": 534,
+          "bottom": 578,
+          "inViewport": true
+        },
+        {
+          "label": "1か月進める",
+          "top": 582,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "政策を考える",
+          "top": 582,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "理由を見る",
+          "top": 582,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "国家の景観を見る",
+          "top": 582,
+          "bottom": 634,
+          "inViewport": true
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "screen": "nation",
+      "filename": "after-nation.png",
+      "bytes": 345861,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 640
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "国家ビュー",
+      "controls": [
+        {
+          "label": "通知の詳細",
+          "top": 6,
+          "bottom": 50,
+          "inViewport": true
+        },
+        {
+          "label": "メニュー",
+          "top": 6,
+          "bottom": 50,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "都市と暮らしを選択：安定",
+          "top": 375.9375,
+          "bottom": 419.9375,
+          "inViewport": true
+        },
+        {
+          "label": "工業地帯を選択：安定",
+          "top": 415.71875,
+          "bottom": 459.71875,
+          "inViewport": true
+        },
+        {
+          "label": "農村を選択：安定",
+          "top": 325.3125,
+          "bottom": 369.3125,
+          "inViewport": true
+        },
+        {
+          "label": "港湾を選択：安定",
+          "top": 488.046875,
+          "bottom": 532.046875,
+          "inViewport": true
+        },
+        {
+          "label": "空港を選択：安定",
+          "top": 488.046875,
+          "bottom": 532.046875,
+          "inViewport": true
+        },
+        {
+          "label": "交通網を選択：安定",
+          "top": 430.1875,
+          "bottom": 474.1875,
+          "inViewport": true
+        },
+        {
+          "label": "エネルギーを選択：安定",
+          "top": 289.140625,
+          "bottom": 333.140625,
+          "inViewport": true
+        },
+        {
+          "label": "地域一覧",
+          "top": 590,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "ニュース",
+          "top": 590,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "声",
+          "top": 590,
+          "bottom": 634,
+          "inViewport": true
+        },
+        {
+          "label": "表示設定",
+          "top": 590,
+          "bottom": 634,
+          "inViewport": true
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "screen": "preview",
+      "filename": "after-preview.png",
+      "bytes": 58942,
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "document": {
+        "width": 360,
+        "height": 640
+      },
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "heading": "政策プレビュー",
+      "controls": [
+        {
+          "label": "メニュー",
+          "top": 6,
+          "bottom": 50,
+          "inViewport": true
+        },
+        {
+          "label": "ホーム",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "政策会議",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "レポート",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "国家ビュー",
+          "top": 55,
+          "bottom": 99,
+          "inViewport": true
+        },
+        {
+          "label": "政策プレビュー：前のページ",
+          "top": 520,
+          "bottom": 564,
+          "inViewport": true
+        },
+        {
+          "label": "政策プレビュー：次のページ",
+          "top": 520,
+          "bottom": 564,
+          "inViewport": true
+        },
+        {
+          "label": "案を修正する",
+          "top": 568,
+          "bottom": 612,
+          "inViewport": true
+        },
+        {
+          "label": "政策を確定して保存",
+          "top": 568,
+          "bottom": 612,
+          "inViewport": true
+        }
+      ]
+    }
+  ],
+  "sourceCommit": "cb49af8e83e5bc6a7dfa11f179b4c88f91844f07",
+  "ciRun": 37120903674,
+  "imageBlobs": [
+    {
+      "filename": "after-home.png",
+      "sha": "40567c32f94c2acb5b67220f18c84ab1ec619ec7"
+    },
+    {
+      "filename": "after-nation.png",
+      "sha": "453b96704b6cfdbe1252e311bdf679c3d183115c"
+    },
+    {
+      "filename": "after-preview.png",
+      "sha": "d88bb229e08d7437f80c9c05ee7823e7e9efbbf8"
+    },
+    {
+      "filename": "before-home.png",
+      "sha": "109aa39bc749c8654989f4dc034dd871288de16a"
+    },
+    {
+      "filename": "before-nation.png",
+      "sha": "8849016bb12bb91279195e6e1e46af3e97cb60eb"
+    },
+    {
+      "filename": "before-preview.png",
+      "sha": "9b5425f75338763a5f18cf38f356ec7b95558a0e"
+    }
+  ]
+}
