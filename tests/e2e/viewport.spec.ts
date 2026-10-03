@@ -35,7 +35,47 @@ async function expectViewport(page: Page) {
           if (element.scrollWidth > element.clientWidth + 2)
             problems.push(`${name}: content width`);
           if (element.scrollHeight > element.clientHeight + 2)
-            problems.push(`${name}: content height`);
+            problems.push(
+              JSON.stringify({
+                name,
+                issue: "content height",
+                scroll: element.scrollHeight,
+                client: element.clientHeight,
+                bounds: {
+                  top: bounds.top,
+                  bottom: bounds.bottom,
+                  height: bounds.height,
+                },
+                items: Array.from(
+                  element.querySelectorAll<HTMLElement>(
+                    ":scope > [data-page-item]",
+                  ),
+                )
+                  .filter(visible)
+                  .slice(0, 3)
+                  .map((item) => ({
+                    height: item.getBoundingClientRect().height,
+                    top: item.getBoundingClientRect().top,
+                    bottom: item.getBoundingClientRect().bottom,
+                    html: item.innerHTML.slice(0, 350),
+                  })),
+                hiddenOversized: Array.from(
+                  element.querySelectorAll<HTMLElement>(
+                    ":scope > [data-page-item][hidden]",
+                  ),
+                )
+                  .filter(
+                    (item) =>
+                      item.getBoundingClientRect().height >
+                      element.clientHeight,
+                  )
+                  .slice(0, 2)
+                  .map((item) => ({
+                    height: item.getBoundingClientRect().height,
+                    html: item.innerHTML.slice(0, 350),
+                  })),
+              }),
+            );
           if (bounds.left < -1 || bounds.right > innerWidth + 1)
             problems.push(`${name}: outside width`);
           if (bounds.top < -1 || bounds.bottom > innerHeight + 1)
@@ -62,7 +102,19 @@ async function expectViewport(page: Page) {
               bounds.top + bounds.height / 2,
             );
             if (hit !== button && !button.contains(hit))
-              problems.push(`${name}: covered`);
+              problems.push(
+                JSON.stringify({
+                  name,
+                  issue: "covered",
+                  bounds: {
+                    left: bounds.left,
+                    top: bounds.top,
+                    width: bounds.width,
+                    height: bounds.height,
+                  },
+                  covering: hit?.outerHTML.slice(0, 200),
+                }),
+              );
           }
         }
         for (const input of document.querySelectorAll<HTMLElement>(
@@ -97,6 +149,44 @@ async function expectViewport(page: Page) {
       }),
     )
     .toEqual([]);
+}
+
+async function expectNoHorizontalScroll(page: Page) {
+  const problems = await page.evaluate(() => {
+    if (document.documentElement.scrollWidth <= innerWidth + 1) return [];
+    const outside = Array.from(
+      document.querySelectorAll<HTMLElement>("body *"),
+    ).filter((element) => {
+      if (
+        element.closest("[hidden], [inert]") ||
+        getComputedStyle(element).visibility === "hidden"
+      )
+        return false;
+      const bounds = element.getBoundingClientRect();
+      return (
+        element.clientWidth > 0 &&
+        (bounds.left < -1 ||
+          bounds.right > innerWidth + 1 ||
+          element.scrollWidth > element.clientWidth + 2)
+      );
+    });
+    return [
+      { viewport: innerWidth, document: document.documentElement.scrollWidth },
+      ...outside.slice(0, 12).map((element) => ({
+        tag: element.tagName,
+        class: element.className,
+        scroll: element.scrollWidth,
+        client: element.clientWidth,
+        left: element.getBoundingClientRect().left,
+        right: element.getBoundingClientRect().right,
+        html: element.outerHTML.slice(0, 300),
+      })),
+    ];
+  });
+  expect(
+    problems,
+    "enlarged text must not require horizontal scrolling",
+  ).toEqual([]);
 }
 
 async function inspectDeck(page: Page, deck: Locator) {
@@ -551,11 +641,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.getByRole("button", { name: "政策を確定して保存" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth + 1,
-    ),
-  ).toBe(false);
+  await expectNoHorizontalScroll(page);
   await seedPresentation(page, "crisisStopped");
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
@@ -569,11 +655,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
       .getByText("危機対応を保存し、再開できる状態になりました。"),
   ).toBeVisible();
   expect((await savedState(page)).runState).toBe("paused");
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth + 1,
-    ),
-  ).toBe(false);
+  await expectNoHorizontalScroll(page);
 });
 
 test("busy and long error details fit and return focus without discarding a draft", async ({

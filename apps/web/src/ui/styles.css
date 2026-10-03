@@ -1151,6 +1151,15 @@ label select {
   border-bottom-width: 1px;
   flex: 0 0 auto;
 }
+.viewport-shell.app-shell-nation .hero {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
 .viewport-shell .hero h1 {
   font-size: 1.15rem;
   flex: 1;
@@ -1232,7 +1241,7 @@ label select {
 }
 .viewport-shell .home-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   flex: 0 0 auto;
 }
 .page-deck {
@@ -1285,6 +1294,18 @@ label select {
   padding: 8px;
   margin: 0;
   box-shadow: none;
+}
+.page-content .indicator {
+  padding: 6px;
+}
+.page-content .indicator-grid {
+  display: block;
+}
+.page-content .quiet,
+.page-content .notice,
+.page-content .crisis,
+.page-content .error {
+  padding: 4px 8px;
 }
 .page-content h3 {
   font-size: 1rem;
@@ -1497,6 +1518,7 @@ label select {
 }
 .viewport-shell .nation-brand strong {
   font-size: 1rem;
+  visibility: visible;
 }
 .viewport-shell .nation-brand small {
   font-size: 0.75rem;
@@ -1599,6 +1621,8 @@ label select {
   min-width: 0;
   min-height: 0;
   gap: 4px;
+  color: #172a33;
+  background: #f2f1eb;
 }
 .nation-detail-header {
   display: flex;
@@ -1657,6 +1681,12 @@ label select {
   position: static;
   visibility: visible;
   width: 100%;
+}
+.page-deck-expanded .page-controls {
+  grid-template-columns: minmax(0, 1fr);
+}
+.page-deck-expanded .page-controls button {
+  display: none;
 }
 .viewport-shell.enlarged-text .home-indicator {
   grid-template-columns: 1fr;

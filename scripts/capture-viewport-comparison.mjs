@@ -97,25 +97,93 @@ async function serve(directory) {
   return `http://127.0.0.1:${server.address().port}/`;
 }
 
+async function settleDeck(page) {
+  await page.evaluate(async () => {
+    await globalThis.document.fonts.ready;
+    await new Promise((resolve, reject) => {
+      const started = globalThis.performance.now();
+      let previous;
+      let stableFrames = 0;
+      function frame() {
+        const deck = [
+          ...globalThis.document.querySelectorAll("[data-page-deck]"),
+        ].find(
+          (element) =>
+            !element.closest("[hidden], [inert]") &&
+            element.getClientRects().length > 0,
+        );
+        const content = deck?.querySelector("[data-page-current]");
+        const snapshot = content
+          ? JSON.stringify({
+              width: content.clientWidth,
+              height: content.clientHeight,
+              current: content.getAttribute("data-page-current"),
+              status: deck.querySelector(".page-controls [role='status']")
+                ?.textContent,
+              items: [
+                ...content.querySelectorAll(":scope > [data-page-item]"),
+              ].map((item) => [
+                item.hidden,
+                item.getBoundingClientRect().height,
+              ]),
+            })
+          : null;
+        stableFrames =
+          snapshot !== null && snapshot === previous ? stableFrames + 1 : 0;
+        previous = snapshot;
+        if (stableFrames >= 3) resolve();
+        else if (globalThis.performance.now() - started > 5_000)
+          reject(
+            new Error("Page layout did not settle before capture navigation"),
+          );
+        else globalThis.requestAnimationFrame(frame);
+      }
+      globalThis.requestAnimationFrame(frame);
+    });
+  });
+}
+
 async function reveal(page, control) {
+  // Font metrics, text splitting and ResizeObserver can change the page map
+  // after a click. Wait for committed layout before reading a disabled pager.
+  if (await page.locator("[data-page-deck]").count()) await settleDeck(page);
   if (await control.isVisible()) return;
+  const deck = page.locator("[data-page-deck]:visible");
   const previous = page.getByRole("button", { name: /：前のページ$/ });
   if ((await previous.count()) !== 1)
     throw new Error("Expected one visible page deck");
-  for (let count = 0; count < 500 && (await previous.isEnabled()); count++)
+  for (let count = 0; count < 500 && (await previous.isEnabled()); count++) {
     await previous.click();
+    await settleDeck(page);
+  }
   const next = page.getByRole("button", { name: /：次のページ$/ });
   for (let count = 0; count < 500; count++) {
     if (await control.isVisible()) return;
     if (!(await next.isEnabled())) break;
+    const before = await deck
+      .locator("[data-page-current]")
+      .getAttribute("data-page-current");
     await next.click();
+    await settleDeck(page);
+    const after = await deck
+      .locator("[data-page-current]")
+      .getAttribute("data-page-current");
+    if (after === before)
+      throw new Error(
+        `Page did not advance from ${before} while revealing ${control}`,
+      );
   }
+  const status = await deck
+    .locator(".page-controls [role='status']")
+    .textContent();
   throw new Error(
-    "Requested input was not reachable through the page controls",
+    `Requested input was not reachable through the page controls (${status}): ${control}`,
   );
 }
 
 async function capture(page, variant, screen) {
+  if (await page.locator("[data-page-deck]:visible").count())
+    await settleDeck(page);
   await page.evaluate(async () => {
     globalThis.scrollTo(0, 0);
     await globalThis.document.fonts.ready;
@@ -180,6 +248,9 @@ async function journey(variant, project) {
     const page = await context.newPage();
     page.setDefaultTimeout(90_000);
     await page.goto(url, { waitUntil: "networkidle" });
+    await page
+      .getByRole("button", { name: "ゲームを始める", exact: true })
+      .waitFor();
     const seed = page.getByRole("textbox", {
       name: "再現用seed（任意）",
       exact: true,

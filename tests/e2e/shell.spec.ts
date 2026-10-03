@@ -144,7 +144,13 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
+  await expect(page.locator("[data-page-deck]")).toHaveClass(
+    /page-deck-expanded/,
+  );
+  await expect(page.locator("[data-page-item][inert]")).toHaveCount(0);
+  await reveal(page, page.getByRole("radio", { name: /30年/ }));
   await page.getByRole("radio", { name: /30年/ }).focus();
+  await expect(page.getByRole("radio", { name: /30年/ })).toBeFocused();
   await page.keyboard.press("Space");
   await expect(page.getByRole("radio", { name: /30年/ })).toBeChecked();
   await page.getByRole("textbox", { name: "再現用seed（任意）" }).focus();
@@ -254,6 +260,7 @@ test("a saved game can advance and reload while offline", async ({
     await navigator.serviceWorker.ready;
   });
   await page.reload();
+  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
   await context.setOffline(true);
   await page.getByRole("button", { name: "1か月進める" }).click();
   await page
@@ -265,6 +272,9 @@ test("a saved game can advance and reload while offline", async ({
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "ホームの詳細" })
+    .selectOption({ label: "今月の報告" });
   await reveal(
     page,
     page.getByRole("heading", { name: "今月の3行報告" }).first(),

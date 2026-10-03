@@ -50,6 +50,14 @@ describe("NationView detail navigation", () => {
     );
     expect(onReport).toHaveBeenCalledOnce();
 
+    // A shell notification can open above this nonmodal details screen.
+    // Escape in that separate dialog must leave the region selection intact.
+    const notification = document.createElement("button");
+    document.body.append(notification);
+    fireEvent.keyDown(notification, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "地域詳細" })).toBeVisible();
+    notification.remove();
+
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(harbor).toHaveFocus());
     expect(harbor).toHaveAttribute("aria-pressed", "true");

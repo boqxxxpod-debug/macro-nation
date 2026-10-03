@@ -372,6 +372,7 @@ export function NationView({
     null,
   );
   const closeRef = useRef<HTMLButtonElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const overviewRef = useRef<HTMLButtonElement>(null);
   const openDetails = (page: DetailPage, trigger: HTMLElement) => {
@@ -392,7 +393,10 @@ export function NationView({
     closeRef.current?.focus();
     // A native listener also receives Escape from the portaled motion controls.
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (
+        event.key === "Escape" &&
+        detailRef.current?.contains(event.target as Node)
+      ) {
         event.preventDefault();
         closeDetails();
       }
@@ -561,6 +565,7 @@ export function NationView({
 
         {detailPage !== null && (
           <section
+            ref={detailRef}
             id="nation-detail-screen"
             className="nation-detail-screen"
             role="dialog"
