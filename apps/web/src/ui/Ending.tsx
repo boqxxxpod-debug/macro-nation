@@ -1,6 +1,7 @@
 import type { GameState } from "@macro-nation/domain";
 import { evaluateEnding } from "../application/game-service";
 import { describeCause, display, label } from "./game-format";
+import { PageDeck } from "./PageDeck";
 import {
   HISTORY_CATEGORY_LABELS,
   endingHistorySummary,
@@ -37,7 +38,10 @@ export function Ending({
     );
   const cause = last?.topCauses[0];
   return (
-    <>
+    <PageDeck
+      label="終了評価の詳細"
+      actions={<button onClick={onReport}>レポートで理由を見る</button>}
+    >
       <p
         className={state.runState === "failed" ? "crisis" : "notice"}
         role="status"
@@ -112,8 +116,7 @@ export function Ending({
             ? `最終月の最大寄与は${label(cause.indicatorId)}への${describeCause(cause, state)}（寄与 ${cause.delta.toFixed(2)}）です。`
             : "最終月に記録された大きな寄与はありません。"}
         </p>
-        <button onClick={onReport}>レポートで理由を見る</button>
       </section>
-    </>
+    </PageDeck>
   );
 }

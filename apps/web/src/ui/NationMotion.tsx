@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { NationViewModel } from "../application/nation-view";
 import {
   createSpriteAtlas,
@@ -26,7 +27,14 @@ function prefersReducedMotion() {
   );
 }
 
-export function NationMotion({ model }: { model: NationViewModel }) {
+export function NationMotion({
+  model,
+  controlsTarget,
+}: {
+  model: NationViewModel;
+  /** Keep drawing mounted while placing its controls in the settings screen. */
+  controlsTarget?: HTMLElement | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poolRef = useRef<ReturnType<typeof createSpritePool> | null>(null);
   const atlasRef = useRef<HTMLCanvasElement | null>(null);
@@ -133,6 +141,32 @@ export function NationMotion({ model }: { model: NationViewModel }) {
     };
   }, [reduced, tier, setting]);
 
+  const controls = (
+    <div className="nation-motion-controls">
+      <label>
+        景観の画質
+        <select
+          value={setting}
+          onChange={(event) => setSetting(event.target.value as QualitySetting)}
+        >
+          <option value="auto">自動</option>
+          <option value="high">高</option>
+          <option value="medium">標準</option>
+          <option value="low">軽量</option>
+        </select>
+      </label>
+      <output
+        className="nation-motion-diagnostics"
+        aria-live="off"
+        data-performance={reduced ? "reduced" : performance}
+      >
+        {reduced
+          ? "動きの軽減: 静止表示"
+          : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
+      </output>
+    </div>
+  );
+
   return (
     <>
       {!reduced && (
@@ -145,31 +179,11 @@ export function NationMotion({ model }: { model: NationViewModel }) {
           data-quality={tier}
         />
       )}
-      <div className="nation-motion-controls">
-        <label>
-          景観の画質
-          <select
-            value={setting}
-            onChange={(event) =>
-              setSetting(event.target.value as QualitySetting)
-            }
-          >
-            <option value="auto">自動</option>
-            <option value="high">高</option>
-            <option value="medium">標準</option>
-            <option value="low">軽量</option>
-          </select>
-        </label>
-        <output
-          className="nation-motion-diagnostics"
-          aria-live="off"
-          data-performance={reduced ? "reduced" : performance}
-        >
-          {reduced
-            ? "動きの軽減: 静止表示"
-            : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
-        </output>
-      </div>
+      {controlsTarget
+        ? createPortal(controls, controlsTarget)
+        : controlsTarget === undefined
+          ? controls
+          : null}
     </>
   );
 }

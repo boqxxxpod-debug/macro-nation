@@ -27,6 +27,33 @@ async function model() {
 }
 
 describe("NationMotion lifecycle", () => {
+  it("keeps the selected quality when its controls leave and reopen in a settings screen", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const target = document.createElement("div");
+    document.body.append(target);
+    const view = await model();
+    const { rerender, unmount } = render(
+      <NationMotion model={view} controlsTarget={target} />,
+    );
+    fireEvent.change(screen.getByLabelText("景観の画質"), {
+      target: { value: "low" },
+    });
+    expect(target.querySelector("select")).toHaveValue("low");
+
+    rerender(<NationMotion model={view} controlsTarget={null} />);
+    expect(screen.queryByLabelText("景観の画質")).not.toBeInTheDocument();
+    rerender(<NationMotion model={view} controlsTarget={target} />);
+    expect(screen.getByLabelText("景観の画質")).toHaveValue("low");
+    expect(screen.getByText(/動きの軽減: 静止表示/)).toBeVisible();
+    unmount();
+    target.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("does not start the animation loop when reduced motion is requested", async () => {
     vi.stubGlobal("matchMedia", () => ({
       matches: true,

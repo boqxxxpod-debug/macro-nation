@@ -9,9 +9,11 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 360, height: 800 },
     trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run preview --workspace @macro-nation/web -- --host 127.0.0.1 --port 4173",
+    command:
+      "npm run preview --workspace @macro-nation/web -- --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
   },

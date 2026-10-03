@@ -21,6 +21,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: var(--viewport-height, 100vh);
 }
 button,
 input,
@@ -1126,4 +1128,619 @@ label select {
   .nation-view .nation-columns {
     grid-template-columns: 1fr;
   }
+}
+
+/* The viewport is a layout budget. Only inactive pages leave the normal flow. */
+.viewport-shell {
+  height: 100vh;
+  height: 100dvh;
+  height: var(--viewport-height, 100vh);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: max(6px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  position: relative;
+}
+.viewport-shell .hero {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  border-bottom-width: 1px;
+  flex: 0 0 auto;
+}
+.viewport-shell.app-shell-nation .hero {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+.viewport-shell .hero h1 {
+  font-size: 1.15rem;
+  flex: 1;
+}
+.viewport-shell .hero .eyebrow,
+.viewport-shell .hero .lead {
+  display: none;
+}
+.viewport-shell .hero button {
+  padding: 4px 8px;
+}
+.viewport-shell .nav {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  gap: 4px;
+  flex: 0 0 auto;
+  transform: none;
+  border: 0;
+}
+.viewport-shell .nav button,
+.viewport-shell .nav button:hover:not(:disabled) {
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #173440;
+  border: 1px solid #87979b;
+  border-radius: 0.65rem;
+  display: block;
+}
+.viewport-shell .nav button::before,
+.viewport-shell.app-shell-nation .nav button::before {
+  content: none;
+}
+.viewport-shell .nav button[aria-current="page"] {
+  background: #173e4b;
+  color: #fff;
+}
+.viewport-shell .game-view,
+.viewport-shell .welcome {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  gap: 4px;
+}
+.viewport-shell h2 {
+  font-size: 1.2rem;
+  line-height: 1.3;
+  margin: 0;
+}
+.viewport-shell .game-view > .eyebrow {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  margin: 0;
+}
+.viewport-shell .meeting {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.viewport-shell .actions {
+  margin: 0;
+  gap: 4px;
+}
+.viewport-shell .actions button {
+  width: auto;
+  flex: 1;
+  padding: 4px 8px;
+  min-width: 0;
+}
+.viewport-shell .home-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex: 0 0 auto;
+}
+.page-deck {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  gap: 4px;
+}
+.page-content {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+.page-content > [data-page-item] {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.page-content > [data-page-item][hidden] {
+  display: block;
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: var(--page-width, 320px);
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout;
+}
+.page-controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.page-controls span {
+  font-size: 0.875rem;
+  text-align: center;
+}
+.page-controls button,
+.page-actions button {
+  min-height: 44px;
+  padding: 4px 8px;
+}
+.page-actions {
+  flex: 0 0 auto;
+}
+.page-actions.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.page-actions.actions > :not(button),
+.page-actions.actions > button:only-child {
+  grid-column: 1 / -1;
+}
+.page-content .panel {
+  padding: 6px;
+  margin: 0;
+  box-shadow: none;
+}
+.page-content .indicator {
+  padding: 4px;
+}
+.page-content .indicator-grid {
+  display: block;
+}
+.page-content .quiet,
+.page-content .notice,
+.page-content .crisis,
+.page-content .error {
+  padding: 4px 8px;
+}
+.page-content h3 {
+  font-size: 1rem;
+  margin: 0 0 2px;
+  line-height: 1.4;
+}
+.page-content h4 {
+  margin: 0 0 4px;
+}
+.page-content p {
+  margin: 0;
+  line-height: 1.4;
+}
+.page-content p:empty {
+  display: none;
+}
+.page-content ul,
+.page-content ol {
+  margin: 0;
+}
+.page-content li {
+  margin: 0;
+  line-height: 1.4;
+}
+.page-content label {
+  margin: 0;
+}
+.page-content input,
+.page-content select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+.page-content .duration-grid,
+.page-content .slot-grid,
+.page-content .forecast-grid,
+.page-content .school-lens-grid,
+.page-content .comparison-list {
+  display: block;
+}
+.page-content .expert-picker {
+  margin: 0;
+  padding: 8px;
+}
+.page-content .expert-picker label {
+  margin: 0;
+}
+.page-content .expert-picker input,
+.page-content .duration-card input,
+.review-acknowledgement input {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  margin: 0;
+}
+.page-content .expert-portrait {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+.page-content .trend {
+  margin: 0;
+}
+.page-content .trend svg {
+  height: 5rem;
+}
+.page-content .ending-score strong {
+  font-size: 1.25rem;
+}
+.page-content .ending-score dl {
+  margin: 0;
+  gap: 0;
+}
+.page-content .ending-score dl div {
+  padding: 4px 0;
+}
+.page-content .ending-score dt,
+.page-content .ending-score dd {
+  margin: 0;
+}
+.page-content .expert-advice {
+  padding: 4px 8px;
+  display: flow-root;
+}
+.page-content .expert-dissent {
+  margin: 0;
+}
+.page-content .review-acknowledgement {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+}
+.page-content .actions {
+  flex-direction: column;
+}
+.action-warning {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.home-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+  gap: 4px;
+}
+.home-warning {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.home-overview h3 {
+  margin: 0 0 2px;
+  font-size: 0.875rem;
+}
+.home-indicators {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.home-indicator {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 1fr) minmax(4.5rem, 1fr) 1.2fr;
+  align-items: center;
+  padding: 4px 6px;
+  border-width: 1px 1px 1px 4px;
+  border-radius: 0.4rem;
+  min-height: 32px;
+  box-shadow: none;
+}
+.home-indicator h4,
+.home-indicator strong,
+.home-indicator small {
+  margin: 0;
+}
+.home-indicator h4 {
+  font-size: 0.875rem;
+}
+.home-indicator strong {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+.home-indicator small {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+.detail-selector,
+.nation-detail-selector {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  font-size: 0.875rem;
+  flex: 0 0 auto;
+}
+.detail-selector select,
+.nation-detail-selector select {
+  min-width: 0;
+  flex: 1;
+  padding: 4px;
+}
+.home-details {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.message-overlay {
+  position: fixed;
+  inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  z-index: 20;
+  display: flex;
+  padding: 12px;
+  background: #f2f1eb;
+  border: 2px solid #173e4b;
+  border-radius: 0.85rem;
+}
+.viewport-shell .nation-page-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip-path: inset(50%);
+}
+.viewport-shell .nation-view {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.viewport-shell .nation-masthead {
+  padding: 4px;
+  gap: 8px;
+  min-height: 44px;
+}
+.viewport-shell .nation-masthead p {
+  display: none;
+}
+.viewport-shell .nation-brand strong {
+  font-size: 1rem;
+  visibility: visible;
+}
+.viewport-shell .nation-brand small {
+  font-size: 0.75rem;
+}
+.viewport-shell .nation-emblem {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+}
+.viewport-shell .nation-date {
+  padding: 0;
+  font-size: 0.75rem;
+}
+.viewport-shell .nation-date strong {
+  font-size: 0.875rem;
+}
+.viewport-shell .nation-scoreboard {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  padding: 0;
+}
+.viewport-shell .nation-score {
+  padding: 4px 2px;
+  min-width: 0;
+  min-height: 0;
+}
+.viewport-shell .nation-score-copy span {
+  font-size: 0.75rem;
+}
+.viewport-shell .nation-score-copy strong {
+  font-size: 1rem;
+}
+.viewport-shell .nation-score-copy small {
+  display: block;
+  font-size: 0.75rem;
+}
+.nation-content {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+}
+.viewport-shell .nation-view .nation-scene {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0.65rem;
+}
+.nation-scene[hidden],
+.nation-overview-actions[hidden] {
+  display: none;
+}
+.viewport-shell .nation-view .nation-hotspot {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 0.8rem;
+  padding: 4px;
+}
+.viewport-shell .nation-hotspot-airport {
+  left: auto;
+  right: 2%;
+}
+.viewport-shell .nation-hotspot-energy {
+  left: auto;
+  right: 2%;
+}
+.viewport-shell .nation-hotspot-transport {
+  top: 63%;
+}
+.viewport-shell .nation-hotspot span {
+  font-size: 1rem;
+}
+.viewport-shell .nation-scene-heading {
+  padding: 6px;
+}
+.viewport-shell .nation-ambition,
+.viewport-shell .nation-goal {
+  padding: 4px;
+  font-size: 0.75rem;
+}
+.viewport-shell .nation-scene-verse {
+  font-size: 0.875rem;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+.viewport-shell .nation-scene-verse br {
+  display: none;
+}
+.nation-overview-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.nation-overview-actions button {
+  padding: 4px;
+  font-size: 0.875rem;
+}
+.nation-detail-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 4px;
+  color: #172a33;
+  background: #f2f1eb;
+}
+.nation-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+}
+.nation-detail-header h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+.nation-detail-header button {
+  padding: 4px 8px;
+}
+.nation-region-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nation-region-list button {
+  width: 100%;
+  text-align: left;
+}
+.nation-region-list small {
+  display: block;
+}
+.viewport-shell .nation-settings-motion .nation-motion-controls {
+  position: static;
+  font-size: 0.875rem;
+  padding: 4px;
+  display: flex;
+  flex-wrap: wrap;
+}
+.viewport-shell .nation-settings-motion .nation-motion-controls select {
+  min-height: 44px;
+  font-size: 1rem;
+}
+.nation-event-marker {
+  position: absolute;
+  left: 2%;
+  top: 12%;
+  z-index: 5;
+}
+
+/* Large text keeps every page and action in document order with vertical reflow. */
+.viewport-shell.enlarged-text {
+  height: auto;
+  min-height: 100vh;
+}
+.page-deck-expanded {
+  width: 100%;
+  flex: 0 0 auto;
+}
+.page-deck-expanded .page-content {
+  flex: 0 0 auto;
+}
+.page-deck-expanded .page-content > [data-page-item][hidden] {
+  position: static;
+  visibility: visible;
+  width: 100%;
+}
+.page-deck-expanded .page-controls {
+  grid-template-columns: minmax(0, 1fr);
+}
+.page-deck-expanded .page-controls button {
+  display: none;
+}
+.page-deck-expanded .page-actions.actions {
+  grid-template-columns: minmax(0, 1fr);
+}
+.viewport-shell.enlarged-text .home-indicator {
+  grid-template-columns: 1fr;
+}
+.viewport-shell.enlarged-text .home-actions {
+  grid-template-columns: 1fr;
+}
+.viewport-shell.enlarged-text .nation-scoreboard {
+  grid-template-columns: 1fr;
+}
+.viewport-shell.enlarged-text .nation-masthead {
+  flex-wrap: wrap;
+}
+.viewport-shell.enlarged-text .nation-brand strong {
+  white-space: normal;
+}
+.viewport-shell.enlarged-text .nation-overview-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.viewport-shell.enlarged-text .nation-scene {
+  min-height: 24rem;
+}
+.viewport-shell.enlarged-text .nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.viewport-shell.enlarged-text .message-overlay {
+  position: absolute;
+  bottom: auto;
+  min-height: calc(100vh - 16px);
 }
