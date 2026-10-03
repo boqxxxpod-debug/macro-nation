@@ -5,13 +5,13 @@ import { label } from "./game-format";
 const DIRECTIONS = { "-1": "懸念", "0": "様子見", "1": "期待" } as const;
 const STRENGTHS = ["変化なし", "小さい", "中程度", "大きい"] as const;
 
-export function NationVoice({
-  state,
-  onOpenCause,
-}: {
+interface NationVoiceProps {
   state: GameState;
   onOpenCause?: () => void;
-}) {
+}
+
+/** Native markup lets the surrounding page deck split every voice and cause. */
+export function nationVoiceContent({ state, onOpenCause }: NationVoiceProps) {
   const voices = selectNationVoices(state);
   if (voices.length === 0) return null;
   return (
@@ -48,4 +48,8 @@ export function NationVoice({
       </div>
     </section>
   );
+}
+
+export function NationVoice(props: NationVoiceProps) {
+  return nationVoiceContent(props);
 }

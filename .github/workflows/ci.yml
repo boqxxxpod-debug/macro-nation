@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -40,3 +42,20 @@ jobs:
 
       - name: PWA and accessibility E2E
         run: npm run test:e2e
+
+      - name: Capture mobile layout before and after
+        if: always() && github.event_name == 'pull_request'
+        env:
+          SCREENSHOT_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/capture-viewport-comparison.mjs
+
+      - name: Upload viewport checks and comparison images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewport-checks
+          path: |
+            artifacts/issue-89/
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
