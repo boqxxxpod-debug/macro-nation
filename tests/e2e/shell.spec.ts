@@ -1,18 +1,23 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { waitForPageLayout } from "./paging";
 
 test.setTimeout(120_000);
 
 async function reveal(page: Page, target: Locator) {
+  await waitForPageLayout(page);
   if (await target.isVisible()) return;
   const previous = page.getByRole("button", { name: /：前のページ$/ });
-  for (let count = 0; count < 500 && (await previous.isEnabled()); count++)
+  for (let count = 0; count < 500 && (await previous.isEnabled()); count++) {
     await previous.click();
+    await waitForPageLayout(page);
+  }
   const next = page.getByRole("button", { name: /：次のページ$/ });
   for (let count = 0; count < 500; count++) {
     if (await target.isVisible()) return;
     if (!(await next.isEnabled())) break;
     await next.click();
+    await waitForPageLayout(page);
   }
   await expect(target).toBeVisible();
 }
@@ -144,6 +149,7 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
+  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
   await expect(page.locator("[data-page-deck]")).toHaveClass(
     /page-deck-expanded/,
   );
@@ -304,16 +310,16 @@ test("nation regions remain accessible with reduced motion and after direct relo
       ["serious", "critical"].includes(violation.impact ?? ""),
     ),
   ).toEqual([]);
-  await page
-    .getByRole("combobox", { name: "詳細の表示" })
-    .selectOption("regions");
+  const details = page.getByRole("combobox", { name: "詳細の表示" });
+  await details.focus();
+  await details.selectOption("regions");
   const harbor = page.getByRole("button", { name: /港湾 安定/ });
   await reveal(page, harbor);
   await harbor.click();
   await reveal(page, page.getByText(/輸出（月間）/).first());
-  await page
-    .getByRole("combobox", { name: "詳細の表示" })
-    .selectOption("settings");
+  await details.focus();
+  await details.selectOption("settings");
+  await waitForPageLayout(page);
   await expect(page.getByText("動きの軽減: 静止表示")).toBeVisible();
   await page.getByRole("button", { name: "詳細を閉じる" }).click();
   await page.reload();

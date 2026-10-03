@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DurationMode, GameState } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
@@ -113,7 +113,7 @@ export function App({
   const [route, setRoute] = useState<Route>(routeFromLocation);
   const [menuOpen, setMenuOpen] = useState(false);
   const [largeText, setLargeText] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const refresh = () => {
       setLargeText(
         Number.parseFloat(

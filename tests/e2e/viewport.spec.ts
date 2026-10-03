@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { waitForPageLayout } from "./paging";
 import type { GameState } from "@macro-nation/domain";
 
 const VIEWPORTS = [
@@ -191,14 +192,17 @@ async function expectNoHorizontalScroll(page: Page) {
 }
 
 async function inspectDeck(page: Page, deck: Locator) {
+  await waitForPageLayout(page);
   const previous = deck.getByRole("button", { name: /：前のページ$/ });
   const next = deck.getByRole("button", { name: /：次のページ$/ });
   for (
     let count = 0;
     count < MAX_PAGE_STEPS && (await previous.isEnabled());
     count++
-  )
+  ) {
     await previous.click();
+    await waitForPageLayout(page);
+  }
   const reached = new Set<number>();
   for (let count = 0; count < MAX_PAGE_STEPS; count++) {
     await expectViewport(page);
@@ -214,6 +218,7 @@ async function inspectDeck(page: Page, deck: Locator) {
     const current = deck.locator(":scope > [data-page-current]");
     const pageBefore = await current.getAttribute("data-page-current");
     await next.click();
+    await waitForPageLayout(page);
     await expect(current).not.toHaveAttribute("data-page-current", pageBefore!);
     await expect(current).toBeFocused();
   }
@@ -233,6 +238,7 @@ async function inspectPages(page: Page) {
 }
 
 async function reach(page: Page, control: Locator) {
+  await waitForPageLayout(page);
   if (await control.isVisible()) return;
   const previous = page.getByRole("button", { name: /：前のページ$/ });
   for (
@@ -241,6 +247,7 @@ async function reach(page: Page, control: Locator) {
     count++
   ) {
     await previous.click();
+    await waitForPageLayout(page);
     if (await control.isVisible()) return;
   }
   const next = page.getByRole("button", { name: /：次のページ$/ });
@@ -248,6 +255,7 @@ async function reach(page: Page, control: Locator) {
     if (await control.isVisible()) return;
     if (!(await next.isEnabled())) break;
     await next.click();
+    await waitForPageLayout(page);
   }
   await expect(control).toBeVisible();
 }
@@ -518,6 +526,9 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole("dialog")).toBeVisible();
     const details = page.getByRole("combobox", { name: "詳細の表示" });
     for (const label of await details.locator("option").allTextContents()) {
+      // selectOption changes values without focusing the native control.
+      // Preserve the focus a player has while switching detail screens.
+      await details.focus();
       await details.selectOption({ label });
       await inspectPages(page);
     }
@@ -626,6 +637,8 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
+  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
+  await waitForPageLayout(page);
   await page.getByRole("button", { name: "政策会議", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "政策会議" })).toBeFocused();
@@ -647,6 +660,8 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
+  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
+  await waitForPageLayout(page);
   await page.getByRole("button", { name: "危機対応を確認して再開" }).focus();
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "通知の詳細", exact: true }).click();

@@ -1196,7 +1196,8 @@ label select {
   border-radius: 0.65rem;
   display: block;
 }
-.viewport-shell .nav button::before {
+.viewport-shell .nav button::before,
+.viewport-shell.app-shell-nation .nav button::before {
   content: none;
 }
 .viewport-shell .nav button[aria-current="page"] {
@@ -1290,13 +1291,22 @@ label select {
 .page-actions {
   flex: 0 0 auto;
 }
+.page-actions.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.page-actions.actions > :not(button),
+.page-actions.actions > button:only-child {
+  grid-column: 1 / -1;
+}
 .page-content .panel {
-  padding: 8px;
+  padding: 6px;
   margin: 0;
   box-shadow: none;
 }
 .page-content .indicator {
-  padding: 6px;
+  padding: 4px;
 }
 .page-content .indicator-grid {
   display: block;
@@ -1309,7 +1319,7 @@ label select {
 }
 .page-content h3 {
   font-size: 1rem;
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   line-height: 1.4;
 }
 .page-content h4 {
@@ -1673,7 +1683,10 @@ label select {
   height: auto;
   min-height: 100vh;
 }
-.page-deck-expanded,
+.page-deck-expanded {
+  width: 100%;
+  flex: 0 0 auto;
+}
 .page-deck-expanded .page-content {
   flex: 0 0 auto;
 }
@@ -1688,6 +1701,9 @@ label select {
 .page-deck-expanded .page-controls button {
   display: none;
 }
+.page-deck-expanded .page-actions.actions {
+  grid-template-columns: minmax(0, 1fr);
+}
 .viewport-shell.enlarged-text .home-indicator {
   grid-template-columns: 1fr;
 }
@@ -1696,6 +1712,15 @@ label select {
 }
 .viewport-shell.enlarged-text .nation-scoreboard {
   grid-template-columns: 1fr;
+}
+.viewport-shell.enlarged-text .nation-masthead {
+  flex-wrap: wrap;
+}
+.viewport-shell.enlarged-text .nation-brand strong {
+  white-space: normal;
+}
+.viewport-shell.enlarged-text .nation-overview-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .viewport-shell.enlarged-text .nation-scene {
   min-height: 24rem;
