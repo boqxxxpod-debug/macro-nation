@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { waitForPageLayout } from "./paging";
+import { waitForEnlargedText, waitForPageLayout } from "./paging";
 import type { GameState } from "@macro-nation/domain";
 
 const VIEWPORTS = [
@@ -637,7 +637,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
-  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
+  await waitForEnlargedText(page);
   await waitForPageLayout(page);
   await page.getByRole("button", { name: "政策会議", exact: true }).focus();
   await page.keyboard.press("Enter");
@@ -660,7 +660,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
-  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
+  await waitForEnlargedText(page);
   await waitForPageLayout(page);
   await page.getByRole("button", { name: "危機対応を確認して再開" }).focus();
   await page.keyboard.press("Enter");

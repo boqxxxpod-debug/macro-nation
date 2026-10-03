@@ -1,4 +1,29 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+
+export async function waitForEnlargedText(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const root = document.documentElement;
+          const shell = document.querySelector<HTMLElement>(".app-shell");
+          if (shell?.classList.contains("enlarged-text")) return true;
+          return {
+            rootStyle: root.getAttribute("style"),
+            computedFontSize: getComputedStyle(root).fontSize,
+            shellClass: shell?.className,
+            deckClasses: Array.from(
+              document.querySelectorAll<HTMLElement>("[data-page-deck]"),
+            ).map((deck) => deck.className),
+            viewportScale: window.visualViewport?.scale,
+          };
+        }),
+      {
+        message: "The shell must reflect the enlarged text before interaction",
+      },
+    )
+    .toBe(true);
+}
 
 export async function waitForPageLayout(page: Page) {
   await page.evaluate(async () => {

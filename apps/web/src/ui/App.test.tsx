@@ -1,5 +1,7 @@
 import { webcrypto } from "node:crypto";
+import { StrictMode } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -46,6 +48,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.history.replaceState({}, "", "/");
+  document.documentElement.style.removeProperty("font-size");
 });
 
 function onPage(label: string, find: () => HTMLElement | undefined) {
@@ -113,6 +116,74 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("keeps text reflow monitoring when stylesheet fonts change after Strict Mode remount", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    const callbacks = new Set<ResizeObserverCallback>();
+    class SizeObserver {
+      constructor(private callback: ResizeObserverCallback) {
+        callbacks.add(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {
+        callbacks.delete(this.callback);
+      }
+    }
+    vi.stubGlobal("ResizeObserver", SizeObserver);
+    const stylesheet = document.createElement("style");
+    stylesheet.textContent = "html { font-size: 16px; }";
+    document.head.append(stylesheet);
+    try {
+      const memory = memoryRepository();
+      render(
+        <StrictMode>
+          <App repository={memory.repository} />
+        </StrictMode>,
+      );
+      await screen.findByRole("heading", { name: "起動・保存スロット" });
+      const shell = document.querySelector(".app-shell");
+      const rootStyle = document.documentElement.getAttribute("style");
+      expect(shell).not.toHaveClass("enlarged-text");
+
+      // A stylesheet/user font setting changes rem sizes without mutating
+      // html attributes. Deliver the native resize notifications jsdom lacks.
+      stylesheet.textContent = "html { font-size: 32px; }";
+      expect(getComputedStyle(document.documentElement).fontSize).toBe("32px");
+      act(() => {
+        for (const callback of [...callbacks])
+          callback([], {} as ResizeObserver);
+      });
+      await waitFor(() => expect(shell).toHaveClass("enlarged-text"));
+      expect(document.documentElement.getAttribute("style")).toBe(rootStyle);
+
+      stylesheet.textContent = "html { font-size: 16px; }";
+      act(() => {
+        for (const callback of [...callbacks])
+          callback([], {} as ResizeObserver);
+      });
+      await waitFor(() => expect(shell).not.toHaveClass("enlarged-text"));
+    } finally {
+      cleanup();
+      expect(callbacks.size).toBe(0);
+      stylesheet.remove();
+      vi.stubGlobal("ResizeObserver", originalResizeObserver);
+    }
+  });
+
+  it("reflows the shell when root text size changes without a resize", async () => {
+    const memory = memoryRepository();
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "起動・保存スロット" });
+    const shell = document.querySelector(".app-shell");
+    expect(shell).not.toHaveClass("enlarged-text");
+
+    document.documentElement.style.fontSize = "200%";
+    await waitFor(() => expect(shell).toHaveClass("enlarged-text"));
+
+    document.documentElement.style.fontSize = "16px";
+    await waitFor(() => expect(shell).not.toHaveClass("enlarged-text"));
+  });
+
   it("shows empty launch history and offline usage guidance", async () => {
     const memory = memoryRepository();
     render(<App repository={memory.repository} />);

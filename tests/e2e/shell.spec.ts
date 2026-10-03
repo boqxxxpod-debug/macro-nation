@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { waitForPageLayout } from "./paging";
+import { waitForEnlargedText, waitForPageLayout } from "./paging";
 
 test.setTimeout(120_000);
 
@@ -149,7 +149,7 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
-  await expect(page.locator(".app-shell")).toHaveClass(/enlarged-text/);
+  await waitForEnlargedText(page);
   await expect(page.locator("[data-page-deck]")).toHaveClass(
     /page-deck-expanded/,
   );

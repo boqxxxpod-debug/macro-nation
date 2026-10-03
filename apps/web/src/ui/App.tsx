@@ -138,8 +138,30 @@ export function App({
       attributes: true,
       attributeFilter: ["class", "style"],
     });
+    // Font settings and stylesheet updates also change rem sizes without
+    // changing html attributes or the viewport. Observe that layout directly.
+    const fontProbe = document.createElement("span");
+    fontProbe.setAttribute("aria-hidden", "true");
+    Object.assign(fontProbe.style, {
+      position: "fixed",
+      width: "1rem",
+      height: "1rem",
+      left: "0",
+      top: "0",
+      visibility: "hidden",
+      pointerEvents: "none",
+      contain: "strict",
+    });
+    document.body.append(fontProbe);
+    const fontObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(refresh);
+    fontObserver?.observe(fontProbe);
     return () => {
       observer.disconnect();
+      fontObserver?.disconnect();
+      fontProbe.remove();
       window.removeEventListener("resize", refresh);
       window.visualViewport?.removeEventListener("resize", refresh);
     };

@@ -21,6 +21,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: var(--viewport-height, 100vh);
 }
 button,
 input,
@@ -1398,6 +1400,7 @@ label select {
 }
 .page-content .expert-advice {
   padding: 4px 8px;
+  display: flow-root;
 }
 .page-content .expert-dissent {
   margin: 0;
@@ -1613,6 +1616,14 @@ label select {
 }
 .viewport-shell .nation-scene-verse {
   font-size: 0.875rem;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+.viewport-shell .nation-scene-verse br {
+  display: none;
 }
 .nation-overview-actions {
   display: grid;
