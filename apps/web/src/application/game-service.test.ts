@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { scorePoint, type GameState } from "@macro-nation/domain";
 import {
   policyStateHash,
@@ -7,6 +7,7 @@ import {
 } from "@macro-nation/simulation-engine";
 import {
   advanceMonth,
+  calculateMonth,
   catchUpOffline,
   confirmPolicy,
   createGame,
@@ -15,6 +16,10 @@ import {
   resumeCrisis,
   type GameRepository,
 } from "./game-service";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function memory() {
   let saved: GameState | null = null;
@@ -149,6 +154,7 @@ describe("SCN-01 first playable", () => {
   });
 
   it("keeps the chosen duration through a save and defers offline steps beyond 96", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000);
     const storage = memory();
     const initial = await createGame(
       storage.repository,
@@ -188,6 +194,49 @@ describe("SCN-01 first playable", () => {
       ),
     ).toEqual([60]);
   }, 15_000);
+
+  it("reports elapsed-time progress after each durable month when calculations take 250 milliseconds", async () => {
+    let nowMs = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    const storage = memory();
+    const initial = await createGame(
+      storage.repository,
+      "baseline-96",
+      1,
+      "standard",
+      "long",
+    );
+    storage.replace({
+      ...initial,
+      runState: "running",
+      clock: { ...initial.clock, progressionMode: "auto" },
+    });
+    const progress: { completed: number; pending: number }[] = [];
+    let calculated: GameState | undefined;
+    const result = await catchUpOffline(
+      storage.repository,
+      1,
+      3 * initial.clock.config.realSecondsPerStep,
+      (completed, pending) => {
+        expect(storage.saved).toEqual(calculated);
+        expect(storage.saved?.monthIndex).toBe(completed);
+        expect(storage.saved?.pendingOfflineSteps).toBe(pending);
+        progress.push({ completed, pending });
+      },
+      (state, fromOffline) => {
+        calculated = calculateMonth(state, fromOffline);
+        nowMs += 250;
+        return calculated;
+      },
+    );
+    expect(progress).toEqual([
+      { completed: 1, pending: 2 },
+      { completed: 2, pending: 1 },
+      { completed: 3, pending: 0 },
+    ]);
+    expect(result.monthIndex).toBe(3);
+    expect(result).toEqual(storage.saved);
+  });
 
   it("does not accumulate offline time while paused", async () => {
     const storage = memory();
