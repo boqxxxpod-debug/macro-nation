@@ -48,7 +48,7 @@ async function stateWithReaction(): Promise<GameState> {
 }
 
 describe("NationVoice", () => {
-  it("announces the actor, direction and exact cause and links to its report", async () => {
+  it("explains the actor, direction and cause in Japanese and links to its report", async () => {
     const onOpenCause = vi.fn();
     render(
       <NationVoice
@@ -58,9 +58,13 @@ describe("NationVoice", () => {
     );
 
     expect(screen.getByRole("heading", { name: "国民の声" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "この国の声" })).toBeVisible();
     expect(screen.getByText(/懸念・強さ 大きい/)).toBeVisible();
-    expect(screen.getByText(/external:import-prices/)).toBeVisible();
-    screen.getByRole("button", { name: "関連指標と因果を見る" }).click();
+    expect(screen.getByText(/為替・貿易などの外部環境/)).toBeVisible();
+    expect(
+      screen.getByRole("article", { name: "国民の声" }),
+    ).not.toHaveTextContent("external:import-prices");
+    screen.getByRole("button", { name: "指標と変化の理由を見る" }).click();
     expect(onOpenCause).toHaveBeenCalledOnce();
   });
 

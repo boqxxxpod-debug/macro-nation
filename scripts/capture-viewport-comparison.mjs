@@ -149,14 +149,14 @@ async function reveal(page, control) {
   if (await page.locator("[data-page-deck]").count()) await settleDeck(page);
   if (await control.isVisible()) return;
   const deck = page.locator("[data-page-deck]:visible");
-  const previous = page.getByRole("button", { name: /：前のページ$/ });
+  const previous = page.getByRole("button", { name: /(?:：|の)前のページ$/ });
   if ((await previous.count()) !== 1)
     throw new Error("Expected one visible page deck");
   for (let count = 0; count < 500 && (await previous.isEnabled()); count++) {
     await previous.click();
     await settleDeck(page);
   }
-  const next = page.getByRole("button", { name: /：次のページ$/ });
+  const next = page.getByRole("button", { name: /(?:：|の)次のページ$/ });
   for (let count = 0; count < 500; count++) {
     if (await control.isVisible()) return;
     if (!(await next.isEnabled())) break;
@@ -238,6 +238,22 @@ async function capture(page, variant, screen) {
 }
 
 async function journey(variant, project) {
+  // The baseline remains on its published wording; compare the same actions
+  // using the precise accessible names from each content version.
+  const copy =
+    variant === "before"
+      ? {
+          start: "ゲームを始める",
+          seed: "再現用seed（任意）",
+          compare: "1年・5年を比較する",
+          preview: "政策プレビュー",
+        }
+      : {
+          start: "はじめる",
+          seed: "再現用コード（任意）",
+          compare: "見通しを確認",
+          preview: "政策の見通し",
+        };
   const url = await serve(path.join(project, "apps/web/dist"));
   const context = await browser.newContext({
     viewport: { width: 360, height: 640 },
@@ -248,18 +264,14 @@ async function journey(variant, project) {
     const page = await context.newPage();
     page.setDefaultTimeout(90_000);
     await page.goto(url, { waitUntil: "networkidle" });
-    await page
-      .getByRole("button", { name: "ゲームを始める", exact: true })
-      .waitFor();
+    await page.getByRole("button", { name: copy.start, exact: true }).waitFor();
     const seed = page.getByRole("textbox", {
-      name: "再現用seed（任意）",
+      name: copy.seed,
       exact: true,
     });
     await reveal(page, seed);
     await seed.fill("issue-89-viewport-comparison");
-    await page
-      .getByRole("button", { name: "ゲームを始める", exact: true })
-      .click();
+    await page.getByRole("button", { name: copy.start, exact: true }).click();
     await page
       .getByRole("heading", { name: "国家ホーム", exact: true })
       .waitFor();
@@ -278,11 +290,9 @@ async function journey(variant, project) {
     });
     await reveal(page, value);
     await value.fill("0.05");
+    await page.getByRole("button", { name: copy.compare, exact: true }).click();
     await page
-      .getByRole("button", { name: "1年・5年を比較する", exact: true })
-      .click();
-    await page
-      .getByRole("heading", { name: "政策プレビュー", exact: true })
+      .getByRole("heading", { name: copy.preview, exact: true })
       .waitFor();
     await capture(page, variant, "preview");
   } finally {

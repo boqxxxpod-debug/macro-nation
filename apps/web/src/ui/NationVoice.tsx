@@ -1,6 +1,6 @@
 import type { GameState } from "@macro-nation/domain";
 import { selectNationVoices } from "../application/nation-voice";
-import { label } from "./game-format";
+import { describeCause, label } from "./game-format";
 
 const DIRECTIONS = { "-1": "懸念", "0": "様子見", "1": "期待" } as const;
 const STRENGTHS = ["変化なし", "小さい", "中程度", "大きい"] as const;
@@ -17,9 +17,9 @@ export function nationVoiceContent({ state, onOpenCause }: NationVoiceProps) {
   return (
     <>
       <section className="panel" aria-labelledby="nation-voice-heading">
-        <h3 id="nation-voice-heading">Nation Voice</h3>
+        <h3 id="nation-voice-heading">この国の声</h3>
         <p className="quiet">
-          支持率や全員の総意ではなく、今月までの反応を表す代表的な声です。
+          今月までの反応をもとにした代表的な声です。支持率や、みんなの意見そのものではありません。
         </p>
       </section>
       {voices.map((voice) => (
@@ -36,15 +36,16 @@ export function nationVoiceContent({ state, onOpenCause }: NationVoiceProps) {
             {voice.lagMonths}か月
           </small>
           <p>
-            理由：{label(voice.topicKey)}（{voice.causeRef.sourceType}:
-            {voice.causeRef.sourceId}）
+            理由：{label(voice.topicKey)}に、
+            {describeCause(voice.causeRef, state)}
+            が影響しています。
           </p>
           {onOpenCause ? (
             <button type="button" onClick={onOpenCause}>
-              関連指標と因果を見る
+              指標と変化の理由を見る
             </button>
           ) : (
-            <small>関連する因果記録は、このレポート上部で確認できます。</small>
+            <small>変化の理由は、このレポートの上部で確認できます。</small>
           )}
         </article>
       ))}

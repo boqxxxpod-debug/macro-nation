@@ -30,9 +30,19 @@ import { PageDeck } from "./PageDeck";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
 import { migrateFirstPlayableSave } from "../application/save-migration";
-import { label, period } from "./game-format";
+import { eventDisplayName, label, period } from "./game-format";
 
 type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+const DIFFICULTY_LABELS = {
+  intro: "入門",
+  standard: "標準",
+  expert: "専門",
+} as const;
+const LEARNING_MODE_LABELS = {
+  casual: "カジュアル",
+  standard: "標準",
+  learning: "学習",
+} as const;
 const NAV_LABELS = {
   home: "ホーム",
   policies: "政策会議",
@@ -82,6 +92,107 @@ function durationLabel(state: GameState): string {
   return selected
     ? `${selected.years}年・${selected.months}か月`
     : "期間未設定";
+}
+function policyTitle(
+  state: GameState,
+  policy: GameState["policies"]["active"][number],
+): string {
+  const rule = policyRules(state.configSnapshot).find(
+    (item) => item.policyType === policy.type,
+  );
+  return rule ? label(rule.policyId) : "政策";
+}
+type ErrorContext = "action" | "load" | "save" | "preview";
+function errorMessage(cause: unknown, context: ErrorContext): string {
+  const message = cause instanceof Error ? cause.message : "";
+  if (/保存データの版に対応していません/.test(message))
+    return "この保存データは現在の版に対応していません。保存したときの版で開いてください。";
+  if (/Config Snapshot/.test(message))
+    return "保存データを確認できませんでした。別の保存先を選ぶか、保存したときの版で開いてください。";
+  if (/保存データを検証できません|保存データを確認できません/.test(message))
+    return "保存データを確認できませんでした。別の保存先から続けるか、空いている保存先で新しく始めてください。";
+  if (/Save slot already exists|slot occupied/.test(message))
+    return "この保存先にはゲームがあります。続きから開くか、空いている保存先を選んでください。";
+  if (/Saved game changed|stale state|concurrent save/i.test(message))
+    return "保存したゲームの状態が変わりました。画面を再読み込みし、最後に保存された状態を確認してください。";
+  if (
+    /Stale.*(preview|draft)|Stale preview response|ゲームの状態が変わりました/i.test(
+      message,
+    )
+  )
+    return "ゲームの状態が変わりました。政策会議に戻り、見通しをもう一度確認してください。";
+  if (/Quarterly policy slots exhausted/.test(message))
+    return "この四半期の政策枠を使い切りました。次の更新月を確認してください。";
+  if (
+    /Insufficient available|Insufficient.*cost|Insufficient resources/.test(
+      message,
+    )
+  )
+    return "政策に必要な資源が足りません。政策会議で費用を確認し、設定を見直してください。";
+  if (
+    /Invalid policy input|Policy input|requires a value|Missing value for|Policy.*quarters/.test(
+      message,
+    )
+  )
+    return "政策の設定を確認できませんでした。政策会議に戻り、設定値と実施時期を確認してください。";
+  if (/one to three unique experts/.test(message))
+    return "専門家を1〜3人選んでから、見通しを確認してください。";
+  if (/Cannot change policy after the game has ended/.test(message))
+    return "このゲームの運営は終了しています。終了評価で結果を確認できます。";
+  if (
+    /No saved game in slot|保存済みのゲームがありません|保存したゲームが見つかりません/.test(
+      message,
+    )
+  )
+    return "保存したゲームが見つかりませんでした。「はじめる・続きから」で保存先を確認してください。";
+  if (/終了または危機停止中|運営の終了時や危機への対応中/.test(message))
+    return "運営が終了しているか、危機のため一時停止しています。ホームで状態を確認してください。";
+  if (
+    /再開できる危機がありません|いまは危機への対応待ちではありません/.test(
+      message,
+    )
+  )
+    return "いまは危機への対応待ちではありません。ホームで現在の状況を確認しましょう。";
+  if (
+    /選択待ちのイベントがありません|いまは対応を選ぶイベントがありません/.test(
+      message,
+    )
+  )
+    return "対応待ちの出来事はありません。ホームで現在の状況を確認しましょう。";
+  if (
+    /イベント記録が見つかりません|対応するイベントの記録を確認できません/.test(
+      message,
+    )
+  )
+    return "出来事の記録を確認できませんでした。画面を再読み込みし、保存したゲームの状態を確認してください。";
+  if (
+    /シナリオの終了・危機条件がありません|ゲームの終了条件と危機条件を確認できません/.test(
+      message,
+    )
+  )
+    return "ゲームの終了条件と危機条件を確認できませんでした。空いている保存先で新しく始めてください。";
+  if (
+    /経過時間が正しくありません|オフライン経過が長すぎます|離れていた時間/.test(
+      message,
+    )
+  )
+    return "離れていた時間を確認できませんでした。保存したゲームを読み込み直して状況を確認しましょう。";
+  if (/保存機能が使えるブラウザー/.test(message))
+    return "このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。";
+  if (context === "load")
+    return "保存したゲームを読み込めませんでした。ブラウザーの保存設定を確認し、画面を再読み込みしてください。";
+  if (context === "preview")
+    return "政策の見通しを確認できませんでした。政策会議に戻り、設定を確認してもう一度お試しください。";
+  if (
+    /storage unavailable|Could not (open save database|read saved game|save game|create save)/i.test(
+      message,
+    ) ||
+    (cause instanceof Error && cause.name === "QuotaExceededError")
+  )
+    return "保存を確認できませんでした。ブラウザーの保存設定や空き容量を確認し、画面を再読み込みして最後に保存された状態を確認してください。";
+  if (context === "save")
+    return "保存を確認できませんでした。画面を再読み込みし、最後に保存された状態を確認してください。";
+  return "操作を完了できませんでした。画面を再読み込みし、最後に保存された状態を確認してください。";
 }
 function routeFromLocation(): Route {
   const path = window.location.pathname;
@@ -224,20 +335,21 @@ export function App({
           const first = loaded.find((item) => item.saved)?.saved ?? null;
           setState(first);
           const recovery = loaded.find((item) => item.recovered);
-          if (recovery?.reason) setNotice(recovery.reason);
+          if (recovery?.reason)
+            setNotice(
+              `保存先${recovery.id}は直前の保存から読み込みました。進み具合を確認してから続けてください。`,
+            );
           const corrupt = loaded.find((item) => !item.saved && item.reason);
           if (corrupt?.reason)
-            setError(`スロット${corrupt.id}: ${corrupt.reason}`);
+            setError(
+              `保存先${corrupt.id}：${errorMessage(new Error(corrupt.reason), "load")}`,
+            );
           setLoading(false);
         }
       })
       .catch((cause: unknown) => {
         if (active) {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "保存を読み込めませんでした",
-          );
+          setError(errorMessage(cause, "load"));
           setLoading(false);
         }
       });
@@ -336,7 +448,10 @@ export function App({
     setRoute(next);
     setError("");
   }
-  async function action(work: () => Promise<void>) {
+  async function action(
+    work: () => Promise<void>,
+    context: ErrorContext = "action",
+  ) {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
@@ -345,14 +460,17 @@ export function App({
     try {
       await work();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "処理に失敗しました");
+      setError(errorMessage(cause, context));
     } finally {
       setBusy(false);
       inFlight.current = false;
     }
   }
   async function start() {
-    if (!repository) throw new Error("この端末では保存機能を利用できません");
+    if (!repository)
+      throw new Error(
+        "このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。",
+      );
     const created = await createGame(
       repository,
       startSeed.trim() || seedFactory(),
@@ -435,7 +553,9 @@ export function App({
       preview.stateHash !== policyStateHash(state) ||
       preview.draftHash !== policyDraftHash(preview.previewedDraft)
     )
-      throw new Error("ゲーム状態が変わりました。再試算してください");
+      throw new Error(
+        "ゲームの状態が変わりました。政策会議に戻り、見通しをもう一度確認してください。",
+      );
     const saved = await confirmPolicy(
       repository,
       state.slotId,
@@ -479,7 +599,7 @@ export function App({
         <p className="eyebrow">国家運営シミュレーション</p>
         <h1>MACRO NATION</h1>
         <p className="lead">
-          政策の時間差とトレードオフを、数字と理由から読み解く。
+          政策の時間差や良い点・注意点を、数字と理由から確かめます。
         </p>
         {(error || notice) && (
           <button
@@ -504,28 +624,28 @@ export function App({
         )}
       </header>
       {loading ? (
-        <p role="status">保存データを読み込み中…</p>
+        <p role="status">保存したゲームを読み込んでいます…</p>
       ) : !state ? (
         <section className="welcome" aria-labelledby="start-heading">
           <h2 id="start-heading" tabIndex={-1}>
-            起動・保存スロット
+            はじめる・続きから
           </h2>
           <PageDeck
-            label="起動・開始設定"
+            label="開始設定"
             actions={
               <button
                 className="primary"
                 disabled={busy || !repository}
-                onClick={() => void action(start)}
+                onClick={() => void action(start, "save")}
               >
-                ゲームを始める
+                はじめる
               </button>
             }
           >
             <p>
               架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
             </p>
-            <div className="launch-actions" aria-label="起動メニュー">
+            <div className="launch-actions" aria-label="開始メニュー">
               <button
                 type="button"
                 aria-expanded={launchPanel === "history"}
@@ -536,7 +656,7 @@ export function App({
                   )
                 }
               >
-                保存履歴
+                保存したゲーム
               </button>
               <button
                 type="button"
@@ -557,9 +677,9 @@ export function App({
                 className="panel launch-panel"
                 aria-labelledby="save-history-heading"
               >
-                <h3 id="save-history-heading">保存履歴</h3>
+                <h3 id="save-history-heading">保存したゲーム</h3>
                 {slots.size === 0 ? (
-                  <p>保存された国家運営はまだありません。</p>
+                  <p>保存したゲームはまだありません。</p>
                 ) : (
                   <ol>
                     {[...slots.entries()]
@@ -569,19 +689,19 @@ export function App({
                       )
                       .map(([id, saved]) => (
                         <li key={id}>
-                          <strong>スロット{id}</strong>：{durationLabel(saved)}
-                          、{saved.monthIndex}か月まで進行、
+                          <strong>保存先{id}</strong>：{durationLabel(saved)}、
+                          {saved.monthIndex}か月まで進行、
                           {saved.runState === "completed"
-                            ? "期間満了"
+                            ? "予定期間を終了"
                             : saved.runState === "failed"
-                              ? "運営失敗"
+                              ? "危機で終了"
                               : "運営中"}
                         </li>
                       ))}
                   </ol>
                 )}
                 <p className="quiet">
-                  終了済みゲームの評価・国家史（最大10件）はUI11国家史で扱う後続機能です。ここでは保存スロットの進行履歴を表示します。
+                  各保存先の進み具合を確認できます。保存したゲームは「続きから」で開けます。
                 </p>
               </section>
             )}
@@ -593,24 +713,24 @@ export function App({
               >
                 <h3 id="launch-help-heading">遊び方・端末設定</h3>
                 <ul>
-                  <li>新規開始では期間、難易度、説明量、seedを選びます。</li>
-                  <li>進行中の設定と期間は開始後に変更できません。</li>
+                  <li>はじめる前に、期間、難易度、説明量を選びます。</li>
+                  <li>開始後は、設定と期間を変更できません。</li>
                   <li>
                     保存はこの端末内だけで行い、ログインや通信を必要としません。
                   </li>
                 </ul>
               </section>
             )}
-            <div className="slot-grid" aria-label="保存スロット">
+            <div className="slot-grid" aria-label="保存先">
               {SLOT_IDS.map((id) => {
                 const saved = slots.get(id);
                 return (
                   <article className="panel" key={id}>
-                    <h3>スロット{id}</h3>
+                    <h3>保存先{id}</h3>
                     <p>
                       {saved
-                        ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${saved.difficulty}・${saved.learningMode}`
-                        : "空き"}
+                        ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${DIFFICULTY_LABELS[saved.difficulty]}・${LEARNING_MODE_LABELS[saved.learningMode ?? "standard"]}`
+                        : "まだ保存されていません。"}
                     </p>
                     {saved ? (
                       <button
@@ -619,14 +739,14 @@ export function App({
                           navigate("home");
                         }}
                       >
-                        スロット{id}の続きから
+                        保存先{id}の続きから
                       </button>
                     ) : (
                       <button
                         aria-pressed={slotId === id}
                         onClick={() => setSlotId(id)}
                       >
-                        スロット{id}で新しく始める
+                        保存先{id}ではじめる
                       </button>
                     )}
                   </article>
@@ -641,7 +761,7 @@ export function App({
               <label>
                 シナリオ
                 <select defaultValue="SCN-01">
-                  <option value="SCN-01">SCN-01 小さな開放経済</option>
+                  <option value="SCN-01">小さな開放経済</option>
                 </select>
               </label>
               <label>
@@ -673,7 +793,7 @@ export function App({
                         {duration.years}年（{duration.months}か月）
                       </strong>
                       <span>想定時間: {duration.time}</span>
-                      <span>学べる論点: {duration.focus}</span>
+                      <span>この期間で学べること：{duration.focus}</span>
                     </label>
                   ))}
                 </div>
@@ -696,17 +816,23 @@ export function App({
                 </select>
               </label>
               <label>
-                再現用seed（任意）
+                再現用コード（任意）
                 <input
                   value={startSeed}
                   maxLength={80}
                   placeholder="未入力なら自動生成"
+                  aria-describedby="reproduction-help"
                   onChange={(event) => setStartSeed(event.target.value)}
                 />
               </label>
+              <p id="reproduction-help" className="quiet">
+                空欄なら自動で作ります。同じコードと開始設定を使い、ゲームの版・設定データ・選ぶ政策・進め方も同じにすると、結果を再現できます。
+              </p>
 
               {!repository && (
-                <p role="alert">端末の保存機能を利用できません。</p>
+                <p role="alert">
+                  このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。
+                </p>
               )}
             </section>
           </PageDeck>
@@ -738,13 +864,13 @@ export function App({
             >
               {period(state)}・第{Math.floor(state.monthIndex / 3) + 1}四半期・
               {state.runState === "crisisStopped"
-                ? "危機停止"
+                ? "危機対応で一時停止"
                 : state.runState === "awaitingEvent"
                   ? "イベント対応待ち"
                   : state.runState === "completed"
-                    ? "期間満了"
+                    ? "予定期間を終了"
                     : state.runState === "failed"
-                      ? "運営終了"
+                      ? "危機で終了"
                       : busy
                         ? "計算中"
                         : "運営中"}
@@ -775,7 +901,7 @@ export function App({
                     setMenuOpen(false);
                   }}
                 >
-                  保存スロット
+                  はじめる・続きから
                 </button>
                 {import.meta.env.DEV && <AIPreview />}
                 {Object.entries(NAV_LABELS).map(([id, text]) => (
@@ -803,7 +929,7 @@ export function App({
                               <section className="panel crisis">
                                 <h3>緊急会議</h3>
                                 <p>
-                                  危機条件に達したため進行を停止しました。政策会議で対策を検討し、明示的に再開してください。次の月も危機が続くと失敗になります。
+                                  危機のため、一時停止しています。政策会議で対策を考え、「危機対応を確認して再開」を選んでください。次の月も危機が続くと、運営が終了します。
                                 </p>
                                 <button onClick={() => navigate("policies")}>
                                   緊急政策を検討する
@@ -833,18 +959,22 @@ export function App({
                                 aria-labelledby="event-heading"
                               >
                                 <h3 id="event-heading">
-                                  突発イベント：対応を選択
+                                  突発イベント：対応を選んでください
                                 </h3>
                                 <p>
-                                  {state.events.pendingChoiceEventId}{" "}
-                                  が発生しました。準備度による軽減はすでに基準被害と分けて記録されています。
+                                  出来事の内容：
+                                  {eventDisplayName(
+                                    state.events.pendingChoiceEventId ?? "",
+                                    state,
+                                  )}
+                                  。これまでの備えで軽減できた被害は、すでに反映しています。対応を選ぶと、次の月に進めます。
                                 </p>
                                 <div className="actions">
                                   {(
                                     [
                                       ["protect-households", "家計を優先"],
                                       ["protect-businesses", "企業を優先"],
-                                      ["balanced", "均衡対応"],
+                                      ["balanced", "バランスを取る"],
                                     ] as const
                                   ).map(([choiceId, text]) => (
                                     <button
@@ -873,7 +1003,11 @@ export function App({
                             {(state.runState === "completed" ||
                               state.runState === "failed") && (
                               <section className="panel">
-                                <h3>運営の終了</h3>
+                                <h3>
+                                  {state.runState === "completed"
+                                    ? "予定期間を終えました"
+                                    : "危機で運営が終了しました"}
+                                </h3>
                                 <button
                                   className="primary"
                                   onClick={() => navigate("ending")}
@@ -920,7 +1054,7 @@ export function App({
                         政策を考える
                       </button>
                       <button onClick={() => navigate("report")}>
-                        理由を見る
+                        変化の理由を見る
                       </button>
                       <button onClick={() => navigate("nation")}>
                         国家の景観を見る
@@ -954,21 +1088,21 @@ export function App({
                                   ...state.policies.reserved,
                                 ].map((policy) => (
                                   <li key={policy.policyId}>
-                                    {policy.policyId}：
+                                    {policyTitle(state, policy)}：
                                     {policy.status === "active"
                                       ? "実施中"
                                       : "予約中"}
-                                    、{policy.activationMonth + 1}月目開始
+                                    、{policy.activationMonth + 1}月目に開始
                                   </li>
                                 ))}
                               </ul>
                             ) : (
-                              <p>政策はまだありません。</p>
+                              <p>実施中・予約中の政策はありません。</p>
                             )}
                           </section>
                           {comparisons.length > 0 && (
                             <section className="panel">
-                              <h3>比較した案（最大3件）</h3>
+                              <h3>比べた案（最大3件）</h3>
                               <ul>
                                 {comparisons.map((item) => (
                                   <li key={item.draftHash}>
@@ -989,21 +1123,24 @@ export function App({
                       }
                       busy={busy}
                       onPreview={(draft, expertIds) =>
-                        void action(() => previewDraft(draft, expertIds))
+                        void action(
+                          () => previewDraft(draft, expertIds),
+                          "preview",
+                        )
                       }
                     />
                   </>
                 )}
                 {route === "preview" && (
                   <>
-                    <h2 tabIndex={-1}>政策プレビュー</h2>
+                    <h2 tabIndex={-1}>政策の見通し</h2>
                     <Preview
                       output={preview}
                       counterfactuals={counterfactuals}
                       expertIds={previewExpertIds}
                       contentVersion={state.versions.contentVersion}
                       busy={busy}
-                      onConfirm={() => void action(confirm)}
+                      onConfirm={() => void action(confirm, "save")}
                       onBack={() => navigate("policies")}
                     />
                   </>
@@ -1036,7 +1173,8 @@ export function App({
                       />
                     ) : (
                       <p>
-                        {state.clock.endMonth}か月の終了後に評価を表示します。
+                        予定の{state.clock.endMonth}
+                        か月を終えるか、危機で運営が終了すると、評価を確認できます。
                       </p>
                     )}
                   </>
@@ -1066,10 +1204,10 @@ export function App({
           className="message-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="通知の詳細"
+          aria-label={error ? "エラーの詳細" : "通知の詳細"}
         >
           <PageDeck
-            label="通知の詳細"
+            label={error ? "エラーの詳細" : "通知の詳細"}
             actions={
               <button
                 onClick={() => {
@@ -1083,7 +1221,7 @@ export function App({
               </button>
             }
           >
-            <h2 tabIndex={-1}>通知の詳細</h2>
+            <h2 tabIndex={-1}>{error ? "エラーの詳細" : "通知の詳細"}</h2>
             <p>{error || notice}</p>
           </PageDeck>
         </div>

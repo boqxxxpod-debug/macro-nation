@@ -40,9 +40,9 @@ describe("NationView detail navigation", () => {
     expect(indicators.querySelectorAll(".nation-score")).toHaveLength(5);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    const harbor = screen.getByRole("button", { name: /港湾を選択/ });
+    const harbor = screen.getByRole("button", { name: /港湾の様子を見る/ });
     fireEvent.click(harbor);
-    expect(screen.getByRole("dialog", { name: "地域詳細" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "地域の様子" })).toBeVisible();
     expect(indicators).toBeVisible();
     expect(screen.getByRole("button", { name: "詳細を閉じる" })).toHaveFocus();
     fireEvent.click(
@@ -55,7 +55,7 @@ describe("NationView detail navigation", () => {
     const notification = document.createElement("button");
     document.body.append(notification);
     fireEvent.keyDown(notification, { key: "Escape" });
-    expect(screen.getByRole("dialog", { name: "地域詳細" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "地域の様子" })).toBeVisible();
     notification.remove();
 
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
@@ -73,12 +73,14 @@ describe("NationView detail navigation", () => {
     expect(
       screen.getByRole("img", { name: /都市、農村、工業、港湾/ }),
     ).toBeVisible();
-    expect(screen.getAllByRole("button", { name: /を選択：/ })).toHaveLength(7);
+    expect(
+      screen.getAllByRole("button", { name: /の様子を見る：/ }),
+    ).toHaveLength(7);
 
     const news = screen.getByRole("button", { name: "ニュース" });
     fireEvent.click(news);
-    expect(screen.getByLabelText("詳細の表示")).toHaveValue("news");
-    fireEvent.change(screen.getByLabelText("詳細の表示"), {
+    expect(screen.getByLabelText("見たい内容")).toHaveValue("news");
+    fireEvent.change(screen.getByLabelText("見たい内容"), {
       target: { value: "regions" },
     });
     expect(screen.getByRole("dialog", { name: "地域一覧" })).toBeVisible();

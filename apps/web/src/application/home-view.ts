@@ -1,4 +1,5 @@
 import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
+import { policyTypeDisplayName } from "./history";
 
 export const HOME_INDICATORS = [
   "realHouseholdIncome",
@@ -72,17 +73,20 @@ export function selectHomeMilestones(state: GameState) {
   return [
     ...state.policies.reserved.map((policy) => ({
       month: policy.activationMonth,
-      text: `政策発動（${policy.policyId}）`,
+      text: `${policyTypeDisplayName(policy.type)}の政策が始まります`,
     })),
     ...state.policies.active
       .filter((policy) => policy.endMonth !== undefined)
       .map((policy) => ({
         month: policy.endMonth! + 1,
-        text: `政策終了（${policy.policyId}）`,
+        text: `${policyTypeDisplayName(policy.type)}の政策が終わります`,
       })),
     // Policy months are zero-based tick indices; endMonth is a completed-month
     // count, so convert it before the shared display adds one.
-    { month: (state.clock.endMonth ?? 48) - 1, text: "シナリオ終了" },
+    {
+      month: (state.clock.endMonth ?? 48) - 1,
+      text: "予定の運営期間が終わります",
+    },
   ]
     .filter((item) => item.month >= state.monthIndex)
     .sort((a, b) => a.month - b.month)
@@ -93,14 +97,16 @@ export function selectHomeRecommendations(state: GameState): readonly string[] {
   if (state.difficulty !== "intro") return [];
   const recommendations: string[] = [];
   if (state.runState === "crisisStopped")
-    recommendations.push("緊急政策を比較し、危機への対応を確認する");
+    recommendations.push("緊急政策を比べて、危機への対応を確認しましょう。");
   if (state.policies.active.length + state.policies.reserved.length === 0)
-    recommendations.push("政策会議で最初の政策案を試算する");
+    recommendations.push(
+      "政策会議で、最初の政策案の見通しを確認してみましょう。",
+    );
   if (state.economy.rates.inflationAnnual > 0.04)
-    recommendations.push("物価を抑える政策の効果と副作用を比較する");
+    recommendations.push("物価を抑える政策の効果と副作用を比べてみましょう。");
   if (state.economy.rates.unemployment > 0.08)
-    recommendations.push("雇用と成長を支える政策案を比較する");
-  recommendations.push("レポートで今月の最大変化要因を確認する");
+    recommendations.push("雇用と成長を支える政策案を比べてみましょう。");
+  recommendations.push("レポートで、今月の変化の理由を見てみましょう。");
   return [...new Set(recommendations)].slice(0, 3);
 }
 
@@ -114,7 +120,9 @@ export function topCause(
 
 export function causeCategory(sourceType: string): string {
   if (sourceType === "policy") return "政策";
-  if (sourceType === "external" || sourceType === "event") return "外部要因";
-  if (sourceType === "random") return "ランダム要因";
-  return "慣性";
+  if (sourceType === "combo") return "政策の組み合わせ";
+  if (sourceType === "external") return "外部環境";
+  if (sourceType === "event") return "イベント";
+  if (sourceType === "random") return "偶発的な変動";
+  return "前月から続く動き";
 }

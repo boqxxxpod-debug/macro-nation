@@ -167,7 +167,7 @@ describe("SCN-01 first playable", () => {
     expect(crisis.runState).toBe("crisisStopped");
     expect(crisis.crisisCounters.unresolved).toBe(1);
     await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(
-      /危機停止/,
+      /危機への対応中/,
     );
     const resumed = await resumeCrisis(storage.repository, 1);
     expect(resumed.runState).toBe("paused");
@@ -208,7 +208,7 @@ describe("SCN-01 first playable", () => {
     });
     await expect(
       resolveEvent(storage.repository, 1, "balanced"),
-    ).rejects.toThrow(/選択待ち/);
+    ).rejects.toThrow(/対応を選ぶイベントがありません/);
   });
 
   it("matches a twelve-month batch after the same committed policy command", async () => {

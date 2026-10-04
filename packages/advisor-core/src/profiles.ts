@@ -1,7 +1,8 @@
 import type { ExpertProfile } from "./contracts";
+import content from "./content-v1.2.0.json";
 
 /** The eight roles already specified for UI04. Portraits and names belong to its content manifest. */
-export const expertProfiles: readonly ExpertProfile[] = [
+const legacyProfiles: readonly ExpertProfile[] = [
   {
     id: "centralBank",
     displayName: "水城 静香",
@@ -100,12 +101,23 @@ export const expertProfiles: readonly ExpertProfile[] = [
   },
 ];
 
+/** The approved identities and priorities stay fixed; only the new content tone changes. */
+export const expertProfiles: readonly ExpertProfile[] = legacyProfiles.map(
+  (profile) => ({
+    ...profile,
+    tone:
+      (content.tones as Readonly<Record<string, string>>)[
+        profile.toneKey ?? ""
+      ] ?? profile.tone,
+  }),
+);
+
 /** Keep advice from existing saves reproducible when profile content evolves. */
 export function expertProfilesForContentVersion(
   contentVersion: string,
 ): readonly ExpertProfile[] {
   if (contentVersion === "1.0.0") {
-    return expertProfiles.map(
+    return legacyProfiles.map(
       ({ id, role, values, tone, portraitAssetKey }) => ({
         id,
         role,
@@ -115,6 +127,7 @@ export function expertProfilesForContentVersion(
       }),
     );
   }
+  if (contentVersion === "1.1.0") return legacyProfiles;
   return expertProfiles;
 }
 
