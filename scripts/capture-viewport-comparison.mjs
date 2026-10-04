@@ -238,22 +238,14 @@ async function capture(page, variant, screen) {
 }
 
 async function journey(variant, project) {
-  // The baseline remains on its published wording; compare the same actions
-  // using the precise accessible names from each content version.
-  const copy =
-    variant === "before"
-      ? {
-          start: "ゲームを始める",
-          seed: "再現用seed（任意）",
-          compare: "1年・5年を比較する",
-          preview: "政策プレビュー",
-        }
-      : {
-          start: "はじめる",
-          seed: "再現用コード（任意）",
-          compare: "見通しを確認",
-          preview: "政策の見通し",
-        };
+  // Either checkout may use the old or current copy. Match each action's
+  // precise accessible name without relying on the comparison variant.
+  const copy = {
+    start: /^(ゲームを始める|はじめる)$/,
+    seed: /^(再現用seed（任意）|再現用コード（任意）)$/,
+    compare: /^(1年・5年を比較する|見通しを確認)$/,
+    preview: /^(政策プレビュー|政策の見通し)$/,
+  };
   const url = await serve(path.join(project, "apps/web/dist"));
   const context = await browser.newContext({
     viewport: { width: 360, height: 640 },
@@ -276,9 +268,7 @@ async function journey(variant, project) {
       .getByRole("heading", { name: "国家ホーム", exact: true })
       .waitFor();
     await capture(page, variant, "home");
-    await page
-      .getByRole("button", { name: "国家ビュー", exact: true })
-      .click();
+    await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
     await page
       .getByRole("heading", { name: "国家ビュー", exact: true })
       .waitFor();
