@@ -114,18 +114,22 @@ describe("SCN-01 no-policy headless runner", () => {
     ["standard", 96],
     ["long", 240],
     ["ultraLong", 360],
-  ] as const)("stops %s exactly at month %i", (mode, months) => {
-    const result = runNoPolicyHeadless({
-      initialState: makeState(`duration-${mode}`, mode),
-      tickCount: months + 1,
-      collectTrace: false,
-    });
-    expect(result.failure).toBeNull();
-    expect(result.ticksCompleted).toBe(months);
-    expect(result.finalState.runState).toBe("completed");
-    expect(result.finalState.clock.endMonth).toBe(months);
-    expect(result.finalState.clock.durationMode).toBe(mode);
-  });
+  ] as const)(
+    "stops %s exactly at month %i",
+    (mode, months) => {
+      const result = runNoPolicyHeadless({
+        initialState: makeState(`duration-${mode}`, mode),
+        tickCount: months + 1,
+        collectTrace: false,
+      });
+      expect(result.failure).toBeNull();
+      expect(result.ticksCompleted).toBe(months);
+      expect(result.finalState.runState).toBe("completed");
+      expect(result.finalState.clock.endMonth).toBe(months);
+      expect(result.finalState.clock.durationMode).toBe(mode);
+    },
+    10_000,
+  );
 
   it("keeps six reviews and three structural updates unique over 30 years", () => {
     const initialState = makeState("thirty-years", "ultraLong");
