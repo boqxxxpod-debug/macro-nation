@@ -26,6 +26,12 @@ import {
   type ForecastCapture,
 } from "./learning";
 import { withNationalHistory } from "./history";
+import {
+  isAutomaticRunning,
+  isTutorialTime,
+  queueElapsed,
+  stopClock,
+} from "./clock-adapter";
 
 export function browserGameRepository(): GameRepository | null {
   return typeof indexedDB === "undefined"
@@ -36,7 +42,11 @@ export function browserGameRepository(): GameRepository | null {
 export interface GameRepository {
   load(slotId: GameState["slotId"]): Promise<GameState | null>;
   loadSlot?(slotId: GameState["slotId"]): Promise<SlotLoadResult>;
-  save(expectedStateHash: string, next: GameState): Promise<void>;
+  save(
+    expectedStateHash: string,
+    next: GameState,
+    shouldCommit?: () => boolean,
+  ): Promise<void>;
   create(state: GameState, startCommandId?: string): Promise<void>;
 }
 
@@ -102,7 +112,7 @@ export async function createGame(
     pack.scenario.parameterOverrides,
   );
   const versions: VersionTuple = {
-    saveSchemaVersion: "2",
+    saveSchemaVersion: "3",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -125,6 +135,13 @@ export async function createGame(
     durationMode,
     learningMode,
     pendingOfflineSteps: 0,
+    clock: {
+      ...initial.clock,
+      progressionMode: "manual",
+      lastProcessedWallClockMs: null,
+      remainderMs: 0,
+      stopReason: "manual",
+    },
     history: {
       ...initial.history,
       reports: [reportSnapshot(initial)],
@@ -141,20 +158,42 @@ export async function advanceMonth(
   repository: GameRepository,
   slotId: GameState["slotId"],
   fromOffline = false,
+  compute: MonthCalculator = calculateMonth,
 ): Promise<GameState> {
   const state = await repository.load(slotId);
   if (!state)
     throw new Error(
       "保存したゲームが見つかりません。「はじめる・続きから」で保存先を確認しましょう。",
     );
+  const next = await compute(state, fromOffline);
+  await repository.save(policyStateHash(state), next);
+  return next;
+}
+
+export type MonthCalculator = (
+  state: GameState,
+  fromAutomatic: boolean,
+) => GameState | Promise<GameState>;
+
+/** Pure monthly calculation, shared by explicit steps and the browser Worker. */
+export function calculateMonth(
+  state: GameState,
+  fromOffline = false,
+): GameState {
   if (
     state.runState === "completed" ||
     state.runState === "failed" ||
-    state.runState === "crisisStopped"
+    state.runState === "crisisStopped" ||
+    state.runState === "awaitingEvent" ||
+    state.runState === "calculating"
   )
     throw new Error(
-      "運営の終了時や危機への対応中は、月を進められません。危機への対応中であれば、ホームで対応を確認してから再開できます。",
+      "運営の終了時や危機への対応中・イベントの選択中は、月を進められません。ホームで対応を確認してから再開できます。",
     );
+  if (isAutomaticRunning(state) && !fromOffline)
+    throw new Error("自動進行を停止してから月を進めてください");
+  if (fromOffline && !isAutomaticRunning(state))
+    throw new Error("自動進行を再開してから残りの月を進めてください");
   const result = runPolicyHeadless({
     initialState: { ...state, runState: "running" },
     tickCount: 1,
@@ -167,15 +206,19 @@ export async function advanceMonth(
   const rules = firstPlayableRules(state);
   const critical = criticalCondition(result.finalState, rules.crisis);
   const priorCritical = state.crisisCounters.unresolved ?? 0;
-  const runState = critical
-    ? priorCritical >= rules.unresolvedCrisisMonthsToFail
+  const runState =
+    result.finalState.runState === "failed" ||
+    (critical && priorCritical >= rules.unresolvedCrisisMonthsToFail)
       ? "failed"
-      : "crisisStopped"
-    : result.finalState.runState === "awaitingEvent"
-      ? "awaitingEvent"
       : result.finalState.monthIndex >= endMonthForState(result.finalState)
         ? "completed"
-        : "paused";
+        : critical
+          ? "crisisStopped"
+          : result.finalState.runState === "awaitingEvent"
+            ? "awaitingEvent"
+            : fromOffline && isAutomaticRunning(state)
+              ? "running"
+              : "paused";
   const monthlyReport = reportSnapshot(
     result.finalState,
     result.records[0]?.diagnostics.causal,
@@ -210,7 +253,7 @@ export async function advanceMonth(
       ],
     },
   };
-  const next: GameState = withNationalHistory({
+  const withHistory: GameState = withNationalHistory({
     ...nextWithoutLearning,
     history: {
       ...nextWithoutLearning.history,
@@ -220,7 +263,18 @@ export async function advanceMonth(
       ],
     },
   });
-  await repository.save(policyStateHash(state), next);
+  const reason =
+    runState === "awaitingEvent"
+      ? "event"
+      : runState === "crisisStopped"
+        ? "crisis"
+        : runState === "completed"
+          ? "completed"
+          : runState === "failed"
+            ? "failed"
+            : "manual";
+  const next =
+    runState === "running" ? withHistory : stopClock(withHistory, reason);
   return next;
 }
 
@@ -230,6 +284,7 @@ export async function catchUpOffline(
   slotId: GameState["slotId"],
   elapsedSeconds: number,
   onProgress?: (completed: number, pending: number) => boolean | void,
+  compute: MonthCalculator = calculateMonth,
 ): Promise<GameState> {
   let state = await repository.load(slotId);
   if (!state)
@@ -240,40 +295,71 @@ export async function catchUpOffline(
     throw new RangeError(
       "離れていた時間を確認できませんでした。もう一度、保存したゲームを読み込みましょう。",
     );
-  if (state.runState === "running") {
-    const newSteps = Math.floor(
-      elapsedSeconds / state.clock.config.realSecondsPerStep,
-    );
-    if (!Number.isSafeInteger(newSteps + (state.pendingOfflineSteps ?? 0)))
-      throw new RangeError(
-        "離れていた時間が長く、一度に進められる範囲を超えています。保存したゲームを読み込んで状況を確認しましょう。",
-      );
-    if (newSteps > 0) {
-      const queued = {
-        ...state,
-        pendingOfflineSteps: (state.pendingOfflineSteps ?? 0) + newSteps,
-      };
-      await repository.save(policyStateHash(state), queued);
-      state = queued;
+  if (!isAutomaticRunning(state)) return state;
+  if (isTutorialTime(state)) {
+    const stopped = stopClock({ ...state, runState: "paused" }, "tutorial");
+    await repository.save(policyStateHash(state), stopped);
+    return stopped;
+  }
+  const queued = queueElapsed(state, elapsedSeconds * 1000);
+  if (policyStateHash(queued) !== policyStateHash(state)) {
+    await repository.save(policyStateHash(state), queued);
+    state = queued;
+  }
+  return processPendingSteps(
+    repository,
+    slotId,
+    state.clock.config.offlineMaxSteps,
+    onProgress,
+    compute,
+  );
+}
+
+/** Both Clock Adapter paths use these same sequential, individually saved months. */
+export async function processPendingSteps(
+  repository: GameRepository,
+  slotId: GameState["slotId"],
+  maximumSteps: number,
+  onProgress?: (completed: number, pending: number) => boolean | void,
+  compute: MonthCalculator = calculateMonth,
+): Promise<GameState> {
+  if (!Number.isSafeInteger(maximumSteps) || maximumSteps < 0)
+    throw new RangeError("進行月数の設定を確認できません");
+  let state = await repository.load(slotId);
+  if (!state) throw new Error("保存済みのゲームがありません");
+  if (!isAutomaticRunning(state)) return state;
+  if (isTutorialTime(state)) {
+    const stopped = stopClock({ ...state, runState: "paused" }, "tutorial");
+    await repository.save(policyStateHash(state), stopped);
+    return stopped;
+  }
+  const count = Math.min(state.pendingOfflineSteps ?? 0, maximumSteps, 96);
+  let lastProgressMs = Date.now();
+  for (let index = 0; index < count; index += 1) {
+    if (!isAutomaticRunning(state)) break;
+    state = await advanceMonth(repository, slotId, true, compute);
+    if (
+      (index + 1) % 4 === 0 ||
+      Date.now() - lastProgressMs >= 250 ||
+      index + 1 === count ||
+      !isAutomaticRunning(state)
+    ) {
+      lastProgressMs = Date.now();
+      if (
+        onProgress?.(index + 1, state.pendingOfflineSteps ?? 0) === false &&
+        isAutomaticRunning(state)
+      ) {
+        const stopped = stopClock({ ...state, runState: "paused" }, "manual");
+        await repository.save(policyStateHash(state), stopped);
+        state = stopped;
+        break;
+      }
     }
   }
-  const count = Math.min(
-    state.pendingOfflineSteps ?? 0,
-    state.clock.config.offlineMaxSteps,
-    96,
-  );
-  for (let index = 0; index < count; index += 1) {
-    if (
-      state.runState === "completed" ||
-      state.runState === "failed" ||
-      state.runState === "crisisStopped"
-    )
-      break;
-    state = await advanceMonth(repository, slotId, true);
-    if ((index + 1) % 12 === 0 || index + 1 === count) {
-      if (onProgress?.(index + 1, state.pendingOfflineSteps ?? 0) === false)
-        break;
-    }
+  if (isAutomaticRunning(state) && (state.pendingOfflineSteps ?? 0) > 0) {
+    const stopped = stopClock({ ...state, runState: "paused" }, "offlineLimit");
+    await repository.save(policyStateHash(state), stopped);
+    state = stopped;
   }
   return state;
 }
@@ -324,7 +410,7 @@ export async function resumeCrisis(
     throw new Error(
       "いまは危機への対応待ちではありません。ホームで現在の状況を確認しましょう。",
     );
-  const next: GameState = { ...state, runState: "paused" };
+  const next = stopClock({ ...state, runState: "paused" }, "manual");
   await repository.save(policyStateHash(state), next);
   return next;
 }
@@ -364,8 +450,13 @@ export async function resolveEvent(
     ),
   ) as unknown as GameState["events"];
   const next: GameState = {
-    ...state,
+    ...structuredClone(state),
     runState: "paused",
+    clock: {
+      ...state.clock,
+      lastProcessedWallClockMs: null,
+      stopReason: "manual",
+    },
     events: {
       ...remainingEvents,
       occurrences,
@@ -448,6 +539,16 @@ export async function confirmPolicy(
   command: PolicyCommand,
   forecast?: Omit<ForecastCapture, "decisionId" | "month">,
 ): Promise<GameState> {
+  const state = await repository.load(slotId);
+  if (!state) throw new Error("保存済みのゲームがありません");
+  if (
+    state.runState === "running" ||
+    state.runState === "calculating" ||
+    state.runState === "awaitingEvent"
+  )
+    throw new Error(
+      "時間を止め、イベントへの対応を終えてから政策を確定してください",
+    );
   return (
     await submitPolicyCommand(repository, slotId, command, (committed) => {
       if (!forecast) return committed;

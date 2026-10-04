@@ -184,14 +184,20 @@ realSecondsPerStep = 300
 offlineMaxSteps = 設定値
 
 
-Web側Clock Adapterが壁時計経過をstep数へ変換する。Engineは実時刻を読まない。
+Web側Clock Adapterが壁時計経過と端数をstep数へ変換する。Engineは実時刻を読まない。
+進行モードは手動／自動とし、新規ゲームとモード情報のない既存セーブは手動・停止とする。自動の明示的な開始・再開から壁時計を加算する。
+進行モード、停止状態、基準時刻、端数、pendingOfflineStepsは既存のRepository境界で保存する。保存構造変更はSave Schemaのmigrationを伴い、既存runのModel Snapshotや乱数条件を変更しない。
+Application側で月次計算、時計変更、政策確定、オフライン処理を直列化する。UIは成功した保存状態から指標・景観・ニュース・レポートを更新する。
+閲覧画面の切替で時計を再生成しない。非表示中のタイマーを停止し、帰還処理は同じ基準時刻を使用する。スロット切替・新規開始は前のゲームの未完了応答を無効化する。
 再開時:
 1. lastActiveAtと現在時刻からelapsedを計算する。
-2. runStateを確認する。
+2. 自動モードかつrunStateがrunningであることを確認する。手動・停止中は経過を加算しない。
 3. 実行可能step数をClockConfigで算出する。
-4. WorkerへrunTicksを依頼する。
+4. Worker clientへ各月の計算を順番に依頼する。計算はWorkerに分離し、main threadの直列キューでRepositoryの期待state hash・選択世代を検証して月ごとにcommitする。保存成功後にだけ次の月を依頼する。
 5. 危機、イベント選択、終了に到達したらそのstepで停止する。
-6. 成功したResultだけを保存する。
+6. 成功したResultだけを保存する。選択変更時はWorkerを終了し、古い応答のcommitを拒否する。Worker異常時は最後のcommitで停止し、明示的な再開からWorkerを再生成する。
+1回のオフライン処理は最大96stepとし、超過分をpendingOfflineStepsに保持する。上限到達後は一時停止し、通常タイマーで次のbatchを自動処理しない。イベント・危機・終了で停止した月以降は処理せず、停止中の新たな経過も加算しない。
+政策編集・プレビュー・最終確認を開く前に停止状態を保存し、離脱・確定・イベント選択後は明示的な再開を必要とする。再開は壁時計の基準を更新して停止期間を除外する。
 
 
 9. Model Configとチューニング

@@ -23,6 +23,20 @@ async function replaceCurrentWithCorrupt(factory: IDBFactory) {
 }
 
 describe("IndexedDbGameRepository generations", () => {
+  it("aborts a queued write when its selected game is no longer active", async () => {
+    const repository = new IndexedDbGameRepository(new IDBFactory());
+    const initial = await createGame(repository, "guarded-save");
+    await expect(repository.save(policyStateHash(initial), {
+      ...initial,
+      learningMode: "standard",
+    }, () => false)).rejects.toThrow(/切り替わり/);
+    expect(await repository.load(1)).toEqual(initial);
+    await repository.save(policyStateHash(initial), {
+      ...initial,
+      learningMode: "standard",
+    }, () => true);
+    expect((await repository.load(1))?.learningMode).toBe("standard");
+  });
   it("keeps start commands idempotent and recovers a corrupt current generation", async () => {
     const factory = new IDBFactory();
     const repository = new IndexedDbGameRepository(factory);

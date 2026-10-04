@@ -277,7 +277,7 @@ async function inspectHome(page: Page) {
     await inspectPages(page);
   }
   await choices.selectOption({ label: "今月の報告" });
-  for (const name of ["1か月進める", "政策を考える", "変化の理由を見る"])
+  for (const name of ["1か月進める", "政策会議", "レポート"])
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 }
 
@@ -702,6 +702,7 @@ test("busy and long underlying errors show safe details without discarding a dra
         window.addEventListener("release-fixture-preview", this.release, {
           once: true,
         });
+        document.documentElement.dataset.fixturePreviewReady = "true";
       }
       terminate() {
         if (this.release)
@@ -723,6 +724,10 @@ test("busy and long underlying errors show safe details without discarding a dra
   await expect(compare).toHaveText("見通しを計算しています…");
   await expect(page.getByText("計算・保存中…")).toBeAttached();
   await expectViewport(page);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-fixture-preview-ready",
+    "true",
+  );
   await page.evaluate(() =>
     window.dispatchEvent(new Event("release-fixture-preview")),
   );

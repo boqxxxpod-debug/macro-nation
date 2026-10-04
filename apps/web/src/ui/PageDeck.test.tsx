@@ -170,6 +170,29 @@ describe("PageDeck accessible content and retained input", () => {
     expect(input).toHaveValue("画面サイズ変更でも保持");
   });
 
+  it("keeps edited input and pagination when available space temporarily reaches zero", () => {
+    render(
+      <PageDeck label="空間が変わる政策">
+        <EditingDraft />
+        <p>費用と副作用</p>
+      </PageDeck>,
+    );
+    const input = screen.getByRole("textbox", { name: "政策名" });
+    fireEvent.change(input, { target: { value: "編集を保持" } });
+    const next = screen.getByRole("button", {
+      name: "空間が変わる政策の次のページ",
+    });
+    expect(next).toBeEnabled();
+    availableHeight = 0;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(next).toBeEnabled();
+    expect(screen.getByRole("status")).not.toHaveTextContent("全文を表示");
+    availableHeight = 160;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(screen.getByRole("textbox", { name: "政策名" })).toBe(input);
+    expect(input).toHaveValue("編集を保持");
+  });
+
   it("exposes all information at 200% text size without discarding input", () => {
     render(
       <PageDeck label="拡大">

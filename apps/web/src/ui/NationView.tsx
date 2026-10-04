@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { GameState } from "@macro-nation/domain";
 import {
   REGION_IDS,
@@ -357,9 +358,11 @@ function regionDetails({
 
 export function NationView({
   state,
+  timeControls,
   onReport,
 }: {
   state: GameState;
+  timeControls?: ReactNode;
   onReport(): void;
 }) {
   const model = useMemo(() => selectNationView(state), [state]);
@@ -428,6 +431,7 @@ export function NationView({
 
   return (
     <div className="nation-view">
+      {timeControls}
       <header className="nation-masthead">
         <div className="nation-brand">
           <span className="nation-emblem" aria-hidden="true">

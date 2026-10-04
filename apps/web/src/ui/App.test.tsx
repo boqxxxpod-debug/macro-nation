@@ -371,9 +371,7 @@ describe("SCN-01 user journey", () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "nation-view-accessibility");
     render(<App repository={memory.repository} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "国家の景観を見る" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "国家ビュー" }));
     expect(screen.getByRole("heading", { name: "国家ビュー" })).toHaveFocus();
     expect(window.location.pathname).toBe("/game/1/nation");
     fireEvent.click(screen.getByRole("button", { name: "地域一覧" }));
@@ -419,7 +417,7 @@ describe("SCN-01 user journey", () => {
     expect(
       textOnPage("次の節目", "48月目：予定の運営期間が終わります"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "政策を考える" }));
+    fireEvent.click(screen.getByRole("button", { name: "政策会議" }));
     expect(screen.getByText(/残り 3 \/ 3枠/)).toBeInTheDocument();
     fireEvent.change(roleOnPage("政策会議", "spinbutton", "政策金利の設定値"), {
       target: { value: "0.05" },
@@ -484,12 +482,7 @@ describe("SCN-01 user journey", () => {
     fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
     fireEvent.click(screen.getByRole("button", { name: "1か月進める" }));
     await waitFor(() => expect(memory.saved?.monthIndex).toBe(1));
-    fireEvent.click(
-      within(document.querySelector<HTMLElement>(".home-actions")!).getByRole(
-        "button",
-        { name: "変化の理由を見る" },
-      ),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "レポート" }));
     expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
     expect(
       roleOnPage("経済レポート", "heading", "変化の理由"),
@@ -647,9 +640,9 @@ describe("SCN-01 user journey", () => {
       expect(
         roleOnPage("危機や出来事への対応", "heading", heading),
       ).toBeInTheDocument();
-      expect(document.querySelector(".game-view > .eyebrow")).toHaveTextContent(
-        status,
-      );
+      expect(
+        screen.getByRole("region", { name: "時間の進行" }),
+      ).toHaveTextContent(status);
       expect(
         screen.getByRole("button", { name: "1か月進める" }),
       ).toBeDisabled();

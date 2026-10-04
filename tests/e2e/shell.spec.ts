@@ -91,7 +91,7 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
   await page.goto("/");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
-  await page.getByRole("button", { name: "政策を考える" }).click();
+  await page.getByRole("button", { name: "政策会議", exact: true }).click();
   await reveal(
     page,
     page.getByRole("spinbutton", { name: "政策金利の設定値" }),
@@ -128,7 +128,7 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
     page,
     page.getByRole("heading", { name: "今月の3行報告" }).first(),
   );
-  await page.getByRole("button", { name: "変化の理由を見る" }).click();
+  await page.getByRole("button", { name: "レポート", exact: true }).click();
   await reveal(page, page.getByRole("heading", { name: "変化の理由" }).first());
   const hasOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,
@@ -170,7 +170,7 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
   await expect(page.getByRole("button", { name: "1か月進める" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "政策を考える" }),
+    page.getByRole("button", { name: "政策会議", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(

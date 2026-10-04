@@ -26,6 +26,7 @@ import {
 import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
+import { isTutorialTime } from "../application/game-clock";
 import {
   learningEntryDisplay,
   schoolLensesForContentVersion,
@@ -101,8 +102,10 @@ export function Home({
   onOpenReport,
   onOpenPolicies,
   response,
+  timeControls,
 }: {
   state: GameState;
+  timeControls?: ReactNode;
   onOpenReport(): void;
   onOpenPolicies(): void;
   response?: ReactNode;
@@ -260,7 +263,7 @@ export function Home({
         <p>今のところ、気になる兆候はありません。</p>
       ),
     },
-    ...(state.monthIndex < 12 && state.learningMode === "learning"
+    ...(isTutorialTime(state)
       ? {
           tutorial: {
             title: "はじめの案内",
@@ -292,6 +295,7 @@ export function Home({
   const selected = details[detail] ?? details.cause!;
   return (
     <div className="home-layout">
+      {timeControls}
       <p
         className={`home-warning ${crisis || state.runState === "awaitingEvent" ? "crisis" : "quiet"}`}
         role="status"

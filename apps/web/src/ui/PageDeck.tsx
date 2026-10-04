@@ -195,7 +195,9 @@ export function PageDeck({
   const content = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState<number[][]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(
+    () => typeof ResizeObserver === "undefined",
+  );
   const [textLimit, setTextLimit] = useState(80);
   const items = blocks(children, textLimit);
   const pageCount = Math.max(1, pages.length);
@@ -214,7 +216,10 @@ export function PageDeck({
       );
       const enlarge =
         fontSize >= 24 || (window.visualViewport?.scale ?? 1) >= 1.5;
-      setExpanded(enlarge || available <= 0);
+      // A zero-height measurement can be transient while a bounded screen
+      // lays out its controls. Keep the previous layout until it is measurable;
+      // expanding here would change its own height and oscillate every commit.
+      setExpanded((previous) => enlarge || (available <= 0 ? previous : false));
       if (enlarge || available <= 0) return;
       const charactersPerLine = Math.max(
         12,

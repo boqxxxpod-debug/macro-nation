@@ -234,7 +234,7 @@ tickSequenceは成功したtickごとに1増え、monthIndexと同じ増分を�
 active reserved completed cancelledの政策IDは重複しない。
 ScheduledEffectの月別weight合計は定義された総weightと許容誤差1e-10以内で一致する。
 同じindicatorIdの寄与度合計は丸め前totalDeltaと絶対誤差1e-9または相対誤差1e-8以内で一致する。
-runStateがrunningのときだけ壁時計経過をゲーム月へ変換する。
+自動モードかつrunStateがrunningのときだけ壁時計経過をゲーム月へ変換する。
 awaitingEvent crisisStopped completed failedではオフライン経過を加算しない。
 5 5 コマンドと冪等性
 interface GameCommand<TPayload> {
@@ -601,26 +601,45 @@ interface PreviewOutput {
 履歴が長い場合は表示解像度に応じて描画点を間引くが、元データは変更しない。
 11 オフライン進行とWorker設計
 11 1 壁時計の扱い
+保存する時計の追加項目は以下とする。型のoptionalは旧セーブとの読み取り互換のためであり、新規作成・schema 3移行後はモード・基準時刻・端数を補完する。停止理由は停止中だけ保持し、開始・再開時に除く。
+interface ClockProgression {
+  progressionMode?: 'manual' | 'auto';
+  lastProcessedWallClockMs?: number | null;
+  remainderMs?: number;
+  warning?: 'CLOCK_MOVED_BACKWARD';
+  stopReason?: 'manual' | 'policy' | 'event' | 'crisis' | 'error'
+    | 'completed' | 'failed' | 'offlineLimit' | 'tutorial';
+}
+これらはGameState.clockに保持し、停止時の基準時刻はnullとする。端数と既に加算したpendingOfflineStepsは停止・モード切替をまたいで保持する。
 elapsedMs = max(0, nowMs - lastProcessedWallClockMs)
-totalMs = remainderMs + min(elapsedMs, 8 hours)
-tickCount = min(floor(totalMs / 5 minutes), 96)
-nextRemainderMs = totalMs - tickCount * 5 minutes
-runStateがrunning以外ならtickCountを0とする。
-時計が過去へ戻った場合はelapsedMsを0とし、CLOCK_MOVED_BACKWARDを注意ログへ記録する。
-8時間超過分は破棄し、後で繰り越さない。
-policy編集または確認画面を開いた時点でpause commandを保存してから画面遷移する。
-visibilitychangeとpagehideでlastSeenAtを保存するが、正しさは次回起動時の保存値検証に依存する。
+stepMs = clock.config.realSecondsPerStep * 1000
+totalMs = remainderMs + elapsedMs
+newSteps = floor(totalMs / stepMs)
+nextRemainderMs = totalMs - newSteps * stepMs
+pendingOfflineSteps = pendingOfflineSteps + newSteps
+tickCount = min(pendingOfflineSteps, clock.config.offlineMaxSteps, 96)
+自動モードかつrunStateがrunningの場合だけ新しい経過を加算して未処理stepを実行する。手動または停止中はどちらも行わない。
+タイマーは経過の確認契機とし、呼出回数をゲーム月数として扱わない。閲覧画面の切替で時計を再生成しない。
+時計が過去へ戻った場合はelapsedMsを0とし、clock.warningへCLOCK_MOVED_BACKWARDを保存する。ホーム・国家ビューで時刻の調整待ちと注意を表示し、保存基準に時刻が追いつくか、明示的な停止・再開で基準を更新すると解除する。経済状態と保存済み端数は変えない。
+96tickを超える未処理stepは保持し、次回帰還または明示的な続行で処理する。旧8時間超過分破棄の仕様は適用しない。
+1回のオフライン処理上限へ到達して未処理stepが残る場合はpaused、stopReason: offlineLimitを保存する。通常タイマーが次のbatchを自動で処理せず、利用者の明示的な再開から続行する。
+停止時は端数を保存し、再開時に現在時刻を基準として停止中の経過を除外する。モード切替も停止状態を保存し、選択だけで自動開始しない。
+政策編集・プレビュー・確認を開く前にpause commandを保存してから画面遷移する。閉じる・確定・イベント選択だけでは再開しない。
+非表示中はオンラインタイマーを停止し、帰還時に同じ保存済み基準時刻からオフライン経過を反映する。visibilitychangeとpagehideは補助であり、正しさは保存済み時計と状態の検証に依存する。
+Application側で手動tick、自動tick、政策確定、オフライン処理、時計変更を直列化する。スロット切替・新規開始で要求世代を更新し、前のゲームの応答は新しいゲームへ適用しない。
+SCN-01のlearningでは、保存済みscenario.firstPlayable.tutorialQuartersとclock.config.policyCycleStepsの積までチュートリアル期間とする。この期間は手動で進め、自動開始を無効化する。進行中の自動セーブを読み込んだ場合も経過を加算する前にtutorial理由で停止する。casualとstandardにはこの案内期間を適用しない。
 11 2 オフライン実行
-1. main threadがslotId、expectedTickSequence、nowMsをWorkerへ送る。
-2. WorkerがIndexedDBからcurrent世代を読み、版とchecksumを検証する。
-3. tickCountを算出し、月次tickを1回ずつ順番に実行する。
-4. 各成功tick後にcurrentをpreviousへ移し、新currentとlastProcessedWallClockMsを同一transactionで保存する。
+1. main threadのClock AdapterがRepositoryからcurrent世代を読み、版とchecksumを検証する。保存済み時計から経過を加算し、基準時刻・端数・未処理stepを先に保存する。
+2. 各月の保存済みstateとrequest ID、state hashをWorker clientへ渡し、Workerで次の1tickを計算する。main threadでは離席分のSimulation Engineを実行しない。
+3. Workerからの候補を受け取った後、main thread側Repositoryが期待state hashと現在のslot・game・要求世代を検証する。各成功tick後にcurrentをpreviousへ移し、新current、時計基準・端数、減算したpendingOfflineStepsを同一transactionで保存する。
+4. 保存成功後にのみ次のtickをWorkerへ依頼する。スロット切替・新規開始・破棄では処理中Workerを終了し、古い応答も保存確定前の世代検証で拒否する。計算をWorker、保存許可をmain threadの直列キューに分け、選択変更が旧スロットを書き換える競合を防ぐ。
 5. 4tickごとまたは250msごとにPROGRESSを通知する。
-6. awaitingEvent crisisStopped failed completedに達したら残り時間を破棄して停止する。
+6. awaitingEvent crisisStopped failed completedに達したらその月で停止する。既に加算した未処理stepは保持するが、停止中は処理も経過時間の加算も行わない。
 7. 終了時に処理月数、停止理由、上位3指標、警告を返す。
 8. main threadは最新保存を再読込し、帰還報告を表示する。
 計算中もナビゲーションとヘルプ閲覧は可能にするが、ゲーム状態を変更する操作は無効化して進捗を表示する。Workerが異常終了しても、最後にcommit済みのtickから再開する。
 11 3 Worker通信
+現在の時間進行WorkerはCALCULATE_MONTH要求（requestId、engineVersion、expectedStateHash、expectedTick、state）に対して、RESULT（同じrequestIdとexpectedStateHash、次月state）またはERRORを返す。Workerは入力、clientは応答をZodとDomain invariantで検証し、異なるgame・slot・tick・要求への応答を採用しない。CANCELはclientによるWorker終了で即座に計算を中止する。以下は他のWorker用途も含む上位コマンドの設計例である。
 type WorkerRequest =
   | { id: string; type: 'RUN_OFFLINE'; slotId: number; nowMs: number; expectedTick: number }
   | { id: string; type: 'PREVIEW_POLICY'; state: PreviewState; draft: PolicyDraft }
@@ -674,13 +693,16 @@ Service Workerは新buildをwaitingに置き、全active saveが対応可能と�
 13 画面と状態遷移設計
 13 1 ルート
 13 2 ゲーム状態遷移
-paused <-> running -> calculating -> running
-running -> awaitingEvent -> paused or running
-running -> crisisStopped -> paused or running
+paused -> explicit auto start/resume -> running -> calculating -> running
+manual paused -> explicit tick -> calculating -> paused
+running -> awaitingEvent -> event choice -> paused
+running -> crisisStopped -> emergency response -> paused
 running -> completed
 running -> failed
 completed and failed are terminal for that gameId
-政策編集と最終確認を開く前にrunningからpausedへ保存する。閉じても自動再開せず、元の状態がrunningだった場合だけ再開確認を出す。
+新規ゲームとモード情報のない既存セーブは手動・pausedとするが、旧セーブのawaitingEvent、crisisStopped、completed、failedは維持する。自動モード選択だけではrunningへ遷移しない。
+政策編集・プレビュー・最終確認を開く前にrunningからpausedへ保存する。閉じる・政策確定・イベント選択後もpausedを維持し、明示的な再開を必要とする。
+計算・保存失敗時は最後にcommitした状態を維持して停止し、同じ月の自動無限再試行を行わない。
 calculating中は状態変更コマンドを拒否し、閲覧操作だけ許可する。
 awaitingEventではイベント選択、help、reportを許可し、通常政策確定と再開を禁止する。
 crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開まで進めない。
@@ -690,6 +712,7 @@ crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開
 長文や履歴は内容の高さに応じてページを分け、すべての内容へ前後の切替で到達可能にする。単一ページの内容をoverflowで切り捨てたり、内容パネルのスクロールへ置き換えたりしない。計算中、エラー、複数の警告でも主要操作を画面外へ押し出さない。
 入力と専門家選択は未確定draftのUI状態としてページや画面の切替中も保持する。ページ切替は表示だけを変更し、政策確定、イベント選択、危機再開のcommandを実行しない。
 13 3 ホーム画面
+ホームと国家ビューは同じ時計状態を表示し、年月、手動／自動、進行／停止と理由、次の月までの残り時間、開始・一時停止・再開操作を提供する。
 1. 危機警告を1行表示する。警告がなければ重大な警告なしと明記する。
 2. 国民生活 成長 物価 雇用 信頼の5カードを表示する。色に加え矢印、状態語、比較期間を付ける。
 3. 帰還時だけ3行報告を先頭付近に表示し、各行から根拠レポートへ遷移する。
@@ -999,12 +1022,13 @@ interface SchoolLens {
 }
 自由主義 社会主義 新自由主義 マルクス主義 共産主義等は同じ政策結果を異なる目的と前提から読む比較レンズとして実装する。score 勝敗補正 正解フラグを持たせない。表示順は固定または利用者選択とし、特定思想を既定の正解として強調しない。
 26 画面状態とルーティング追補
-UI04を開く時点でrunningをpausedへ保存し 離脱時も明示操作なしに再開しない。
+UI04およびプレビュー・最終確認を開く前にrunningをpausedへ保存し、離脱・確定後も明示操作なしに再開しない。通常の閲覧画面の切替は時計を維持する。
 専門家選択はpolicy draftのUI状態だが 確定時にdecision logへ保存する。
-UI14は閲覧画面でありrunStateを変更しない。危機時も見られるが再開操作はUI10だけに置く。
+UI14への閲覧遷移はrunStateを変更しない。ホームと同じ時計操作を提供するが、危機停止の解除はUI10の緊急会議だけに置く。
 戻る操作でworker結果を再commitしないようrequestId draftHash commandIdを分離する。
 27 保存 バージョン 移行
 saveSchemaVersionを上げるmigrationでは既存セーブにstandard duration 96か月を設定せず、scenarioIdがSCN-01なら48、それ以外の既存シナリオなら96をendMonthとして補完する。ExpertProfile本文や画像は保存せずexpertIdとtemplateVersionだけを保存する。
+Issue #91の保存schema 3は時計の進行モード・基準時刻・端数・停止理由を追加する。旧セーブは手動、基準時刻null、端数0へ補完し、通常のrunningはpausedへ移す。イベント待ち・危機・終了状態、既にあるendMonth・durationMode、pendingOfflineSteps、経済Config Snapshot、RNGを維持する。Engine・Modelの版を時間UI追加だけで変更しない。
 28 Workerと性能設計
 worker messageはZodで検証しrequestIdとengineVersion不一致を拒否する。
 30年実行は12tickごとに進捗を通知し96tickごとに取消可能checkpointを置く。
@@ -1494,7 +1518,7 @@ AT006
 48逐次と4時間offline一致
 integration offline equality 48
 AT007
-8時間超でも96tick上限
+1回96tick上限、超過step保持、手動・停止中は経過加算なし
 worker clock boundary
 AT008
 危機停止後に時間停止
