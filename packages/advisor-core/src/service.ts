@@ -3,9 +3,11 @@ import type {
   FreePolicyResult, HistoryRequest, NationHistory, NewsRequest, NewsStory,
 } from "./contracts";
 import { ordinaryNews } from "./news";
+import content from "./content-v1.2.0.json";
+import { causeDisplayName, indicatorDisplayName, renderContent } from "./display-names";
 
-const unavailable = "AI解説は現在利用できません。ゲームの進行には影響しません。";
-const unsupported = (explanation = "現在の政策エンジンでは表現できません。既存の政策を選択してください。"): FreePolicyResult =>
+const unavailable = content.ai.unavailable;
+const unsupported = (explanation = content.ai.unsupported): FreePolicyResult =>
   ({ status: "unsupported", explanation, candidate: null });
 
 function record(value: unknown): Record<string, unknown> {
@@ -115,24 +117,28 @@ export class MockAIProvider implements AIProvider {
     const cause = request.facts.causes[0];
     return request.experts.map((expert) => ({
       expertId: expert.id,
-      conclusion: `${expert.role}の視点から政策を検討します。`,
-      reason: cause ? `${cause.indicator}の変化には${cause.source}が寄与しました。${expert.values}を重視します。` : `${expert.values}を重視します。`,
-      caution: "効果には時間差と副作用があります。",
+      conclusion: renderContent(content.ai.mockConclusion, { role: expert.role }),
+      reason: renderContent(cause ? content.ai.mockReason : content.ai.mockNoEvidenceReason, {
+        indicator: cause ? indicatorDisplayName(cause.indicator) : "",
+        source: cause ? causeDisplayName(cause.source) : "",
+        values: expert.values,
+      }),
+      caution: content.ai.mockCaution,
     }));
   }
   async freePolicy(request: FreePolicyRequest): Promise<FreePolicyResult> {
     const match = request.text.match(/政策金利を\s*(\d+(?:\.\d+)?)\s*%/);
-    return match ? validateFreePolicy({ status: "supported", explanation: "政策金利の目標として解釈しました。確定前にプレビューしてください。", candidate: { policyType: "interestRate", targetRate: Number(match[1]) / 100 } }) : unsupported();
+    return match ? validateFreePolicy({ status: "supported", explanation: content.ai.policyInterpretation, candidate: { policyType: "interestRate", targetRate: Number(match[1]) / 100 } }) : unsupported();
   }
   async news(request: NewsRequest): Promise<NewsStory> {
     const base = ordinaryNews(request.facts);
-    return { ...base, explanation: `${base.explanation} 主な要因は因果ログで確認できます。`, perspectives: [
-      ...base.perspectives, { viewpoint: "newspaper", text: "政策と指標の推移を継続して観察します。" },
-      { viewpoint: "citizen", text: "暮らしへの影響が気になります。" },
+    return { ...base, explanation: `${base.explanation} ${content.ai.newsEvidence}`, perspectives: [
+      ...base.perspectives, { viewpoint: "newspaper", text: content.ai.newspaper },
+      { viewpoint: "citizen", text: content.ai.citizen },
     ] };
   }
   async history(request: HistoryRequest): Promise<NationHistory> {
-    return { title: "国家運営の記録", narrative: `${request.ending.month}か月を運営しました。${request.milestones.map((x) => x.summary).join(" ").slice(0, 1000) || "政策と経済の推移を振り返りましょう。"}` };
+    return { title: content.ai.historyTitle, narrative: `${renderContent(content.ai.historyLead, { month: String(request.ending.month) })}${request.milestones.map((x) => x.summary).join(" ").slice(0, 1000) || content.ai.historyEmpty}` };
   }
 }
 
@@ -158,6 +164,6 @@ export class AIService {
   async history(request: HistoryRequest): Promise<NationHistory> {
     if (!this.flags.enabled || !this.flags.history) return new MockAIProvider().history(request);
     try { return validateHistory(await this.provider.history(request)); }
-    catch { return { title: "国家運営の記録", narrative: unavailable }; }
+    catch { return { title: content.ai.historyTitle, narrative: unavailable }; }
   }
 }

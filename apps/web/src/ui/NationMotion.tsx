@@ -14,6 +14,11 @@ import {
 } from "./nation-motion";
 
 type QualitySetting = "auto" | QualityTier;
+const QUALITY_LABELS: Record<QualityTier, string> = {
+  high: "高画質",
+  medium: "標準",
+  low: "軽量",
+};
 
 function deviceTier(): QualityTier {
   const memory = (navigator as Navigator & { deviceMemory?: number })
@@ -47,10 +52,13 @@ export function NationMotion({
   const tier = setting === "auto" ? autoTier : setting;
   const performance = frameRateStatus(fps);
   const performanceLabel = {
-    measuring: "性能を計測中",
-    target: "目標30fpsを達成",
-    minimum: "最低20fpsを達成",
-    slow: "20fps未満・画質を調整中",
+    measuring: "動きのなめらかさを確認しています",
+    target: "30fps以上でなめらかに動いています",
+    minimum: "20fps以上で動いています",
+    slow:
+      setting === "auto"
+        ? "20fps未満のため画質を調整しています"
+        : "20fps未満です",
   }[performance];
 
   useEffect(() => {
@@ -150,7 +158,7 @@ export function NationMotion({
           onChange={(event) => setSetting(event.target.value as QualitySetting)}
         >
           <option value="auto">自動</option>
-          <option value="high">高</option>
+          <option value="high">高画質</option>
           <option value="medium">標準</option>
           <option value="low">軽量</option>
         </select>
@@ -161,8 +169,8 @@ export function NationMotion({
         data-performance={reduced ? "reduced" : performance}
       >
         {reduced
-          ? "動きの軽減: 静止表示"
-          : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
+          ? "動きを減らす設定に合わせて、静止表示にしています"
+          : `画質 ${QUALITY_LABELS[tier]} · ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
       </output>
     </div>
   );

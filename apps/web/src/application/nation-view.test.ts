@@ -63,8 +63,41 @@ describe("read-only NationViewSelector", () => {
     expect(view.regions.city.topCause?.sourceId).toBe("world-demand");
     expect(view.regions.city.previous).toBe(initial.economy.indices.realGdp);
     expect(Object.keys(view.regions)).toHaveLength(7);
-    expect(view.eventMarkers).toContain("危機停止");
+    expect(view.eventMarkers).toContain("危機への対応を待っています");
     expect(state).toEqual(before);
     expect(selectNationView(structuredClone(state))).toEqual(view);
+  });
+
+  it("shows saved event names and a crisis ending without exposing IDs or changing the state", async () => {
+    const initial = await fixture();
+    const state: GameState = {
+      ...initial,
+      runState: "failed",
+      events: {
+        ...initial.events,
+        activeEventIds: ["saved-event-id", "unknown-event-id"],
+      },
+      configSnapshot: {
+        ...initial.configSnapshot,
+        normalizedConfig: {
+          ...initial.configSnapshot.normalizedConfig,
+          content: {
+            events: [
+              { eventId: "saved-event-id", title: "保存時のイベント名" },
+            ],
+          },
+        },
+      },
+    };
+    const before = structuredClone(state);
+    expect(selectNationView(state).eventMarkers).toEqual([
+      "保存時のイベント名",
+      "イベントが起きています",
+      "危機により運営が終了しました",
+    ]);
+    expect(selectNationView(state).overlays).toEqual([
+      "危機により運営が終了しました",
+    ]);
+    expect(state).toEqual(before);
   });
 });

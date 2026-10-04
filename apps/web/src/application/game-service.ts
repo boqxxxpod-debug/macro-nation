@@ -143,13 +143,18 @@ export async function advanceMonth(
   fromOffline = false,
 ): Promise<GameState> {
   const state = await repository.load(slotId);
-  if (!state) throw new Error("保存済みのゲームがありません");
+  if (!state)
+    throw new Error(
+      "保存したゲームが見つかりません。「はじめる・続きから」で保存先を確認しましょう。",
+    );
   if (
     state.runState === "completed" ||
     state.runState === "failed" ||
     state.runState === "crisisStopped"
   )
-    throw new Error("終了または危機停止中です。危機対応後に再開してください");
+    throw new Error(
+      "運営の終了時や危機への対応中は、月を進められません。危機への対応中であれば、ホームで対応を確認してから再開できます。",
+    );
   const result = runPolicyHeadless({
     initialState: { ...state, runState: "running" },
     tickCount: 1,
@@ -227,15 +232,22 @@ export async function catchUpOffline(
   onProgress?: (completed: number, pending: number) => boolean | void,
 ): Promise<GameState> {
   let state = await repository.load(slotId);
-  if (!state) throw new Error("保存済みのゲームがありません");
+  if (!state)
+    throw new Error(
+      "保存したゲームが見つかりません。「はじめる・続きから」で保存先を確認しましょう。",
+    );
   if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0)
-    throw new RangeError("経過時間が正しくありません");
+    throw new RangeError(
+      "離れていた時間を確認できませんでした。もう一度、保存したゲームを読み込みましょう。",
+    );
   if (state.runState === "running") {
     const newSteps = Math.floor(
       elapsedSeconds / state.clock.config.realSecondsPerStep,
     );
     if (!Number.isSafeInteger(newSteps + (state.pendingOfflineSteps ?? 0)))
-      throw new RangeError("オフライン経過が長すぎます");
+      throw new RangeError(
+        "離れていた時間が長く、一度に進められる範囲を超えています。保存したゲームを読み込んで状況を確認しましょう。",
+      );
     if (newSteps > 0) {
       const queued = {
         ...state,
@@ -283,7 +295,9 @@ export function firstPlayableRules(state: GameState): PlayRules {
     firstPlayable: Omit<PlayRules, "durationMonths">;
   };
   if (!scenario?.firstPlayable)
-    throw new Error("シナリオの終了・危機条件がありません");
+    throw new Error(
+      "このゲームの終了条件と危機条件を確認できませんでした。別の保存先で新しく始めることができます。",
+    );
   return { durationMonths: scenario.durationMonths, ...scenario.firstPlayable };
 }
 
@@ -307,7 +321,9 @@ export async function resumeCrisis(
 ): Promise<GameState> {
   const state = await repository.load(slotId);
   if (!state || state.runState !== "crisisStopped")
-    throw new Error("再開できる危機がありません");
+    throw new Error(
+      "いまは危機への対応待ちではありません。ホームで現在の状況を確認しましょう。",
+    );
   const next: GameState = { ...state, runState: "paused" };
   await repository.save(policyStateHash(state), next);
   return next;
@@ -322,14 +338,19 @@ export async function resolveEvent(
   const state = await repository.load(slotId);
   const eventId = state?.events.pendingChoiceEventId;
   if (!state || state.runState !== "awaitingEvent" || !eventId)
-    throw new Error("選択待ちのイベントがありません");
+    throw new Error(
+      "いまは対応を選ぶイベントがありません。ホームで現在の状況を確認しましょう。",
+    );
   const expectedHash = policyStateHash(state);
   const choiceRate = choiceId === "balanced" ? 0.15 : 0.2;
   const occurrences = [...(state.events.occurrences ?? [])];
   const index = occurrences.findLastIndex(
     (item) => item.eventId === eventId && !item.choiceId,
   );
-  if (index < 0) throw new Error("イベント記録が見つかりません");
+  if (index < 0)
+    throw new Error(
+      "対応するイベントの記録を確認できませんでした。保存したゲームを読み込んで、もう一度状況を確認しましょう。",
+    );
   const occurrence = occurrences[index]!;
   const choiceMitigation = -occurrence.baselineDamage * choiceRate;
   occurrences[index] = {

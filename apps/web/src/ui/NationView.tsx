@@ -327,7 +327,7 @@ function regionDetails({
     <section
       className="panel nation-details"
       aria-live="polite"
-      aria-label={`${region.label}の地域詳細`}
+      aria-label={`${region.label}の様子`}
     >
       <p className="eyebrow">地域のいま · {STAGE_NAMES[region.stage]}</p>
       <h3>{region.label}</h3>
@@ -336,7 +336,7 @@ function regionDetails({
       </p>
       <p>
         {change === null
-          ? "前月比較は記録がありません。"
+          ? "前月の記録がまだないため、変化は次の月から確認できます。"
           : `前月差 ${change >= 0 ? "+" : ""}${change.toFixed(2)}（${region.previous!.toFixed(1)} → ${region.value.toFixed(1)}）`}
       </p>
       {region.related.length > 0 && (
@@ -348,8 +348,8 @@ function regionDetails({
       )}
       <p>
         {region.topCause
-          ? `主な要因：${label(region.topCause.indicatorId)}に対して${describeCause(region.topCause, state)}（寄与 ${region.topCause.delta >= 0 ? "+" : ""}${region.topCause.delta.toFixed(2)}）`
-          : "今月、この地域に関連する因果記録はありません。"}
+          ? `主な理由：${label(region.topCause.indicatorId)}に${describeCause(region.topCause, state)}が影響しています（寄与 ${region.topCause.delta >= 0 ? "+" : ""}${region.topCause.delta.toFixed(2)}）。`
+          : "今月、この地域の変化の理由はまだ記録されていません。"}
       </p>
     </section>
   );
@@ -416,10 +416,10 @@ export function NationView({
   const progress = Math.min(100, Math.round((model.month / duration) * 100));
   const cards = selectHomeIndicators(state);
   const detailLabels: Record<DetailPage, string> = {
-    region: "地域詳細",
+    region: "地域の様子",
     regions: "地域一覧",
     news: "今月のニュース",
-    voices: "Nation Voice",
+    voices: "この国の声",
     settings: "表示設定",
   };
   const stages = Object.fromEntries(
@@ -435,11 +435,11 @@ export function NationView({
           </span>
           <span>
             <strong aria-hidden="true">国家ビュー</strong>
-            <small>Living Nation</small>
+            <small>この国のいま</small>
           </span>
         </div>
         <p>
-          つながる人、ひろがる未来<small>今日も、この国は動いている</small>
+          つながる人、ひろがる未来<small>今日も、この国は動いています</small>
         </p>
         <div className="nation-date">
           <span>
@@ -526,7 +526,7 @@ export function NationView({
               key={id}
               aria-label={
                 model.regions[id].label +
-                "を選択：" +
+                "の様子を見る：" +
                 STAGE_NAMES[model.regions[id].stage]
               }
               aria-pressed={selected === id}
@@ -578,7 +578,7 @@ export function NationView({
               </button>
             </header>
             <label className="nation-detail-selector">
-              詳細の表示
+              見たい内容
               <select
                 value={detailPage}
                 onChange={(event) =>
@@ -614,9 +614,9 @@ export function NationView({
                 regionDetails({ region: model.regions[selected], state })}
               {detailPage === "regions" && (
                 <section className="panel nation-list" aria-label="地域一覧">
-                  <h3>地域を選ぶ</h3>
+                  <h3>地域の様子を見てみましょう</h3>
                   <p>
-                    景観が表示できないときも、こちらから同じ地域情報を確認できます。
+                    気になる地域を選ぶと、今の状態と変化の理由を確認できます。
                   </p>
                   <ul className="nation-region-list">
                     {REGION_IDS.map((id) => (
@@ -653,7 +653,7 @@ export function NationView({
                     <p>
                       実質GDP {economy.indices.realGdp.toFixed(1)} · GDP成長{" "}
                       {growth === null
-                        ? "前月データなし"
+                        ? "前月の記録はまだありません"
                         : `${Number(growth) >= 0 ? "+" : ""}${growth}%（前月比）`}
                     </p>
                     <p>輸出 {economy.flows.exports.toFixed(1)}（月間）</p>
@@ -668,26 +668,28 @@ export function NationView({
                           <li key={`${index}:${marker}`}>{marker}</li>
                         ))}
                       </ul>
-                      <p>この画面から時間は進みません。</p>
+                      <p>この画面を見るだけでは、時間は進みません。</p>
                     </section>
                   )}
                 </>
               )}
               {detailPage === "voices" &&
                 (nationVoiceContent({ state, onOpenCause: onReport }) ?? (
-                  <p>今月までの代表的な声はまだ記録されていません。</p>
+                  <p>
+                    この国の声はまだ届いていません。月が進むと、反応を確認できます。
+                  </p>
                 ))}
               {detailPage === "settings" && (
                 <section className="panel nation-settings">
                   <h3>景観の表示</h3>
                   <p>
-                    画質は自動・高・標準・軽量から選べます。自動では端末の描画性能に合わせて調整します。
+                    画質は自動・高画質・標準・軽量から選べます。自動では端末に合わせて調整します。
                   </p>
                   <p>
-                    端末で「動きの軽減」を設定すると移動物を停止し、静止景観と地域ラベルで状態を表示します。
+                    端末で「動きの軽減」を設定すると、人や乗り物の動きが止まります。静止した景観と地域の名前から、同じ情報を確認できます。
                   </p>
                   <p>
-                    景観はゲーム内モデルの目安です。現実の経済予測ではありません。
+                    景観はゲーム内の経済の様子を表しています。現実の経済を予測するものではありません。
                   </p>
                 </section>
               )}
@@ -723,7 +725,7 @@ export function NationView({
           aria-controls="nation-detail-screen"
           onClick={(event) => openDetails("voices", event.currentTarget)}
         >
-          声
+          この国の声
         </button>
         <button
           type="button"

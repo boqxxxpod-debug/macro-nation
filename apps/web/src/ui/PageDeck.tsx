@@ -302,11 +302,11 @@ export function PageDeck({
       <div
         className="page-controls"
         role="group"
-        aria-label={`${label}のページ切替`}
+        aria-label={`${label}のページを切り替える`}
       >
         <button
           type="button"
-          aria-label={`${label}：前のページ`}
+          aria-label={`${label}の前のページ`}
           aria-controls={id}
           disabled={current === 0 || expanded}
           onClick={() => turn(current - 1)}
@@ -314,11 +314,13 @@ export function PageDeck({
           前へ
         </button>
         <span role="status" aria-live="polite">
-          {expanded ? "拡大表示・全文" : `${current + 1} / ${pageCount}ページ`}
+          {expanded
+            ? "全文を表示しています"
+            : `${current + 1} / ${pageCount}ページ`}
         </span>
         <button
           type="button"
-          aria-label={`${label}：次のページ`}
+          aria-label={`${label}の次のページ`}
           aria-controls={id}
           disabled={current >= pageCount - 1 || expanded}
           onClick={() => turn(current + 1)}

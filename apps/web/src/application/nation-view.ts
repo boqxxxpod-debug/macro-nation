@@ -1,5 +1,6 @@
 import { ordinaryNews, projectFacts } from "@macro-nation/advisor-core";
 import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
+import { historyReferenceDisplay } from "./history";
 import rules from "./nation-view-rules.json";
 
 export const REGION_IDS = [
@@ -260,11 +261,25 @@ export function selectNationView(state: GameState): NationViewModel {
     regions,
     trafficLevel: regions.harbor.stage,
     constructionLevel: regions.city.stage,
-    overlays: crisis ? ["危機警戒"] : [],
+    overlays:
+      state.runState === "failed"
+        ? ["危機により運営が終了しました"]
+        : crisis
+          ? ["危機への対応が必要です"]
+          : [],
     eventMarkers: [
-      ...state.events.activeEventIds,
-      ...(crisis ? ["危機停止"] : []),
+      ...state.events.activeEventIds.map((id) => {
+        const title = historyReferenceDisplay(id, state);
+        return title === "過去の記録" ? "イベントが起きています" : title;
+      }),
+      ...(crisis
+        ? [
+            state.runState === "failed"
+              ? "危機により運営が終了しました"
+              : "危機への対応を待っています",
+          ]
+        : []),
     ],
-    news: ordinaryNews(projectFacts(state)),
+    news: ordinaryNews(projectFacts(state), state.versions.contentVersion),
   };
 }

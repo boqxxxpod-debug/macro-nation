@@ -88,13 +88,14 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
               state: structuredClone(record.previous),
               recovered: true,
               reason:
-                "現在の保存データが破損していたため、直前の正常な保存から復旧しました。",
+                "最新の保存データを読み込めなかったため、直前の保存から読み込みました。進んだ月や政策を確認しましょう。",
             };
           } else {
             found = {
               state: null,
               recovered: false,
-              reason: "現在と直前の保存データを検証できませんでした。",
+              reason:
+                "最新と直前の保存データを確認できませんでした。別の保存先から続けるか、新しく始めることができます。",
             };
           }
         };

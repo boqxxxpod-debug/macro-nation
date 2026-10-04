@@ -27,6 +27,8 @@ export interface ExpertProfile {
 export interface RuleBasedAdviceContext {
   readonly effects: Readonly<Record<string, number>>;
   readonly uncertainty: string;
+  /** Existing games keep the wording associated with their saved content version. */
+  readonly contentVersion?: string;
 }
 export interface Advice {
   readonly expertId: string;

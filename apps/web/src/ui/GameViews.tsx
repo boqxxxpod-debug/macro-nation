@@ -23,14 +23,60 @@ import {
   selectHomeRecommendations,
   topCause,
 } from "../application/home-view";
-import { describeCause, display, label } from "./game-format";
+import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
-import { schoolLenses, visibleCauseCount } from "../application/learning";
+import {
+  learningEntryDisplay,
+  schoolLensesForContentVersion,
+  visibleCauseCount,
+} from "../application/learning";
 import {
   HISTORY_CATEGORY_LABELS,
+  historyCauseDisplay,
+  historyReferenceDisplay,
   nationalHistory,
 } from "../application/history";
+
+function uncertaintyExplanation(note: string): string {
+  return note ===
+    "同一モデルの固定ショック分位による試算幅であり、確率的な信頼区間ではありません。"
+    ? "外部環境の揺れを一定の条件で想定した計算の幅です。この範囲に収まる確率を示すものではありません。"
+    : note;
+}
+
+function adviceExplanation(
+  text: string,
+  indicatorIds: readonly string[],
+): string {
+  const indicator = indicatorIds.find((id) => text.startsWith(`${id}は`));
+  const translated = indicator
+    ? `${label(indicator)}${text.slice(indicator.length)}`
+    : text;
+  return translated.replace(
+    "無追加政策比で",
+    "新しい政策を加えない場合と比べて",
+  );
+}
+
+function preparednessIndicatorLabel(
+  id: string,
+  eventId: string,
+  state: GameState,
+): string {
+  const content = state.configSnapshot.normalizedConfig.content as
+    | {
+        events?: readonly {
+          eventId: string;
+          preparednessIndicators: readonly { id: string; path: string }[];
+        }[];
+      }
+    | undefined;
+  const indicator = content?.events
+    ?.find((event) => event.eventId === eventId)
+    ?.preparednessIndicators.find((item) => item.id === id);
+  return label(indicator?.path ?? id);
+}
 
 function ExpertPortrait({ expertId }: { expertId: string }) {
   const portrait = expertPortraitManifest.find(
@@ -82,14 +128,14 @@ export function Home({
   const primaryCause = topCause(latest);
   const warningText =
     state.runState === "crisisStopped"
-      ? "危機警告：停止中・対応を確認してください。"
+      ? "危機のため一時停止中です。"
       : state.runState === "awaitingEvent"
-        ? "突発イベント：対応を選択してください。"
+        ? "出来事が起きました。対応を選んでください。"
         : crisis
-          ? "危機警告：物価・雇用が危険域です。"
+          ? "物価や雇用に大きな不安があります。"
           : (state.events.warnings ?? []).length > 0
-            ? `イベントの兆候：${state.events.warnings!.length}件（詳細へ）`
-            : "重大な危機警告はありません。";
+            ? `気になる兆候が${state.events.warnings!.length}件あります。`
+            : "今のところ、大きな危機の兆候はありません。";
   const hasResponse = !!response;
   const [detail, setDetail] = useState(hasResponse ? "response" : "cause");
   useEffect(() => {
@@ -97,7 +143,7 @@ export function Home({
   }, [hasResponse]);
   const details: Record<string, { title: string; content: ReactNode }> = {
     ...(hasResponse
-      ? { response: { title: "危機・イベント対応", content: response } }
+      ? { response: { title: "危機や出来事への対応", content: response } }
       : {}),
     report: {
       title: "今月の報告",
@@ -115,10 +161,10 @@ export function Home({
                 </article>
               ))}
               <article>
-                <p>{`3. 次に注意：最大の寄与は${
+                <p>{`3. ${
                   latest?.topCauses[0]
-                    ? `${label(latest.topCauses[0].indicatorId)}には${describeCause(latest.topCauses[0], state)}`
-                    : "大きな変化は確認されていません"
+                    ? `${label(latest.topCauses[0].indicatorId)}にいちばん大きく影響したのは、${describeCause(latest.topCauses[0], state)}です`
+                    : "大きな変化はまだ確認されていません"
                 }。`}</p>
                 <button className="brief-link" onClick={onOpenReport}>
                   根拠を見る
@@ -132,22 +178,22 @@ export function Home({
       ),
     },
     cause: {
-      title: "最大変化要因",
+      title: "いちばん大きく影響したこと",
       content: (
         <section className="panel">
-          <h3>最大変化要因</h3>
+          <h3>いちばん大きく影響したこと</h3>
           {primaryCause ? (
             <p>
               <strong>{causeCategory(primaryCause.sourceType)}</strong>：
               {label(primaryCause.indicatorId)}には
-              {describeCause(primaryCause, state)}が最大の寄与をしました。
+              {describeCause(primaryCause, state)}がいちばん大きく影響しました。
             </p>
           ) : (
             <p>
-              月次計算後に、政策・外部要因・慣性・ランダム要因の区分付きで表示します。
+              月を進めると、変化の理由を政策や外部環境などに分けて確認できます。
             </p>
           )}
-          <button onClick={onOpenReport}>因果ログで根拠を見る</button>
+          <button onClick={onOpenReport}>変化の理由を見る</button>
         </section>
       ),
     },
@@ -178,46 +224,46 @@ export function Home({
               ))}
             </ol>
           ) : (
-            <p>現在の提案はありません。</p>
+            <p>今は新しい提案はありません。指標の変化を見守りましょう。</p>
           )}
           <p className="quiet">
-            提案は自動では確定されません。比較してから判断してください。
+            提案を比べて、あなたが採用するかどうかを決められます。
           </p>
           <button onClick={onOpenPolicies}>政策会議で比較する</button>
         </section>
       ),
     },
     voices: {
-      title: "Nation Voice",
+      title: "国民・企業・市場の声",
       content: nationVoiceContent({ state, onOpenCause: onOpenReport }) ?? (
         <p>月を進めると、国民・企業・市場の声が届きます。</p>
       ),
     },
     warnings: {
-      title: "イベントの兆候",
+      title: "気になる兆候",
       content: (state.events.warnings ?? []).length ? (
         (state.events.warnings ?? []).map((warning) => (
           <section className="panel" key={warning.eventId}>
-            <h3>イベントの兆候（警戒度 {warning.severity}）</h3>
+            <h3>気になる兆候（警戒度 {warning.severity}）</h3>
             <p>
-              {warning.eventId}：準備度 {Math.round(warning.preparedness * 100)}
-              %
+              {eventDisplayName(warning.eventId, state)}：準備度{" "}
+              {Math.round(warning.preparedness * 100)}%
             </p>
             <p>
               {warning.missingIndicatorIds.length > 0
-                ? `不足：${warning.missingIndicatorIds.join("、")}`
+                ? `備えが足りない項目：${warning.missingIndicatorIds.map((id) => preparednessIndicatorLabel(id, warning.eventId, state)).join("、")}。政策会議で対策を検討してください。`
                 : "主要な備えは整っています。"}
             </p>
           </section>
         ))
       ) : (
-        <p>現在、イベントの兆候はありません。</p>
+        <p>今のところ、気になる兆候はありません。</p>
       ),
     },
     ...(state.monthIndex < 12 && state.learningMode === "learning"
       ? {
           tutorial: {
-            title: "チュートリアル",
+            title: "はじめの案内",
             content: (
               <section
                 className="panel tutorial"
@@ -229,16 +275,14 @@ export function Home({
                 <p>
                   {
                     [
-                      "まず政策会議で案を比較し、確定するか何もしないか選びましょう。",
+                      "まず政策会議で案を比べ、採用するか今の政策を続けるか選びましょう。",
                       "数か月進め、前月比と3行報告を確認しましょう。",
-                      "別の政策を試算し、12か月の副作用と費用を比べましょう。",
-                      "レポートで最大の変化要因を確認し、次の判断に備えましょう。",
+                      "別の政策の見通しを確認し、12か月の副作用と費用を比べましょう。",
+                      "レポートでいちばん大きく影響したことを確認し、次の判断に備えましょう。",
                     ][Math.floor(state.monthIndex / 3)]
                   }
                 </p>
-                <p>
-                  この案内は説明だけです。計算は通常の月次Engineで進みます。
-                </p>
+                <p>この案内を見ながら、通常と同じルールで進められます。</p>
               </section>
             ),
           },
@@ -267,7 +311,7 @@ export function Home({
               <small>
                 {previous === undefined
                   ? "開始時点"
-                  : `${direction === "up" ? "↑" : direction === "down" ? "↓" : "→"} ${display(id, Math.abs(current - previous))}・${assessment === "improved" ? "良化" : assessment === "worsened" ? "悪化" : "安定"}`}
+                  : `${direction === "up" ? "↑" : direction === "down" ? "↓" : "→"} ${display(id, Math.abs(current - previous))}・${assessment === "improved" ? "改善" : assessment === "worsened" ? "悪化" : "安定"}`}
               </small>
             </article>
           ))}
@@ -306,7 +350,7 @@ function Trend({
   const values = reports
     .map((report) => report.values[id])
     .filter((value): value is number => value !== undefined);
-  if (values.length < 2) return <p>推移は2か月目から表示します。</p>;
+  if (values.length < 2) return <p>月を進めると、指標の推移を確認できます。</p>;
   const min = Math.min(...values),
     span = Math.max(...values) - min || 1;
   const points = values
@@ -341,12 +385,17 @@ function Trend({
 
 export function Report({ state }: { state: GameState }) {
   const latest = state.history.reports?.at(-1);
-  const [story, setStory] = useState(() => ordinaryNews(projectFacts(state)));
+  const profiles = expertProfilesForContentVersion(
+    state.versions.contentVersion,
+  );
+  const [story, setStory] = useState(() =>
+    ordinaryNews(projectFacts(state), state.versions.contentVersion),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const service = useMemo(() => createBrowserAIService(), []);
   useEffect(() => {
-    setStory(ordinaryNews(projectFacts(state)));
+    setStory(ordinaryNews(projectFacts(state), state.versions.contentVersion));
   }, [state]);
   const facts = {
     ...projectFacts(state),
@@ -360,7 +409,7 @@ export function Report({ state }: { state: GameState }) {
   return (
     <PageDeck label="経済レポート">
       <p className="quiet">
-        ゲームモデル上の試算であり、現実経済の予測ではありません。
+        ゲーム内の計算による説明です。現実の経済を予測するものではありません。
       </p>
       <section className="panel">
         <h3>経済の推移</h3>
@@ -371,9 +420,7 @@ export function Report({ state }: { state: GameState }) {
       {nationVoiceContent({ state })}
       <section className="panel" aria-labelledby="national-history-heading">
         <h3 id="national-history-heading">国家史</h3>
-        <p>
-          同じ月の出来事をまとめ、政策・イベント・反応・因果の参照IDから再構成しています。
-        </p>
+        <p>政策や出来事を月ごとにまとめています。変化の理由も振り返れます。</p>
         {nationalHistory(state).length ? (
           <div className="history-timeline">
             {nationalHistory(state).map((entry) => (
@@ -384,21 +431,41 @@ export function Report({ state }: { state: GameState }) {
                     .map((category) => HISTORY_CATEGORY_LABELS[category])
                     .join("・")}
                 </h4>
-                <p>参照：{entry.referenceIds.join("、")}</p>
+                <p>
+                  記録：
+                  {[
+                    ...new Set(
+                      entry.referenceIds.map((id) =>
+                        historyReferenceDisplay(id, state),
+                      ),
+                    ),
+                  ].join("、")}
+                </p>
                 {entry.causeRefs.length > 0 && (
-                  <p>因果：{entry.causeRefs.join("、")}</p>
+                  <p>
+                    変化の理由：
+                    {[
+                      ...new Set(
+                        entry.causeRefs.map((ref) =>
+                          historyCauseDisplay(ref, state),
+                        ),
+                      ),
+                    ].join("、")}
+                  </p>
                 )}
               </article>
             ))}
           </div>
         ) : (
-          <p>節目はまだありません。</p>
+          <p>
+            まだ節目の記録はありません。政策や出来事があると、ここに残ります。
+          </p>
         )}
       </section>
       <section className="panel">
-        <h3>なぜ起きた</h3>
+        <h3>変化の理由</h3>
         <p>
-          基準時点：前月からの変化。寄与の絶対値が大きい順に
+          前月からの変化に大きく影響した順に、
           {visibleCauseCount(state.learningMode ?? "standard")}件を表示します。
         </p>
         {latest?.topCauses.length ? (
@@ -408,50 +475,52 @@ export function Report({ state }: { state: GameState }) {
               .map((cause, index) => (
                 <li key={index}>
                   {label(cause.indicatorId)}：{describeCause(cause, state)}
-                  、寄与 {cause.delta > 0 ? "+" : ""}
+                  、変化への影響 {cause.delta > 0 ? "+" : ""}
                   {cause.delta.toFixed(2)}
                 </li>
               ))}
           </ol>
         ) : (
-          <p>まだ月次の因果記録はありません。</p>
+          <p>月を進めると、指標が変わった理由を確認できます。</p>
         )}
       </section>
       {state.learningMode === "learning" && (
         <section className="panel" aria-labelledby="school-lenses-heading">
           <h3 id="school-lenses-heading">思想比較</h3>
           <p>
-            同じゲーム内の結果を、異なる目的と前提から読む比較レンズです。正解・順位・勝敗を示すものではありません。
+            同じ結果を、異なる目的や前提から見比べます。どれが正解かを決めるものではありません。
           </p>
           <div className="school-lens-grid">
-            {schoolLenses.map((lens) => (
-              <article key={lens.schoolId}>
-                <h4>{lens.displayName}</h4>
-                <p>
-                  <strong>重視する目的：</strong>
-                  {lens.goals.join("、")}
-                </p>
-                <p>
-                  <strong>前提：</strong>
-                  {lens.premises.join("、")}
-                </p>
-                <p>
-                  <strong>政策への見方：</strong>
-                  {lens.view}
-                </p>
-                <p>
-                  <strong>想定する利点：</strong>
-                  {lens.benefits.join("、")}
-                </p>
-                <p>
-                  <strong>想定するリスク：</strong>
-                  {lens.risks.join("、")}
-                </p>
-              </article>
-            ))}
+            {schoolLensesForContentVersion(state.versions.contentVersion).map(
+              (lens) => (
+                <article key={lens.schoolId}>
+                  <h4>{lens.displayName}</h4>
+                  <p>
+                    <strong>重視する目的：</strong>
+                    {lens.goals.join("、")}
+                  </p>
+                  <p>
+                    <strong>前提：</strong>
+                    {lens.premises.join("、")}
+                  </p>
+                  <p>
+                    <strong>政策への見方：</strong>
+                    {lens.view}
+                  </p>
+                  <p>
+                    <strong>想定する利点：</strong>
+                    {lens.benefits.join("、")}
+                  </p>
+                  <p>
+                    <strong>想定するリスク：</strong>
+                    {lens.risks.join("、")}
+                  </p>
+                </article>
+              ),
+            )}
           </div>
           <p className="quiet">
-            ゲームモデル上の説明であり、現実の思想・政策の優劣判定や現実経済の予測ではありません。
+            ゲーム内の説明です。現実の思想や政策の優劣を示すものではありません。
           </p>
         </section>
       )}
@@ -467,8 +536,20 @@ export function Report({ state }: { state: GameState }) {
                   <article key={record.recordId}>
                     <h4>{record.recordedMonth}月目の政策判断</h4>
                     <p>
-                      専門家：{record.expertIds.join("、")}、確信度：
-                      {record.confidence}
+                      専門家：
+                      {record.expertIds
+                        .map(
+                          (id) =>
+                            profiles.find((profile) => profile.id === id)
+                              ?.displayName ?? "当時の専門家",
+                        )
+                        .join("、")}
+                      、確信度：
+                      {
+                        { low: "低", medium: "中", high: "高" }[
+                          record.confidence
+                        ]
+                      }
                     </p>
                     {record.horizons.map((horizon) => (
                       <p key={horizon.months}>
@@ -476,15 +557,17 @@ export function Report({ state }: { state: GameState }) {
                         {display("realGdp", horizon.indicators.realGdp ?? 0)}
                       </p>
                     ))}
-                    <p>主な不確実性：{record.uncertainty}</p>
+                    <p>
+                      主な不確実性：{uncertaintyExplanation(record.uncertainty)}
+                    </p>
                   </article>
                 ))}
             </div>
           ) : (
-            <p>政策会議で試算を確定すると、1年・5年の見通しを保存します。</p>
+            <p>政策を確定すると、そのときの1年・5年の見通しを保存します。</p>
           )}
           <p className="quiet">
-            予測値は全専門家で共通です。専門家は説明の焦点だけを変え、経済結果には影響しません。
+            見通しの数値は全専門家で共通です。それぞれの視点から解説します。
           </p>
         </section>
       )}
@@ -496,21 +579,32 @@ export function Report({ state }: { state: GameState }) {
               {(state.history.learningEntries ?? [])
                 .slice()
                 .reverse()
-                .map((entry) => (
-                  <article key={entry.entryId}>
-                    <h4>{entry.concept}</h4>
-                    <p>
-                      {entry.month}月目・{entry.kind}
-                    </p>
-                    <p>根拠：{entry.evidence}</p>
-                  </article>
-                ))}
+                .map((entry) => {
+                  const entryDisplay = learningEntryDisplay(entry, state);
+                  return (
+                    <article key={entry.entryId}>
+                      <h4>{entryDisplay.concept}</h4>
+                      <p>
+                        {entry.month}月目・
+                        {
+                          {
+                            term: "用語",
+                            theory: "経済のつながり",
+                            decision: "政策の判断",
+                            verification: "結果の振り返り",
+                          }[entry.kind]
+                        }
+                      </p>
+                      <p>根拠：{entryDisplay.evidence}</p>
+                    </article>
+                  );
+                })}
             </div>
           ) : (
-            <p>月を進めると、用語・理論・判断・結果検証を自動保存します。</p>
+            <p>月を進めると、用語や判断を振り返るノートが残ります。</p>
           )}
           <p className="quiet">
-            ノートは説明用であり、政策効果や勝敗には影響しません。
+            ノートで用語や判断を振り返れます。記録が政策の効果を変えることはありません。
           </p>
         </section>
       )}
@@ -526,17 +620,15 @@ export function Report({ state }: { state: GameState }) {
             void service
               .news({ id: `month-${facts.month}`, facts })
               .then(setStory)
-              .catch((cause: unknown) =>
+              .catch(() =>
                 setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "報道を生成できませんでした",
+                  "特別報道を読み込めませんでした。少し待って、もう一度試してください。",
                 ),
               )
               .finally(() => setBusy(false));
           }}
         >
-          特別報道を読む
+          {busy ? "特別報道を読み込んでいます…" : "特別報道を読む"}
         </button>
         {error && <p role="alert">{error}</p>}
       </section>
@@ -614,11 +706,15 @@ export function PolicyForm({
         const available =
           resources[key] - held.reduce((sum, item) => sum + item.costs[key], 0);
         if (costs[key] > available)
-          return `${key === "foreignReserves" ? "外貨準備" : key === "politicalCapital" ? "政治資本" : key === "implementationCapacity" ? "実施能力" : "開始予算"}が不足しています。必要 ${costs[key].toFixed(1)}、利用可能 ${available.toFixed(1)}。`;
+          return `${key === "foreignReserves" ? "外貨準備" : key === "politicalCapital" ? "政治資本" : key === "implementationCapacity" ? "実施能力" : "開始予算"}が足りません。必要 ${costs[key].toFixed(1)}、使える量 ${available.toFixed(1)}です。設定値や政策を見直して、もう一度見通しを確認してください。`;
       }
       return "";
     } catch {
-      return "設定値が政策の許容範囲外です。";
+      const min = rule?.inputs?.[0]?.min ?? rule?.inputMin;
+      const max = rule?.inputs?.[0]?.max ?? rule?.inputMax;
+      return min !== undefined && max !== undefined
+        ? `設定値は${min}〜${max}の範囲で入力してください。値を見直して、もう一度見通しを確認してください。`
+        : "設定値を確認できませんでした。政策を選び直して、もう一度試してください。";
     }
   })();
   return (
@@ -643,13 +739,13 @@ export function PolicyForm({
               );
             }}
           >
-            1年・5年を比較する
+            {busy ? "見通しを計算しています…" : "見通しを確認"}
           </button>
           {(shortage || meeting.slotsRemaining === 0) && (
             <span role="status" className="action-warning">
               {shortage
-                ? "資源不足または設定値のエラー：本文で詳細を確認してください。"
-                : "今四半期の政策枠は残っていません。"}
+                ? "政策を進める準備が足りません。本文の案内を確認してください。"
+                : "今四半期の政策枠は使い切りました。次の四半期にもう一度検討できます。"}
             </span>
           )}
         </>
@@ -697,7 +793,7 @@ export function PolicyForm({
           />
         </label>
         <label>
-          発動時期
+          政策を始める時期
           <select
             value={ahead}
             onChange={(event) =>
@@ -706,7 +802,7 @@ export function PolicyForm({
           >
             {[0, 1, 2, 3].map((offset) => (
               <option key={offset} value={offset}>
-                {offset === 0 ? "即時" : `${offset}四半期後`}
+                {offset === 0 ? "すぐに始める" : `${offset}四半期後`}
               </option>
             ))}
           </select>
@@ -746,7 +842,9 @@ export function PolicyForm({
           ))}
         </fieldset>
         {meeting.slotsRemaining === 0 && (
-          <p>今四半期の3枠を使い切りました。次の更新月までお待ちください。</p>
+          <p>
+            今四半期の3枠を使い切りました。月を進めると、次の四半期に検討できます。
+          </p>
         )}
         {shortage && <p role="status">{shortage}</p>}
       </section>
@@ -778,10 +876,12 @@ export function Preview({
   if (!output)
     return (
       <PageDeck
-        label="政策プレビュー"
+        label="政策の見通し"
         actions={onBack && <button onClick={onBack}>案を修正する</button>}
       >
-        <p className="panel">政策会議で案を作成し、プレビューしてください。</p>
+        <p className="panel">
+          政策会議で案を作り、「見通しを確認」を押してください。
+        </p>
       </PageDeck>
     );
   const forecast = (months: 12 | 60, indicatorId: string) =>
@@ -807,20 +907,22 @@ export function Preview({
         : "低";
   const profiles = expertProfilesForContentVersion(contentVersion);
   const advisor = new RuleBasedExpertAdvisor();
+  const uncertaintyNote = uncertaintyExplanation(output.uncertainty.note);
   const adviceContext = {
     effects: Object.fromEntries(
       output.summaries
         .filter((item) => item.horizonMonths === 60)
         .map((item) => [item.indicatorId, item.endDelta]),
     ),
-    uncertainty: output.uncertainty.note,
+    uncertainty: uncertaintyNote,
+    contentVersion,
   };
   const dissentingExpert = profiles.find(
     (profile) => !expertIds.includes(profile.id),
   );
   return (
     <PageDeck
-      label="政策プレビュー"
+      label="政策の見通し"
       actions={
         <>
           {onBack && (
@@ -835,7 +937,7 @@ export function Preview({
               if (reviewed && !busy) onConfirm();
             }}
           >
-            政策を確定して保存
+            {busy ? "政策を保存しています…" : "政策を確定する"}
           </button>
           {!reviewed && (
             <small className="action-warning">
@@ -848,11 +950,11 @@ export function Preview({
       <section className="panel">
         <h3>効果と費用</h3>
         <p>
-          発動：
+          政策の開始：
           {output.activationMonth === null
-            ? "未設定"
+            ? "設定していません"
             : `${output.activationMonth + 1}月目`}
-          。最大効果：
+          。いちばん効果が大きい時期：
           {output.summaries.find(
             (item) =>
               item.indicatorId === "realGdp" && item.horizonMonths === 12,
@@ -860,8 +962,8 @@ export function Preview({
           か月後。
         </p>
         <p>
-          主効果 {output.primaryEffects.length}件、副作用{" "}
-          {output.sideEffects.length}件。
+          主な効果は{output.primaryEffects.length}件、副作用は{" "}
+          {output.sideEffects.length}件です。
         </p>
         <ul>
           {output.sideEffects.map((effect) => (
@@ -877,12 +979,15 @@ export function Preview({
           {output.costs.immediateBudget}。
         </p>
         {output.interactions.length > 0 && (
-          <p>同種の政策と重なります：{output.interactions.join("、")}</p>
+          <p>
+            同じ種類の政策が{output.interactions.length}
+            件あります。効果が重なる点にも気をつけましょう。
+          </p>
         )}
-        <p>{output.uncertainty.note}</p>
+        <p>{uncertaintyNote}</p>
       </section>
       <section className="panel" aria-labelledby="interaction-heading">
-        <h3 id="interaction-heading">政策コンボ</h3>
+        <h3 id="interaction-heading">政策の組み合わせ</h3>
         {output.comboResults.map((combo) => {
           const reason = combo.reason
             ? {
@@ -890,15 +995,19 @@ export function Preview({
                 "forbidden-policy": "同時に使えない政策があります",
                 "insufficient-overlap": `重複期間が${combo.overlapMonths}か月で条件を満たしません`,
                 "insufficient-additional-cost":
-                  "コンボの追加費用が不足しています（政策自体は確定できます）",
-                "missing-required-combo": "前提となるコンボが発動していません",
-                "already-fired-this-month": "今月すでに発動済みです",
+                  "組み合わせの追加費用が足りません（政策自体は確定できます）",
+                "missing-required-combo":
+                  "前提となる組み合わせの効果がまだ出ていません",
+                "already-fired-this-month": "今月はすでに効果が出ています",
               }[combo.reason]
             : "すべての条件を満たします";
           return (
             <article className="combo-result" key={combo.comboId}>
               <h4>
-                {combo.kind === "synergy" ? "相乗" : "相殺"}：{combo.comboId}
+                {combo.kind === "synergy"
+                  ? "効果を高め合う組み合わせ"
+                  : "効果を打ち消し合う組み合わせ"}
+                ：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
               </h4>
               <p>
                 条件：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
@@ -907,8 +1016,10 @@ export function Preview({
                   : ""}
               </p>
               <p>
-                判定：{combo.activated ? "発動見込み" : "未発動見込み"} —{" "}
-                {reason}。
+                {combo.activated
+                  ? "組み合わせの効果が出る見込みです"
+                  : "組み合わせの効果は出ない見込みです"}
+                。 {reason}。
               </p>
               <p>
                 追加費用：政治資本 {combo.additionalCosts.politicalCapital}
@@ -920,7 +1031,7 @@ export function Preview({
           );
         })}
         {output.comboResults.length === 0 && (
-          <p>定義済みの政策コンボはありません。</p>
+          <p>今の設定には、特別な組み合わせの効果はありません。</p>
         )}
       </section>
       <label className="review-acknowledgement">
@@ -934,10 +1045,10 @@ export function Preview({
         費用・副作用・警告を確認しました
       </label>
       <p className="quiet">
-        ゲーム内モデルの試算です。低・中・高は固定ショック分位に基づく幅です。
+        ゲーム内の計算による見通しです。外部環境の揺れを想定し、結果の幅を示しています。
       </p>
       <section className="panel">
-        <h3>無追加政策との12か月比較</h3>
+        <h3>新しい政策を加えない場合との12か月比較</h3>
         <div className="comparison-list">
           {output.indicators
             .filter((item) =>
@@ -964,7 +1075,8 @@ export function Preview({
                 <p>
                   12か月：{display(item.indicatorId, item.month12.low)} ～{" "}
                   {display(item.indicatorId, item.month12.high)}
-                  、無追加政策との差 {item.month12.deltaBase > 0 ? "+" : ""}
+                  、新しい政策を加えない場合との差{" "}
+                  {item.month12.deltaBase > 0 ? "+" : ""}
                   {display(item.indicatorId, item.month12.deltaBase)}
                 </p>
               </article>
@@ -982,11 +1094,11 @@ export function Preview({
             <article key={indicatorId}>
               <h4>{label(indicatorId)}</h4>
               <p>
-                1年後の無介入との差：
+                1年後の新しい政策を加えない場合との差：
                 {display(indicatorId, forecast(12, indicatorId)?.endDelta ?? 0)}
               </p>
               <p>
-                5年後の無介入との差：
+                5年後の新しい政策を加えない場合との差：
                 {display(indicatorId, forecast(60, indicatorId)?.endDelta ?? 0)}
               </p>
             </article>
@@ -994,15 +1106,18 @@ export function Preview({
         </div>
       </section>
       <section className="panel" aria-labelledby="counterfactual-heading">
-        <h3 id="counterfactual-heading">反実仮想：別の判断なら</h3>
+        <h3 id="counterfactual-heading">別の政策を選んだら</h3>
         <p>
           基準時点：ゲーム内{" "}
           {output.activationMonth === null
             ? "現在"
             : `${output.activationMonth + 1}月目`}
-          。すべて同じsnapshot・固定ショックで比較しています。
+          。今の国の状態と外部環境をそろえて比べています。
         </p>
-        <div className="counterfactual-cards" aria-label="政策案と無介入の比較">
+        <div
+          className="counterfactual-cards"
+          aria-label="政策案と新しい政策を加えない場合の比較"
+        >
           {[output, ...counterfactuals].map((candidate) => {
             const row = candidate.indicators.find(
               (item) => item.indicatorId === "realGdp",
@@ -1016,7 +1131,7 @@ export function Preview({
                 <h4>
                   {candidate.previewedDraft
                     ? label(candidate.previewedDraft.ruleId)
-                    : "何もしない"}
+                    : "今の政策を続ける"}
                 </h4>
                 {[
                   { horizon: "3か月", value: row.month3.deltaBase },
@@ -1033,7 +1148,7 @@ export function Preview({
             );
           })}
         </div>
-        <small>表示値は成長の無介入との差です。</small>
+        <small>表示値は、新しい政策を加えない場合との成長の差です。</small>
       </section>
       <section className="panel" aria-labelledby="advice-heading">
         <h3 id="advice-heading">選択した専門家の解説</h3>
@@ -1053,7 +1168,11 @@ export function Preview({
               </p>
               <p>
                 <strong>結論：</strong>
-                {advice.conclusion}
+                {adviceExplanation(
+                  advice.conclusion,
+                  expert.priorityIndicators ??
+                    Object.keys(adviceContext.effects),
+                )}
               </p>
               <p>
                 <strong>やさしい理由：</strong>
@@ -1064,7 +1183,7 @@ export function Preview({
                 {advice.caution}
               </p>
               <details>
-                <summary>用語：無追加政策比</summary>
+                <summary>比べている基準</summary>
                 新しい政策を加えず、現在の政策だけを続けた場合との差です。
               </details>
             </article>
@@ -1076,10 +1195,15 @@ export function Preview({
             return (
               <aside className="expert-dissent">
                 <strong>
-                  別の視点 —{" "}
+                  別の視点：{" "}
                   {dissentingExpert.displayName ?? dissentingExpert.role}：
                 </strong>{" "}
-                {dissent.conclusion} {dissent.caution}
+                {adviceExplanation(
+                  dissent.conclusion,
+                  dissentingExpert.priorityIndicators ??
+                    Object.keys(adviceContext.effects),
+                )}{" "}
+                {dissent.caution}
               </aside>
             );
           })()}

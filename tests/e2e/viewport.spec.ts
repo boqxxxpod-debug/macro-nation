@@ -193,8 +193,8 @@ async function expectNoHorizontalScroll(page: Page) {
 
 async function inspectDeck(page: Page, deck: Locator) {
   await waitForPageLayout(page);
-  const previous = deck.getByRole("button", { name: /：前のページ$/ });
-  const next = deck.getByRole("button", { name: /：次のページ$/ });
+  const previous = deck.getByRole("button", { name: /の前のページ$/ });
+  const next = deck.getByRole("button", { name: /の次のページ$/ });
   for (
     let count = 0;
     count < MAX_PAGE_STEPS && (await previous.isEnabled());
@@ -240,7 +240,7 @@ async function inspectPages(page: Page) {
 async function reach(page: Page, control: Locator) {
   await waitForPageLayout(page);
   if (await control.isVisible()) return;
-  const previous = page.getByRole("button", { name: /：前のページ$/ });
+  const previous = page.getByRole("button", { name: /の前のページ$/ });
   for (
     let count = 0;
     count < MAX_PAGE_STEPS && (await previous.isEnabled());
@@ -250,7 +250,7 @@ async function reach(page: Page, control: Locator) {
     await waitForPageLayout(page);
     if (await control.isVisible()) return;
   }
-  const next = page.getByRole("button", { name: /：次のページ$/ });
+  const next = page.getByRole("button", { name: /の次のページ$/ });
   for (let count = 0; count < MAX_PAGE_STEPS; count++) {
     if (await control.isVisible()) return;
     if (!(await next.isEnabled())) break;
@@ -263,9 +263,9 @@ async function reach(page: Page, control: Locator) {
 async function startGame(page: Page) {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "ゲームを始める" }),
+    page.getByRole("button", { name: "はじめる", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await page.getByRole("button", { name: "はじめる", exact: true }).click();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
 }
 
@@ -277,7 +277,7 @@ async function inspectHome(page: Page) {
     await inspectPages(page);
   }
   await choices.selectOption({ label: "今月の報告" });
-  for (const name of ["1か月進める", "政策を考える", "理由を見る"])
+  for (const name of ["1か月進める", "政策を考える", "変化の理由を見る"])
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 }
 
@@ -289,14 +289,14 @@ async function previewPolicy(page: Page) {
   await inspectPages(page);
   await reach(page, value);
   await expect(value).toHaveValue("0.05");
-  await page.getByRole("button", { name: "1年・5年を比較する" }).click();
+  await page.getByRole("button", { name: "見通しを確認" }).click();
   await expect(
-    page.getByRole("heading", { name: "政策プレビュー" }),
+    page.getByRole("heading", { name: "政策の見通し" }),
   ).toBeFocused();
 }
 
 async function confirmPolicy(page: Page) {
-  const confirm = page.getByRole("button", { name: "政策を確定して保存" });
+  const confirm = page.getByRole("button", { name: "政策を確定する" });
   await expect(confirm).toBeDisabled();
   const reviewed = page.getByRole("checkbox", {
     name: "費用・副作用・警告を確認しました",
@@ -495,10 +495,10 @@ for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "ゲームを始める" }),
+      page.getByRole("button", { name: "はじめる", exact: true }),
     ).toBeVisible();
     await inspectPages(page);
-    await page.getByRole("button", { name: "ゲームを始める" }).click();
+    await page.getByRole("button", { name: "はじめる", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "国家ホーム" }),
     ).toBeFocused();
@@ -521,10 +521,10 @@ for (const viewport of VIEWPORTS) {
         body: await page.screenshot(),
         contentType: "image/png",
       });
-    const harbor = page.getByRole("button", { name: /^港湾を選択/ });
+    const harbor = page.getByRole("button", { name: /^港湾の様子を見る：/ });
     await harbor.click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    const details = page.getByRole("combobox", { name: "詳細の表示" });
+    const details = page.getByRole("combobox", { name: "見たい内容" });
     for (const label of await details.locator("option").allTextContents()) {
       // selectOption changes values without focusing the native control.
       // Preserve the focus a player has while switching detail screens.
@@ -556,8 +556,11 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole("heading", { name: "終了評価" })).toBeFocused();
     await inspectPages(page);
     // Durable history merges simultaneous events and social reactions by month.
-    await reach(page, page.getByText(/^119月目：イベント(?:・強い社会反応)?$/));
-    await page.getByRole("button", { name: "レポートで理由を見る" }).click();
+    await reach(
+      page,
+      page.getByText(/^119月目：イベント(?:・社会の大きな反応)?$/),
+    );
+    await page.getByRole("button", { name: "変化の理由を見る" }).click();
     await expect(
       page.getByRole("heading", { name: "経済レポート" }),
     ).toBeFocused();
@@ -585,7 +588,7 @@ test("long Japanese, warnings, crisis and event choices remain reachable at 360�
   await inspectHome(page);
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
-    .selectOption({ label: "危機・イベント対応" });
+    .selectOption({ label: "危機や出来事への対応" });
   await reach(
     page,
     page.getByRole("button", { name: "危機対応を確認して再開" }),
@@ -595,8 +598,8 @@ test("long Japanese, warnings, crisis and event choices remain reachable at 360�
   expect((await savedState(page)).runState).toBe("paused");
   await seedPresentation(page, "awaitingEvent");
   await inspectPages(page);
-  await reach(page, page.getByRole("button", { name: "均衡対応" }));
-  await page.getByRole("button", { name: "均衡対応" }).click();
+  await reach(page, page.getByRole("button", { name: "バランスを取る" }));
+  await page.getByRole("button", { name: "バランスを取る" }).click();
   await expectNotice(page, "イベント対応を保存しました。");
   const saved = await savedState(page);
   expect(saved.runState).toBe("paused");
@@ -615,7 +618,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const pager = page.getByRole("button", {
-    name: "起動・開始設定：次のページ",
+    name: "開始設定の次のページ",
   });
   await expect(pager).toBeEnabled();
   const content = page.locator("[data-page-current]");
@@ -632,7 +635,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
       ),
     ).toBe(false);
   }
-  await page.getByRole("button", { name: "ゲームを始める" }).focus();
+  await page.getByRole("button", { name: "はじめる", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
   await page.evaluate(() => {
@@ -644,16 +647,16 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "政策会議" })).toBeFocused();
   await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
-  await page.getByRole("button", { name: "1年・5年を比較する" }).focus();
+  await page.getByRole("button", { name: "見通しを確認" }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "政策プレビュー" }),
+    page.getByRole("heading", { name: "政策の見通し" }),
   ).toBeFocused();
   await page
     .getByRole("checkbox", { name: "費用・副作用・警告を確認しました" })
     .focus();
   await page.keyboard.press("Space");
-  await page.getByRole("button", { name: "政策を確定して保存" }).focus();
+  await page.getByRole("button", { name: "政策を確定する" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
   await expectNoHorizontalScroll(page);
@@ -675,7 +678,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await expectNoHorizontalScroll(page);
 });
 
-test("busy and long error details fit and return focus without discarding a draft", async ({
+test("busy and long underlying errors show safe details without discarding a draft", async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -712,9 +715,12 @@ test("busy and long error details fit and return focus without discarding a draf
   const input = page.getByRole("spinbutton", { name: "政策金利の設定値" });
   await reach(page, input);
   await input.fill("0.05");
-  const compare = page.getByRole("button", { name: "1年・5年を比較する" });
+  const compare = page.getByRole("button", {
+    name: /^見通しを(?:確認|計算しています…)$/,
+  });
   await compare.click();
   await expect(compare).toBeDisabled();
+  await expect(compare).toHaveText("見通しを計算しています…");
   await expect(page.getByText("計算・保存中…")).toBeAttached();
   await expectViewport(page);
   await page.evaluate(() =>
@@ -723,8 +729,11 @@ test("busy and long error details fit and return focus without discarding a draf
   const errorDetails = page.getByRole("button", { name: "エラーの詳細" });
   await expect(errorDetails).toBeVisible();
   await errorDetails.click();
-  const dialog = page.getByRole("dialog", { name: "通知の詳細" });
-  await expect(dialog).toContainText(message);
+  const dialog = page.getByRole("dialog", { name: "エラーの詳細" });
+  await expect(dialog).toContainText(
+    "政策の見通しを確認できませんでした。政策会議に戻り、設定を確認してもう一度お試しください。",
+  );
+  await expect(dialog).not.toContainText(message);
   await inspectPages(page);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);

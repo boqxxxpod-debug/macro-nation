@@ -22,7 +22,7 @@
     {
       "eventId": "evt-demand-slump",
       "dependsOn": [],
-      "title": "需要急減",
+      "title": "需要の急な落ち込み",
       "condition": [
         {
           "path": "economy.sentiment.consumerConfidence",
@@ -79,7 +79,7 @@
     {
       "eventId": "evt-energy-shock",
       "dependsOn": [],
-      "title": "エネルギー供給ショック",
+      "title": "エネルギー供給の混乱",
       "condition": [
         {
           "path": "economy.external.resourcePriceIndex",

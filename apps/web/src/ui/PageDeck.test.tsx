@@ -74,7 +74,7 @@ describe("PageDeck accessible content and retained input", () => {
     expect(
       screen.getByRole("region", { name: "政策の注意点" }),
     ).toHaveTextContent("最初の副作用");
-    fireEvent.click(screen.getByRole("button", { name: "説明：次のページ" }));
+    fireEvent.click(screen.getByRole("button", { name: "説明の次のページ" }));
     expect(
       screen.getByRole("region", { name: "政策の注意点" }),
     ).toHaveTextContent("次の副作用");
@@ -94,7 +94,7 @@ describe("PageDeck accessible content and retained input", () => {
     );
 
     const content = screen.getByLabelText("警告の内容");
-    const next = screen.getByRole("button", { name: "警告：次のページ" });
+    const next = screen.getByRole("button", { name: "警告の次のページ" });
     const reached: string[] = [];
     let linkReached = false;
     do {
@@ -129,12 +129,12 @@ describe("PageDeck accessible content and retained input", () => {
     );
     const input = screen.getByRole("textbox", { name: "政策名" });
     fireEvent.change(input, { target: { value: "入力を保持する" } });
-    fireEvent.click(screen.getByRole("button", { name: "政策：次のページ" }));
+    fireEvent.click(screen.getByRole("button", { name: "政策の次のページ" }));
     expect(screen.queryByRole("textbox", { name: "政策名" })).toBeNull();
 
     availableHeight = 160;
     act(() => window.dispatchEvent(new Event("resize")));
-    fireEvent.click(screen.getByRole("button", { name: "政策：前のページ" }));
+    fireEvent.click(screen.getByRole("button", { name: "政策の前のページ" }));
     expect(screen.getByRole("textbox", { name: "政策名" })).toBe(input);
     expect(input).toHaveValue("入力を保持する");
     expect(screen.getByRole("status")).toHaveTextContent("1 / 2ページ");
@@ -148,7 +148,7 @@ describe("PageDeck accessible content and retained input", () => {
       </PageDeck>,
     );
     const next = screen.getByRole("button", {
-      name: "可変レイアウト：次のページ",
+      name: "可変レイアウトの次のページ",
     });
     while (!screen.queryByRole("textbox", { name: "政策名" })) {
       expect(next).toBeEnabled();
@@ -160,7 +160,7 @@ describe("PageDeck accessible content and retained input", () => {
     availableHeight = 250;
     act(() => window.dispatchEvent(new Event("resize")));
     const previous = screen.getByRole("button", {
-      name: "可変レイアウト：前のページ",
+      name: "可変レイアウトの前のページ",
     });
     while (!screen.queryByRole("textbox", { name: "政策名" })) {
       expect(previous).toBeEnabled();
@@ -189,12 +189,14 @@ describe("PageDeck accessible content and retained input", () => {
     );
     expect(screen.getByText("必要な費用と副作用")).toBeVisible();
     expect(screen.getByRole("button", { name: "危機への対応" })).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("拡大表示・全文");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "全文を表示しています",
+    );
     expect(
-      screen.getByRole("button", { name: "拡大：前のページ" }),
+      screen.getByRole("button", { name: "拡大の前のページ" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "拡大：次のページ" }),
+      screen.getByRole("button", { name: "拡大の次のページ" }),
     ).toBeDisabled();
     for (const item of document.querySelectorAll<HTMLElement>(
       "[data-page-item]",
