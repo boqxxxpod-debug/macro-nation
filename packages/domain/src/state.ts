@@ -78,6 +78,8 @@ export interface GameClock {
   readonly lastProcessedWallClockMs?: number | null;
   readonly remainderMs?: number;
   readonly stopReason?: ClockStopReason;
+  /** A recoverable wall-clock notice recorded by the web Clock Adapter. */
+  readonly warning?: "CLOCK_MOVED_BACKWARD";
 }
 
 export type ClockStopReason =

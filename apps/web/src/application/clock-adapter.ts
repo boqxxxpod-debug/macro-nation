@@ -62,10 +62,13 @@ export function checkpointClock(state: GameState, nowMs: number): GameState {
   if (!Number.isFinite(prior) || prior < 0)
     throw new RangeError("保存された時刻を確認できません");
   const next = queueElapsed(state, Math.max(0, nowMs - prior));
+  const clock = { ...next.clock };
+  if (nowMs < prior) clock.warning = "CLOCK_MOVED_BACKWARD";
+  else delete clock.warning;
   return {
     ...next,
     clock: {
-      ...next.clock,
+      ...clock,
       lastProcessedWallClockMs: Math.max(prior, nowMs),
     },
   };

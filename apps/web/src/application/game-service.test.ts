@@ -43,38 +43,97 @@ function memory() {
 }
 
 describe("SCN-01 first playable", () => {
+  it("finishes at the final month even if a recoverable crisis occurs, while preserving terminal failure", async () => {
+    for (const priorCritical of [0, 100]) {
+      const storage = memory();
+      const initial = await createGame(
+        storage.repository,
+        "final-crisis",
+        1,
+        "casual",
+      );
+      storage.replace({
+        ...initial,
+        durationMode: "custom",
+        clock: { ...initial.clock, endMonth: 1, durationMode: "custom" },
+        crisisCounters: { unresolved: priorCritical },
+        economy: {
+          ...initial.economy,
+          sentiment: { ...initial.economy.sentiment, support: scorePoint(0) },
+        },
+      });
+      const result = await advanceMonth(storage.repository, 1);
+      expect(result.monthIndex).toBe(1);
+      expect(result.runState).toBe(
+        priorCritical === 0 ? "completed" : "failed",
+      );
+      expect(result.clock.stopReason).toBe(result.runState);
+      await expect(advanceMonth(storage.repository, 1)).rejects.toThrow();
+      expect(storage.saved?.monthIndex).toBe(1);
+    }
+  });
   it("does not spend already earned offline steps while paused or waiting for an event", async () => {
     const storage = memory();
-    const initial = await createGame(storage.repository, "offline-stopped-budget");
-    for (const runState of ["paused", "awaitingEvent", "crisisStopped", "completed", "failed"] as const) {
+    const initial = await createGame(
+      storage.repository,
+      "offline-stopped-budget",
+    );
+    for (const runState of [
+      "paused",
+      "awaitingEvent",
+      "crisisStopped",
+      "completed",
+      "failed",
+    ] as const) {
       const stopped: GameState = {
-        ...initial, runState, pendingOfflineSteps: 5,
+        ...initial,
+        runState,
+        pendingOfflineSteps: 5,
         clock: { ...initial.clock, progressionMode: "auto", remainderMs: 123 },
       };
       storage.replace(stopped);
-      expect(await catchUpOffline(storage.repository, 1, 10 * 300)).toEqual(stopped);
+      expect(await catchUpOffline(storage.repository, 1, 10 * 300)).toEqual(
+        stopped,
+      );
     }
     storage.replace({ ...initial, runState: "awaitingEvent" });
-    await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(/イベント/);
+    await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(
+      /イベント/,
+    );
   });
 
   it("rejects policy confirmation while the automatic clock is running", async () => {
     const storage = memory();
     const initial = await createGame(storage.repository, "policy-auto-guard");
     const running: GameState = {
-      ...initial, runState: "running",
-      clock: { ...initial.clock, progressionMode: "auto", lastProcessedWallClockMs: 1_000 },
+      ...initial,
+      runState: "running",
+      clock: {
+        ...initial.clock,
+        progressionMode: "auto",
+        lastProcessedWallClockMs: 1_000,
+      },
     };
     storage.replace(running);
     const preview = previewPolicy({
       state: running,
-      draft: { status: "draft", policyId: "rate", ruleId: "interest-rate", value: 0.05, quartersAhead: 0 },
+      draft: {
+        status: "draft",
+        policyId: "rate",
+        ruleId: "interest-rate",
+        value: 0.05,
+        quartersAhead: 0,
+      },
       horizonMonths: 12,
     });
-    await expect(confirmPolicy(storage.repository, 1, {
-      kind: "commit", commandId: "running-policy", expectedStateHash: preview.stateHash,
-      draft: preview.previewedDraft!,
-    })).rejects.toThrow(/時間を止め/);
+    await expect(
+      confirmPolicy(storage.repository, 1, {
+        kind: "commit",
+        commandId: "running-policy",
+        expectedStateHash: preview.stateHash,
+        draft: preview.previewedDraft!,
+      }),
+    ).rejects.toThrow(/時間を止め/);
     expect(await storage.repository.load(1)).toEqual(running);
   });
   it("keeps Engine outcomes identical across all three explanation modes", async () => {
@@ -99,7 +158,11 @@ describe("SCN-01 first playable", () => {
       "long",
     );
     expect(initial.clock.endMonth).toBe(240);
-    storage.replace({ ...initial, runState: "running", clock: { ...initial.clock, progressionMode: "auto" } });
+    storage.replace({
+      ...initial,
+      runState: "running",
+      clock: { ...initial.clock, progressionMode: "auto" },
+    });
     const progress: number[] = [];
     const first = await catchUpOffline(
       storage.repository,
@@ -111,7 +174,9 @@ describe("SCN-01 first playable", () => {
     );
     expect(first.monthIndex).toBe(96);
     expect(first.pendingOfflineSteps).toBe(4);
-    expect(progress).toEqual(Array.from({ length: 24 }, (_, index) => (index + 1) * 4));
+    expect(progress).toEqual(
+      Array.from({ length: 24 }, (_, index) => (index + 1) * 4),
+    );
     storage.replace({ ...first, runState: "running" });
     const resumed = await catchUpOffline(storage.repository, 1, 0);
     expect(resumed.monthIndex).toBe(100);
@@ -171,7 +236,11 @@ describe("SCN-01 first playable", () => {
     for (let month = 0; month < 48; month += 1)
       sequential = await advanceMonth(sequentialStorage.repository, 1);
 
-    offlineStorage.replace({ ...offlineInitial, runState: "running", clock: { ...offlineInitial.clock, progressionMode: "auto" } });
+    offlineStorage.replace({
+      ...offlineInitial,
+      runState: "running",
+      clock: { ...offlineInitial.clock, progressionMode: "auto" },
+    });
     const offline = await catchUpOffline(
       offlineStorage.repository,
       1,
@@ -209,7 +278,7 @@ describe("SCN-01 first playable", () => {
     expect(crisis.runState).toBe("crisisStopped");
     expect(crisis.crisisCounters.unresolved).toBe(1);
     await expect(advanceMonth(storage.repository, 1)).rejects.toThrow(
-      /危機停止/,
+      /危機への対応中/,
     );
     const resumed = await resumeCrisis(storage.repository, 1);
     expect(resumed.runState).toBe("paused");
@@ -250,7 +319,7 @@ describe("SCN-01 first playable", () => {
     });
     await expect(
       resolveEvent(storage.repository, 1, "balanced"),
-    ).rejects.toThrow(/選択待ち/);
+    ).rejects.toThrow(/対応を選ぶイベントがありません/);
   });
 
   it("matches a twelve-month batch after the same committed policy command", async () => {

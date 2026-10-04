@@ -236,19 +236,19 @@ $error = null;
 try {
     if ($provider === 'mock') {
         $result = match ($feature) {
-            'advisors' => array_map(static fn($x) => ['expertId'=>$x['id'], 'conclusion'=>'政策の効果を確認しましょう。', 'reason'=>'因果ログと指標を照合します。', 'caution'=>'副作用と時間差があります。'], $data['experts']),
-            'freePolicy' => ['status'=>'unsupported', 'explanation'=>'Mockでは自由入力を既存政策画面で確認してください。', 'candidate'=>null],
-            'news' => ['headline'=>'特別報道', 'explanation'=>'指標と因果ログを確認してください。', 'perspectives'=>[['viewpoint'=>'anchor','text'=>'引き続き動向を追います。']]],
+            'advisors' => array_map(static fn($x) => ['expertId'=>$x['id'], 'conclusion'=>'政策の効果を確認しましょう。', 'reason'=>'指標と変化の理由を照らし合わせます。', 'caution'=>'副作用と時間差があります。'], $data['experts']),
+            'freePolicy' => ['status'=>'unsupported', 'explanation'=>'この文章サービスでは自由入力を政策に変換できません。政策会議で案の見通しを確認しましょう。', 'candidate'=>null],
+            'news' => ['headline'=>'特別報道', 'explanation'=>'指標と変化の理由を確認しましょう。', 'perspectives'=>[['viewpoint'=>'anchor','text'=>'引き続き動向を追います。']]],
             'history' => ['title'=>'国家運営の記録', 'narrative'=>'政策と出来事を振り返りましょう。'],
         };
     } else {
-        $promptPath = __DIR__ . '/_private/prompts/' . $feature . '-v1.txt';
+        $promptPath = __DIR__ . '/_private/prompts/' . $feature . '-v2.txt';
         $prompt = file_get_contents($promptPath);
         if ($prompt === false) throw new RuntimeException('Prompt unavailable');
         $payload = [
             'model'=>$model, 'store'=>false, 'reasoning'=>['effort'=>'none'],
             'max_output_tokens'=>match ($feature) { 'advisors'=>800, 'freePolicy'=>350, 'news'=>700, 'history'=>750 },
-            'prompt_cache_key'=>'macro-nation-' . $feature . '-v1',
+            'prompt_cache_key'=>'macro-nation-' . $feature . '-v2',
             'input'=>[['role'=>'system','content'=>$prompt], ['role'=>'user','content'=>json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]],
             'text'=>['format'=>['type'=>'json_schema','name'=>'macro_nation_' . $feature,'strict'=>true,'schema'=>schema_for($feature)]],
         ];

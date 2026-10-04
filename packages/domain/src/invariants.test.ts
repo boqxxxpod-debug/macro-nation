@@ -164,6 +164,10 @@ describe("domain invariants", () => {
       clock: { ...legacy.clock, progressionMode: "auto", lastProcessedWallClockMs: 42, remainderMs: 100 },
     };
     expect(validateState(valid)).toEqual([]);
+    expect(validateState({ ...valid, clock: { ...valid.clock, warning: "CLOCK_MOVED_BACKWARD" } })).toEqual([]);
+    expect(validateState({ ...valid, clock: { ...valid.clock, warning: "unknown" } } as unknown as GameState)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "INVALID_CLOCK", path: "clock.warning" }),
+    ]));
     for (const clock of [
       { ...valid.clock, lastProcessedWallClockMs: Number.NaN },
       { ...valid.clock, lastProcessedWallClockMs: -1 },

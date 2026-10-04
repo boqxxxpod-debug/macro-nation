@@ -1,22 +1,52 @@
 import { expect, test, type Page } from "@playwright/test";
+import { waitForPageLayout, waitForEnlargedText } from "./paging";
 import type { GameState } from "../../packages/domain/src/index";
 
 const INITIAL_TIME = new Date("2026-10-02T12:00:00Z");
 
 async function freezeClock(page: Page) {
   await page.clock.install({ time: INITIAL_TIME });
-  await page.clock.pauseAt(new Date(INITIAL_TIME.getTime() + 1_000));
+  await page.clock.setFixedTime(new Date(INITIAL_TIME.getTime() + 1_000));
+}
+
+async function advanceTime(page: Page, milliseconds: number) {
+  const current = await page.evaluate(() => Date.now());
+  await page.clock.setFixedTime(new Date(current + milliseconds));
+  await page.clock.fastForward(1_000);
+}
+
+async function reveal(page: Page, target: ReturnType<Page["getByRole"]>) {
+  await waitForPageLayout(page);
+  if (await target.isVisible()) return;
+  const previous = page.getByRole("button", { name: /の前のページ$/ });
+  while (await previous.isEnabled()) {
+    await previous.click();
+    await waitForPageLayout(page);
+  }
+  const next = page.getByRole("button", { name: /の次のページ$/ });
+  for (let count = 0; count < 300; count++) {
+    if (await target.isVisible()) return;
+    if (!(await next.isEnabled())) break;
+    await next.click();
+    await waitForPageLayout(page);
+  }
+  await expect(target).toBeVisible();
 }
 
 async function startGame(page: Page) {
   await page.goto("/");
+  await reveal(page, page.getByRole("combobox", { name: "説明モード" }));
   await page
     .getByRole("combobox", { name: "説明モード" })
     .selectOption("casual");
+  await reveal(
+    page,
+    page.getByRole("textbox", { name: "再現用コード（任意）" }),
+  );
   await page
-    .getByRole("textbox", { name: "再現用seed（任意）" })
+    .getByRole("textbox", { name: "再現用コード（任意）" })
     .fill("first-playable-48");
-  await page.getByRole("button", { name: "ゲームを始める" }).click();
+  await page.getByRole("button", { name: "はじめる", exact: true }).click();
   await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
 }
 
@@ -108,7 +138,7 @@ test("automatic months follow the saved clock across views, pauses, and reload",
     controls(page).getByRole("combobox", { name: "時間の進め方" }),
   ).toHaveValue("manual");
   const stepMs = (await readSave(page)).clock.config.realSecondsPerStep * 1_000;
-  await page.clock.fastForward(stepMs * 2);
+  await advanceTime(page, stepMs * 2);
   await page.reload();
   expect((await readSave(page)).monthIndex).toBe(0);
 
@@ -116,7 +146,7 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await controls(page)
     .getByRole("combobox", { name: "時間の進め方" })
     .selectOption("auto");
-  await page.clock.fastForward(stepMs);
+  await advanceTime(page, stepMs);
   expect((await readSave(page)).monthIndex).toBe(0);
   await expect(controls(page).getByLabel("次の月までの残り時間")).toContainText(
     "5:00",
@@ -130,27 +160,31 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await expect(
     controls(page).getByRole("button", { name: "1か月進める" }),
   ).toBeDisabled();
-  await page.clock.fastForward(stepMs - 1_000);
+  await advanceTime(page, stepMs - 1_000);
   expect((await readSave(page)).monthIndex).toBe(0);
   await expect(controls(page).getByLabel("次の月までの残り時間")).toContainText(
     "0:01",
   );
-  await page.clock.fastForward(1_000);
+  await advanceTime(page, 1_000);
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(1);
   await expect(controls(page)).toContainText("進行中");
   await expect(controls(page)).toContainText("1年目 2月");
 
   await page.getByRole("button", { name: "ホーム", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "今月の3行報告" }),
-  ).toBeVisible();
-  await page.clock.fastForward(120_000);
+  await page
+    .getByRole("combobox", { name: "ホームの詳細" })
+    .selectOption("report");
+  await reveal(
+    page,
+    page.getByRole("heading", { name: "今月の3行報告" }).first(),
+  );
+  await advanceTime(page, 120_000);
   await controls(page)
     .getByRole("button", { name: "一時停止", exact: true })
     .click();
   await expect.poll(async () => (await readSave(page)).runState).toBe("paused");
   expect((await readSave(page)).clock.remainderMs).toBe(120_000);
-  await page.clock.fastForward(stepMs * 4);
+  await advanceTime(page, stepMs * 4);
   await page.reload();
   await expect(controls(page)).toContainText("停止中");
   expect((await readSave(page)).monthIndex).toBe(1);
@@ -160,9 +194,9 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("running");
-  await page.clock.fastForward(stepMs - 120_000 - 1_000);
+  await advanceTime(page, stepMs - 120_000 - 1_000);
   expect((await readSave(page)).monthIndex).toBe(1);
-  await page.clock.fastForward(1_000);
+  await advanceTime(page, 1_000);
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(2);
   expect((await readSave(page)).tickSequence).toBe(2);
   await controls(page)
@@ -171,7 +205,7 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await expect
     .poll(async () => (await readSave(page)).clock.progressionMode)
     .toBe("manual");
-  await page.clock.fastForward(stepMs * 2);
+  await advanceTime(page, stepMs * 2);
   expect((await readSave(page)).monthIndex).toBe(2);
   await controls(page).getByRole("button", { name: "1か月進める" }).click();
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(3);
@@ -184,30 +218,39 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
   await startGame(page);
   await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
   await startAuto(page);
-  await page.clock.fastForward(120_000);
+  await advanceTime(page, 120_000);
   await page.getByRole("button", { name: "政策会議", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "政策会議", exact: true }),
   ).toBeVisible();
   expect((await readSave(page)).runState).toBe("paused");
   expect((await readSave(page)).clock.stopReason).toBe("policy");
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
+  await reveal(
+    page,
+    page.getByRole("spinbutton", { name: "政策金利の設定値" }),
+  );
   await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
-  await page.getByRole("button", { name: "1年・5年を比較する" }).click();
+  await page.getByRole("button", { name: "見通しを確認" }).click();
   await expect(
-    page.getByRole("heading", { name: "政策プレビュー" }),
+    page.getByRole("heading", { name: "政策の見通し" }),
   ).toBeVisible();
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
-  await page.getByRole("button", { name: "政策を確定して保存" }).click();
+  const acknowledge = page.getByRole("checkbox", {
+    name: "費用・副作用・警告を確認しました",
+  });
+  await reveal(page, acknowledge);
+  await acknowledge.check();
+  await page.getByRole("button", { name: "政策を確定する" }).click();
   await expect(
     page.getByText("政策を確定し、端末に保存しました。"),
-  ).toBeVisible();
+  ).toBeAttached();
   await expect(
     controls(page).getByRole("button", { name: "再開", exact: true }),
   ).toBeEnabled();
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   await page.reload();
   await expect(controls(page)).toContainText("停止中");
   expect((await readSave(page)).monthIndex).toBe(0);
@@ -217,7 +260,7 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("running");
-  await page.clock.fastForward(180_000);
+  await advanceTime(page, 180_000);
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(1);
 });
 
@@ -259,12 +302,18 @@ test("an event blocks the clock and its choice stays paused until explicit resum
   await expect(
     controls(page).getByRole("button", { name: "再開", exact: true }),
   ).toBeDisabled();
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
-  await page.getByRole("button", { name: "均衡対応", exact: true }).click();
-  await expect(page.getByText("イベント対応を保存しました。")).toBeVisible();
+  await reveal(
+    page,
+    page.getByRole("button", { name: "バランスを取る", exact: true }),
+  );
+  await page
+    .getByRole("button", { name: "バランスを取る", exact: true })
+    .click();
+  await expect(page.getByText("イベント対応を保存しました。")).toBeAttached();
   await expect(controls(page)).toContainText("停止中");
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
   await controls(page)
     .getByRole("button", { name: "再開", exact: true })
@@ -272,7 +321,7 @@ test("an event blocks the clock and its choice stays paused until explicit resum
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("running");
-  await page.clock.fastForward(state.clock.config.realSecondsPerStep * 1_000);
+  await advanceTime(page, state.clock.config.realSecondsPerStep * 1_000);
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(1);
 });
 
@@ -298,16 +347,20 @@ test("a crisis needs the existing emergency response before automatic resume", a
   await expect(
     controls(page).getByRole("button", { name: "再開", exact: true }),
   ).toBeDisabled();
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
+  await reveal(
+    page,
+    page.getByRole("button", { name: "危機対応を確認して再開", exact: true }),
+  );
   await page
     .getByRole("button", { name: "危機対応を確認して再開", exact: true })
     .click();
   await expect(
     page.getByText("危機対応を保存し、再開できる状態になりました。"),
-  ).toBeVisible();
+  ).toBeAttached();
   await expect(controls(page)).toContainText("停止中");
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
   await controls(page)
     .getByRole("button", { name: "再開", exact: true })
@@ -315,7 +368,7 @@ test("a crisis needs the existing emergency response before automatic resume", a
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("running");
-  await page.clock.fastForward(state.clock.config.realSecondsPerStep * 1_000);
+  await advanceTime(page, state.clock.config.realSecondsPerStep * 1_000);
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(1);
 });
 
@@ -347,14 +400,14 @@ test("the final automatic month stops at the ending and cannot advance beyond it
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("running");
-  await page.clock.fastForward(state.clock.config.realSecondsPerStep * 1_000);
+  await advanceTime(page, state.clock.config.realSecondsPerStep * 1_000);
   await expect(
     page.getByRole("heading", { name: "終了評価", exact: true }),
   ).toBeVisible();
   await expect
     .poll(async () => (await readSave(page)).runState)
     .toBe("completed");
-  await page.clock.fastForward(3_000_000);
+  await advanceTime(page, 3_000_000);
   await page.reload();
   expect((await readSave(page)).monthIndex).toBe(48);
   expect((await readSave(page)).tickSequence).toBe(48);
@@ -364,6 +417,8 @@ test("hidden time is caught up once, preserving the fraction through an offline 
   context,
   page,
 }) => {
+  const workerUrls: string[] = [];
+  page.on("worker", (worker) => workerUrls.push(worker.url()));
   await freezeClock(page);
   await startGame(page);
   await page.evaluate(async () => {
@@ -371,24 +426,31 @@ test("hidden time is caught up once, preserving the fraction through an offline 
   });
   await page.reload();
   await startAuto(page);
-  await page.clock.fastForward(120_000);
+  await advanceTime(page, 120_000);
   await setVisibility(page, "hidden");
-  await page.clock.fastForward(600_000);
+  await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
   await setVisibility(page, "visible");
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(2);
+  await reveal(page, page.getByText(/2か月を反映しました/));
   await expect(page.getByRole("region", { name: "帰還報告" })).toContainText(
     "2か月を反映しました",
   );
+  expect(workerUrls.some((url) => url.includes("offline-month.worker"))).toBe(
+    true,
+  );
+  await page.getByRole("button", { name: "詳細を閉じる" }).click();
   expect((await readSave(page)).clock.remainderMs).toBe(120_000);
   await setVisibility(page, "hidden");
-  await page.clock.fastForward(180_000);
+  await advanceTime(page, 180_000);
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect.poll(async () => (await readSave(page)).monthIndex).toBe(3);
+  await reveal(page, page.getByText(/1か月を反映しました/));
   await expect(page.getByRole("region", { name: "帰還報告" })).toContainText(
     "1か月を反映しました",
   );
+  await page.getByRole("button", { name: "詳細を閉じる" }).click();
   expect((await readSave(page)).clock.remainderMs).toBe(0);
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(controls(page)).toContainText("進行中");
@@ -406,6 +468,7 @@ test("360px and 200% text retain keyboard access to automatic time controls", as
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
+  await waitForEnlargedText(page);
   const mode = controls(page).getByRole("combobox", { name: "時間の進め方" });
   await mode.focus();
   await page.keyboard.press("End");
@@ -452,4 +515,40 @@ test("360px and 200% text retain keyboard access to automatic time controls", as
     ),
     JSON.stringify(overflowing),
   ).toBe(false);
+});
+
+test("a backward device clock saves recovery guidance without earning a month", async ({
+  page,
+}) => {
+  await freezeClock(page);
+  await startGame(page);
+  const state = await readSave(page);
+  const stepMs = state.clock.config.realSecondsPerStep * 1_000;
+  const now = await page.evaluate(() => Date.now());
+  await writeSave(page, {
+    ...state,
+    runState: "running",
+    clock: {
+      ...state.clock,
+      progressionMode: "auto",
+      lastProcessedWallClockMs: now + stepMs,
+      remainderMs: 0,
+    },
+  });
+  await page.reload();
+  await expect(controls(page)).toContainText("端末の時刻が保存時より前");
+  await expect
+    .poll(async () => (await readSave(page)).clock.warning)
+    .toBe("CLOCK_MOVED_BACKWARD");
+  expect((await readSave(page)).monthIndex).toBe(0);
+  await controls(page)
+    .getByRole("button", { name: "一時停止", exact: true })
+    .click();
+  await controls(page)
+    .getByRole("button", { name: "再開", exact: true })
+    .click();
+  await expect(controls(page)).not.toContainText("端末の時刻が保存時より前");
+  expect((await readSave(page)).clock.warning).toBeUndefined();
+  await advanceTime(page, stepMs);
+  await expect.poll(async () => (await readSave(page)).monthIndex).toBe(1);
 });

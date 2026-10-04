@@ -1,0 +1,83 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`game screen wording > explains how to continue after all quarterly policy slots are used 1`] = `"今四半期の政策枠は使い切りました。次の四半期にもう一度検討できます。"`;
+
+exports[`game screen wording > explains how to continue after all quarterly policy slots are used 2`] = `"今四半期の3枠を使い切りました。月を進めると、次の四半期に検討できます。"`;
+
+exports[`game screen wording > explains the next step for awaitingEvent on Home 1`] = `"出来事が起きました。対応を選んでください。"`;
+
+exports[`game screen wording > explains the next step for crisisStopped on Home 1`] = `"危機のため一時停止中です。"`;
+
+exports[`game screen wording > explains the next step for paused on Home 1`] = `"今のところ、大きな危機の兆候はありません。"`;
+
+exports[`game screen wording > gives a next step for an unaffordable policy 1`] = `
+[
+  "政治資本が足りません。必要 1.0、使える量 0.0です。設定値や政策を見直して、もう一度見通しを確認してください。",
+  "政策を進める準備が足りません。本文の案内を確認してください。",
+]
+`;
+
+exports[`game screen wording > guides the player when no preview exists 1`] = `"政策会議で案を作り、「見通しを確認」を押してください。"`;
+
+exports[`game screen wording > keeps legacy expert profiles while translating indicator IDs in their explanations 1`] = `
+[
+  "結論：実質GDPは新しい政策を加えない場合と比べて悪化する見通しです。",
+  "別の視点： 水城 静香： 為替指数は新しい政策を加えない場合と比べて悪化する見通しです。 外部環境の揺れを一定の条件で想定した計算の幅です。この範囲に収まる確率を示すものではありません。 数字の振れを見ながら進めるのが妥当です。",
+]
+`;
+
+exports[`game screen wording > keeps ordinary news and gives retry guidance after special reporting fails 1`] = `"特別報道を読み込めませんでした。少し待って、もう一度試してください。"`;
+
+exports[`game screen wording > offers policy choices without promising reserve recovery during a crisis 1`] = `
+[
+  "外貨準備が足りません。必要 12.0、使える量 0.0です。設定値や政策を見直して、もう一度見通しを確認してください。",
+  "政策を進める準備が足りません。本文の案内を確認してください。",
+]
+`;
+
+exports[`game screen wording > preserves preview values and confirmation while hiding internal IDs 1`] = `
+[
+  "効果と費用",
+  "政策の組み合わせ",
+  "効果を高め合う組み合わせ：税制 ＋ 公共事業",
+  "効果を打ち消し合う組み合わせ：関税 ＋ 税制",
+  "新しい政策を加えない場合との12か月比較",
+  "実質GDP",
+  "物価上昇率",
+  "失業率",
+  "政策への信頼",
+  "外貨準備",
+  "1年・5年の見通し",
+  "実質GDP",
+  "物価上昇率",
+  "失業率",
+  "別の政策を選んだら",
+  "政策金利",
+  "選択した専門家の解説",
+  "マクロ経済",
+]
+`;
+
+exports[`game screen wording > shows event names and preparedness labels while retaining the saved IDs 1`] = `"需要の急な落ち込み：準備度 25%"`;
+
+exports[`game screen wording > shows event names and preparedness labels while retaining the saved IDs 2`] = `"備えが足りない項目：裁量予算、政策への信頼。政策会議で対策を検討してください。"`;
+
+exports[`game screen wording > shows progress and prevents duplicate preview requests 1`] = `"見通しを計算しています…"`;
+
+exports[`game screen wording > shows the allowed range when a policy value is invalid 1`] = `
+[
+  "設定値は-0.02〜0.3の範囲で入力してください。値を見直して、もう一度見通しを確認してください。",
+  "政策を進める準備が足りません。本文の案内を確認してください。",
+]
+`;
+
+exports[`game screen wording > translates old notebook, forecast and history records without rewriting them 1`] = `"専門家：景山 めぐみ、確信度：中"`;
+
+exports[`game screen wording > translates old notebook, forecast and history records without rewriting them 2`] = `
+[
+  "根拠：1月目の物価上昇率の変化に、政策金利の政策が+1.0000パーセントポイント影響しています。",
+  "根拠：1月目の物価上昇率の変化に、政策金利の政策が+1.0000パーセントポイント影響しています。",
+  "根拠：1月目の物価上昇率の変化に、政策金利の政策が+1.0000パーセントポイント影響しています。",
+  "根拠：1月目の物価上昇率の変化に、政策金利の政策が+1.0000パーセントポイント影響しています。",
+]
+`;

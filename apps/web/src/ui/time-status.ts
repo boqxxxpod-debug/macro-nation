@@ -6,14 +6,17 @@ const STOP_LABELS: Record<string, string> = {
   event: "イベントの選択待ち",
   crisis: "危機への対応待ち",
   error: "計算・保存エラー",
-  completed: "期間満了",
-  failed: "運営終了",
+  completed: "予定期間を終了",
+  failed: "危機で終了",
   offlineLimit: "残りの進行があります",
   tutorial: "説明を確認中",
 };
 
 export function clockStatus(state: GameState): string {
-  if (state.runState === "running") return "進行中";
+  if (state.runState === "running")
+    return state.clock.warning === "CLOCK_MOVED_BACKWARD"
+      ? "時刻の調整待ち"
+      : "進行中";
   const reason =
     state.runState === "awaitingEvent"
       ? "event"

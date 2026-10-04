@@ -49,7 +49,7 @@ export function TimeControls({
       <div className="time-controls-summary">
         <strong>{period(state)}</strong>
         <span>{mode === "auto" ? "自動" : "手動"}</span>
-        <p role="status">{clockStatus(state)}</p>
+        <p role="status">{busy ? "計算・保存中" : clockStatus(state)}</p>
         <p aria-label="次の月までの残り時間" aria-live="off">
           次の月まで あと {remainingTime(remainingMs)}
           {mode === "manual" && <small>手動操作で進みます</small>}
@@ -57,7 +57,7 @@ export function TimeControls({
       </div>
       <div className="time-controls-actions">
         <label>
-          時間の進め方
+          <span className="time-controls-label">時間の進め方</span>
           <select
             value={mode}
             disabled={busy}
@@ -98,7 +98,7 @@ export function TimeControls({
       {tutorial && (
         <p className="time-controls-note">
           はじめの{tutorialStepLimit(state)}
-          か月は、説明を確かめながら手動で進めます。その後、自動進行を利用できます。
+          か月は手動で進めます。
         </p>
       )}
       {(state.pendingOfflineSteps ?? 0) > 0 && (
@@ -110,6 +110,13 @@ export function TimeControls({
       {state.clock.stopReason === "error" && (
         <p className="time-controls-note">
           最後に保存できた月で止めました。保存環境を確認してから再開してください。
+        </p>
+      )}
+      {mode === "auto" && state.clock.warning === "CLOCK_MOVED_BACKWARD" && (
+        <p className="time-controls-note" role="status">
+          端末の時刻が保存時より前のため、時間の加算を待っています。
+          {state.runState === "running" ? "一時停止してから" : "時間の進行を"}
+          再開すると、現在の時刻を基準に進められます。
         </p>
       )}
     </section>

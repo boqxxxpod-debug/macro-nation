@@ -1,24 +1,28 @@
 import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
+import {
+  indicatorDisplayName,
+  policyDisplayName,
+} from "@macro-nation/advisor-core";
 
-export const LABELS: Record<string, string> = {
-  "interest-rate": "政策金利",
-  "tax-package": "税制",
-  "public-works": "公共事業",
-  tariff: "関税",
-  "fx-intervention": "為替介入",
-  realHouseholdIncome: "国民生活",
-  realGdp: "成長",
-  inflation: "物価",
-  unemployment: "雇用",
-  policyTrust: "信頼",
-  support: "支持",
-  fx: "為替",
-  governmentDebtRatio: "政府債務",
-  foreignReserves: "外貨準備",
-  primarySpending: "基礎支出",
+export const label = (id: string) => {
+  const preparedness: Record<string, string> = {
+    "fiscal-space": "使える予算",
+    "policy-trust": "政策への信頼",
+    "energy-infrastructure": "エネルギーインフラ",
+    "foreign-reserves": "外貨準備",
+  };
+  if (Object.hasOwn(preparedness, id)) return preparedness[id]!;
+  const policy = policyDisplayName(id);
+  if (policy !== "政策") return policy;
+  const metric = id.replace(
+    /^economy\.industries\.([^.]+)\.(productionIndex|capacityIndex|employment|importDependency)$/,
+    (_, industry: string, property: string) =>
+      `industry.${industry}.${property.replace(/Index$/, "")}`,
+  );
+  const indicator = indicatorDisplayName(metric);
+  if (indicator !== "経済指標") return indicator;
+  return /[ぁ-んァ-ン一-龠]/.test(id) ? id : "経済の指標";
 };
-export const label = (id: string) =>
-  LABELS[id] ?? id.replace(/^economy\./, "").replaceAll(".", " ");
 export const display = (id: string, value: number) =>
   ["inflation", "unemployment", "governmentDebtRatio"].includes(id)
     ? `${(value * 100).toFixed(1)}%`
@@ -27,9 +31,17 @@ export const period = (state: GameState) =>
   `${Math.floor(state.monthIndex / 12) + 1}年目 ${(state.monthIndex % 12) + 1}月`;
 
 export function describeCause(
-  cause: MonthlyReportSnapshot["topCauses"][number],
+  cause: Pick<
+    MonthlyReportSnapshot["topCauses"][number],
+    "sourceType" | "sourceId"
+  >,
   state: GameState,
 ): string {
+  if (cause.sourceType === "event") {
+    const name = eventDisplayName(cause.sourceId, state);
+    return cause.sourceId.endsWith(":preparedness") ? `${name}への備え` : name;
+  }
+  if (cause.sourceType === "combo") return "政策の組み合わせ";
   if (cause.sourceType === "policy") {
     const policy = [
       ...state.policies.active,
@@ -64,4 +76,15 @@ export function describeCause(
   return cause.sourceType === "external"
     ? "外部環境"
     : "前月から続く経済の動き";
+}
+
+/** Resolve the display name from the game's saved content, keeping IDs intact. */
+export function eventDisplayName(id: string, state: GameState): string {
+  const content = state.configSnapshot.normalizedConfig.content as
+    { events?: readonly { eventId: string; title: string }[] } | undefined;
+  const event = content?.events?.find(
+    (item) => id === item.eventId || id.startsWith(`${item.eventId}:`),
+  );
+  if (event) return event.title;
+  return /[ぁ-んァ-ン一-龠]/.test(id) ? id : "経済に影響する出来事";
 }

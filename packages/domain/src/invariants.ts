@@ -127,6 +127,9 @@ export function validateState(state: GameState): ValidationIssue[] {
     add(issues, "INVALID_CLOCK", "clock.progressionMode", "progression mode must be manual or auto");
   }
   const anchor = state.clock.lastProcessedWallClockMs;
+  if (state.clock.warning !== undefined && state.clock.warning !== "CLOCK_MOVED_BACKWARD") {
+    add(issues, "INVALID_CLOCK", "clock.warning", "clock warning is not recognized");
+  }
   if (anchor !== undefined && anchor !== null && (!Number.isFinite(anchor) || anchor < 0)) {
     add(issues, "INVALID_CLOCK", "clock.lastProcessedWallClockMs", "wall-clock checkpoint must be finite and non-negative");
   }

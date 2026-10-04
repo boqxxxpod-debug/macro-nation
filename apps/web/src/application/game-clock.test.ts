@@ -2,7 +2,19 @@ import type { GameState } from "@macro-nation/domain";
 import { policyStateHash } from "@macro-nation/simulation-engine";
 import { describe, expect, it } from "vitest";
 import { GameClockController, tutorialStepLimit } from "./game-clock";
-import { advanceMonth, createGame, type GameRepository } from "./game-service";
+import {
+  advanceMonth,
+  calculateMonth,
+  createGame,
+  type GameRepository,
+} from "./game-service";
+
+const inlineMonthClient = {
+  async calculate(state: GameState) {
+    return calculateMonth(state, true);
+  },
+  cancel() {},
+};
 
 function deferred() {
   let resolve!: () => void;
@@ -90,6 +102,7 @@ async function fixture(realSecondsPerStep = 300) {
   let now = 1_000_000;
   const controller = new GameClockController(storage.repository, {
     nowMs: () => now,
+    monthClient: inlineMonthClient,
   });
   controller.selectGame(initial);
   return {
@@ -334,6 +347,7 @@ describe("GameClockController wall-clock progression", () => {
     f.advance(300_000);
     const restored = new GameClockController(f.storage.repository, {
       nowMs: () => f.now,
+      monthClient: inlineMonthClient,
     });
     restored.selectGame(f.storage.saved());
     await restored.synchronize({ offline: true });
@@ -355,6 +369,7 @@ describe("GameClockController wall-clock progression", () => {
     await f.controller.synchronize();
     expect(f.storage.saved().monthIndex).toBe(0);
     expect(f.storage.saved().clock.remainderMs).toBe(100_000);
+    expect(f.storage.saved().clock.warning).toBe("CLOCK_MOVED_BACKWARD");
     expect(
       f.storage.saved().clock.lastProcessedWallClockMs,
     ).toBeGreaterThanOrEqual(before.clock.lastProcessedWallClockMs!);
@@ -362,6 +377,21 @@ describe("GameClockController wall-clock progression", () => {
     await f.controller.synchronize();
     expect(f.storage.saved().monthIndex).toBe(1);
     expect(f.storage.saved().clock.remainderMs).toBe(0);
+    expect(f.storage.saved().clock.warning).toBeUndefined();
+    f.controller.dispose();
+  });
+
+  it("clears a backward-clock notice immediately on explicit pause and restart", async () => {
+    const f = await fixture();
+    await startAuto(f.controller);
+    f.advance(-50_000);
+    await f.controller.synchronize();
+    expect(f.storage.saved().clock.warning).toBe("CLOCK_MOVED_BACKWARD");
+    await f.controller.pause();
+    await f.controller.start();
+    expect(f.storage.saved().clock.warning).toBeUndefined();
+    expect(f.storage.saved().clock.lastProcessedWallClockMs).toBe(f.now);
+    expect(f.storage.saved().monthIndex).toBe(0);
     f.controller.dispose();
   });
 
@@ -476,6 +506,78 @@ describe("GameClockController wall-clock progression", () => {
 });
 
 describe("GameClockController serialization and failure safety", () => {
+  it("does not cancel the newly selected game's Worker when an old save finishes", async () => {
+    const f = await fixture();
+    f.controller.dispose();
+    const prepare = (state: GameState): GameState => ({
+      ...state,
+      runState: "running",
+      pendingOfflineSteps: 1,
+      clock: {
+        ...state.clock,
+        progressionMode: "auto",
+        lastProcessedWallClockMs: f.now,
+      },
+    });
+    const first = prepare(f.initial);
+    const second = prepare(
+      await createGame(f.storage.repository, "baseline-96", 2, "casual"),
+    );
+    f.storage.replace(first);
+    f.storage.replace(second);
+    const saveEntered = deferred();
+    const releaseSave = deferred();
+    const secondEntered = deferred();
+    let pending: {
+      resolve(state: GameState): void;
+      reject(error: Error): void;
+    } | null = null;
+    let cancellations = 0;
+    const client = {
+      calculate(state: GameState): Promise<GameState> {
+        if (state.slotId === 1)
+          return Promise.resolve(calculateMonth(state, true));
+        return new Promise((resolve, reject) => {
+          pending = { resolve, reject };
+          secondEntered.resolve();
+        });
+      },
+      cancel() {
+        cancellations += 1;
+        pending?.reject(new Error("Worker cancelled"));
+        pending = null;
+      },
+    };
+    f.storage.setBeforeSave(async (state) => {
+      if (state.slotId === 1 && state.monthIndex === 1) {
+        saveEntered.resolve();
+        await releaseSave.promise;
+      }
+    });
+    const controller = new GameClockController(f.storage.repository, {
+      nowMs: () => f.now,
+      monthClient: client,
+    });
+    controller.selectGame(first);
+    const oldRun = controller.synchronize();
+    await saveEntered.promise;
+    controller.selectGame(second);
+    const newRun = controller.synchronize();
+    await secondEntered.promise;
+    const beforeCleanup = cancellations;
+    releaseSave.resolve();
+    expect(await oldRun).toBeNull();
+    expect(cancellations).toBe(beforeCleanup);
+    expect(pending).not.toBeNull();
+    const active = pending as unknown as { resolve(state: GameState): void };
+    pending = null;
+    active.resolve(calculateMonth(second, true));
+    expect((await newRun)?.monthIndex).toBe(1);
+    expect(f.storage.saved(1).monthIndex).toBe(0);
+    expect(f.storage.saved(2).monthIndex).toBe(1);
+    expect(controller.snapshot.error).toBeNull();
+    controller.dispose();
+  });
   it("publishes busy and committed results while holding unsaved monthly drafts", async () => {
     const f = await fixture();
     await startAuto(f.controller);

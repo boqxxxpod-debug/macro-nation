@@ -64,7 +64,8 @@ describe("IndexedDbGameRepository generations", () => {
     await replaceCurrentWithCorrupt(factory);
     const recovered = await repository.loadSlot(1);
     expect(recovered.recovered).toBe(true);
-    expect(recovered.reason).toMatch(/破損.*直前/);
+    expect(recovered.reason).toMatch(/読み込めなかった.*直前/);
+    expect(recovered.reason).toContain("進んだ月や政策を確認しましょう");
     expect(recovered.state?.durationMode).toBe("long");
     expect(recovered.state?.difficulty).toBe("standard");
   });

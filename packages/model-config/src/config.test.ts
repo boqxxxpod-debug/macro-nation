@@ -34,7 +34,7 @@ describe("ConfigPack v1", () => {
         configSchemaVersion: "1",
         modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
-        contentVersion: "1.1.0",
+        contentVersion: "1.2.0",
         rngVersion: "xoshiro128ss-v1",
         configVersion: SCN01_CONFIG_PACK.manifest.configVersion,
       }),
@@ -69,7 +69,7 @@ describe("ConfigPack v1", () => {
         configSchemaVersion: "1",
         modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
-        contentVersion: "1.1.0",
+        contentVersion: "1.2.0",
         rngVersion: "xoshiro128ss-v1",
         configVersion: "0.0.9",
       }),
@@ -428,5 +428,58 @@ describe("ConfigPack v1", () => {
       createSnapshotIndicatorRegistry(oldSnapshot).definitions,
     ).toHaveLength(SCN01_CONFIG_PACK.content.indicators.length);
     expect(oldSnapshot.configHash).not.toBe(newSnapshot.configHash);
+  });
+
+  it("revises only content while saved games retain their original snapshot text", async () => {
+    expect(SCN01_CONFIG_PACK.manifest.contentVersion).toBe("1.2.0");
+    expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.2");
+    expect(SCN01_CONFIG_PACK.manifest.configSchemaVersion).toBe("1");
+    expect(SCN01_CONFIG_PACK.manifest.configVersion).toBe("0.1.5");
+    expect(SCN01_CONFIG_PACK.manifest.rngVersion).toBe("xoshiro128ss-v1");
+    const legacyTitles = ["需要急減", "エネルギー供給ショック"];
+    const legacyPack = parseConfigPack({
+      ...SCN01_CONFIG_PACK,
+      manifest: { ...SCN01_CONFIG_PACK.manifest, contentVersion: "1.1.0" },
+      content: {
+        ...SCN01_CONFIG_PACK.content,
+        events: SCN01_CONFIG_PACK.content.events.map((event, index) => ({
+          ...event,
+          title: legacyTitles[index]!,
+        })),
+      },
+    });
+    const savedSnapshot = await createConfigSnapshot(legacyPack);
+    const savedBeforePublication = structuredClone(savedSnapshot);
+    const newGameSnapshot = await createConfigSnapshot(SCN01_CONFIG_PACK);
+    expect(savedSnapshot).toEqual(savedBeforePublication);
+    expect(
+      (
+        savedSnapshot.normalizedConfig.content as typeof legacyPack.content
+      ).events.map(({ title }) => title),
+    ).toEqual(legacyTitles);
+    expect(newGameSnapshot.configHash).not.toBe(savedSnapshot.configHash);
+    for (const key of [
+      "parameters",
+      "parameterDefinitions",
+      "lagKernels",
+      "shockModel",
+      "policyRules",
+      "model",
+      "limits",
+      "effectCurves",
+      "nation",
+      "scenario",
+    ]) {
+      expect(newGameSnapshot.normalizedConfig[key]).toEqual(
+        savedSnapshot.normalizedConfig[key],
+      );
+    }
+    const mechanics = (event: (typeof legacyPack.content.events)[number]) =>
+      Object.fromEntries(
+        Object.entries(event).filter(([key]) => key !== "title"),
+      );
+    expect(SCN01_CONFIG_PACK.content.events.map(mechanics)).toEqual(
+      legacyPack.content.events.map(mechanics),
+    );
   });
 });

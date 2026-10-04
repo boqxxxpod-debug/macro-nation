@@ -13,6 +13,10 @@ import {
   stepMilliseconds,
   stopClock,
 } from "./clock-adapter";
+import {
+  OfflineMonthClient,
+  type AutomaticMonthClient,
+} from "../infrastructure/offline-month-client";
 
 export { isTutorialTime, tutorialStepLimit } from "./clock-adapter";
 
@@ -40,12 +44,17 @@ export class GameClockController {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly nowMs: () => number;
+  private readonly monthClient: AutomaticMonthClient;
 
   constructor(
     private readonly repository: GameRepository,
-    options: { readonly nowMs?: () => number } = {},
+    options: {
+      readonly nowMs?: () => number;
+      readonly monthClient?: AutomaticMonthClient;
+    } = {},
   ) {
     this.nowMs = options.nowMs ?? Date.now;
+    this.monthClient = options.monthClient ?? new OfflineMonthClient();
   }
 
   get snapshot(): GameClockSnapshot {
@@ -78,6 +87,7 @@ export class GameClockController {
 
   selectGame(state: GameState | null): void {
     this.generation += 1;
+    this.monthClient.cancel();
     this.error = state ? (this.errorStops.get(state.gameId) ?? null) : null;
     this.state =
       state && this.error && isAutomaticRunning(state)
@@ -118,8 +128,8 @@ export class GameClockController {
         assertSelected();
         const state = await this.repository.load(slotId);
         assertSelected();
+        if (!state) throw new Error("保存済みのゲームがありません");
         if (
-          !state ||
           state.gameId !== selected.gameId ||
           state.slotId !== selected.slotId
         )
@@ -263,6 +273,7 @@ export class GameClockController {
       }
       const clock = { ...state.clock };
       delete clock.stopReason;
+      delete clock.warning;
       const next: GameState = {
         ...state,
         runState: "running",
@@ -321,6 +332,7 @@ export class GameClockController {
   }
 
   synchronize(options: SynchronizeOptions = {}): Promise<GameState | null> {
+    const generation = this.generation;
     return this.run(async (repository, slotId) => {
       const state = (await repository.load(slotId))!;
       if (this.error || !isAutomaticRunning(state)) return this.state ?? state;
@@ -333,9 +345,28 @@ export class GameClockController {
       if (policyStateHash(checkpoint) !== policyStateHash(state)) {
         await repository.save(policyStateHash(state), checkpoint);
       }
-      return options.offline
-        ? catchUpOffline(repository, slotId, 0, options.onProgress)
-        : processPendingSteps(repository, slotId, 96, options.onProgress);
+      try {
+        // The Worker computes one month; guarded save commits it before the next
+        // request. Neither a cancelled selection nor a crash can save a draft.
+        const compute = (state: GameState) => this.monthClient.calculate(state);
+        return options.offline
+          ? await catchUpOffline(
+              repository,
+              slotId,
+              0,
+              options.onProgress,
+              compute,
+            )
+          : await processPendingSteps(
+              repository,
+              slotId,
+              96,
+              options.onProgress,
+              compute,
+            );
+      } finally {
+        if (this.generation === generation) this.monthClient.cancel();
+      }
     });
   }
 }

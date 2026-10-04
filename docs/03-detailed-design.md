@@ -606,6 +606,7 @@ interface ClockProgression {
   progressionMode?: 'manual' | 'auto';
   lastProcessedWallClockMs?: number | null;
   remainderMs?: number;
+  warning?: 'CLOCK_MOVED_BACKWARD';
   stopReason?: 'manual' | 'policy' | 'event' | 'crisis' | 'error'
     | 'completed' | 'failed' | 'offlineLimit' | 'tutorial';
 }
@@ -619,7 +620,7 @@ pendingOfflineSteps = pendingOfflineSteps + newSteps
 tickCount = min(pendingOfflineSteps, clock.config.offlineMaxSteps, 96)
 自動モードかつrunStateがrunningの場合だけ新しい経過を加算して未処理stepを実行する。手動または停止中はどちらも行わない。
 タイマーは経過の確認契機とし、呼出回数をゲーム月数として扱わない。閲覧画面の切替で時計を再生成しない。
-時計が過去へ戻った場合はelapsedMsを0とし、CLOCK_MOVED_BACKWARDを注意ログへ記録する。
+時計が過去へ戻った場合はelapsedMsを0とし、clock.warningへCLOCK_MOVED_BACKWARDを保存する。ホーム・国家ビューで時刻の調整待ちと注意を表示し、保存基準に時刻が追いつくか、明示的な停止・再開で基準を更新すると解除する。経済状態と保存済み端数は変えない。
 96tickを超える未処理stepは保持し、次回帰還または明示的な続行で処理する。旧8時間超過分破棄の仕様は適用しない。
 1回のオフライン処理上限へ到達して未処理stepが残る場合はpaused、stopReason: offlineLimitを保存する。通常タイマーが次のbatchを自動で処理せず、利用者の明示的な再開から続行する。
 停止時は端数を保存し、再開時に現在時刻を基準として停止中の経過を除外する。モード切替も停止状態を保存し、選択だけで自動開始しない。
@@ -628,16 +629,17 @@ tickCount = min(pendingOfflineSteps, clock.config.offlineMaxSteps, 96)
 Application側で手動tick、自動tick、政策確定、オフライン処理、時計変更を直列化する。スロット切替・新規開始で要求世代を更新し、前のゲームの応答は新しいゲームへ適用しない。
 SCN-01のlearningでは、保存済みscenario.firstPlayable.tutorialQuartersとclock.config.policyCycleStepsの積までチュートリアル期間とする。この期間は手動で進め、自動開始を無効化する。進行中の自動セーブを読み込んだ場合も経過を加算する前にtutorial理由で停止する。casualとstandardにはこの案内期間を適用しない。
 11 2 オフライン実行
-1. main threadがslotId、expectedTickSequence、nowMsをWorkerへ送る。
-2. WorkerがIndexedDBからcurrent世代を読み、版とchecksumを検証する。
-3. tickCountを算出し、月次tickを1回ずつ順番に実行する。
-4. 各成功tick後にcurrentをpreviousへ移し、新current、時計基準・端数、減算したpendingOfflineStepsを同一transactionで保存する。
+1. main threadのClock AdapterがRepositoryからcurrent世代を読み、版とchecksumを検証する。保存済み時計から経過を加算し、基準時刻・端数・未処理stepを先に保存する。
+2. 各月の保存済みstateとrequest ID、state hashをWorker clientへ渡し、Workerで次の1tickを計算する。main threadでは離席分のSimulation Engineを実行しない。
+3. Workerからの候補を受け取った後、main thread側Repositoryが期待state hashと現在のslot・game・要求世代を検証する。各成功tick後にcurrentをpreviousへ移し、新current、時計基準・端数、減算したpendingOfflineStepsを同一transactionで保存する。
+4. 保存成功後にのみ次のtickをWorkerへ依頼する。スロット切替・新規開始・破棄では処理中Workerを終了し、古い応答も保存確定前の世代検証で拒否する。計算をWorker、保存許可をmain threadの直列キューに分け、選択変更が旧スロットを書き換える競合を防ぐ。
 5. 4tickごとまたは250msごとにPROGRESSを通知する。
 6. awaitingEvent crisisStopped failed completedに達したらその月で停止する。既に加算した未処理stepは保持するが、停止中は処理も経過時間の加算も行わない。
 7. 終了時に処理月数、停止理由、上位3指標、警告を返す。
 8. main threadは最新保存を再読込し、帰還報告を表示する。
 計算中もナビゲーションとヘルプ閲覧は可能にするが、ゲーム状態を変更する操作は無効化して進捗を表示する。Workerが異常終了しても、最後にcommit済みのtickから再開する。
 11 3 Worker通信
+現在の時間進行WorkerはCALCULATE_MONTH要求（requestId、engineVersion、expectedStateHash、expectedTick、state）に対して、RESULT（同じrequestIdとexpectedStateHash、次月state）またはERRORを返す。Workerは入力、clientは応答をZodとDomain invariantで検証し、異なるgame・slot・tick・要求への応答を採用しない。CANCELはclientによるWorker終了で即座に計算を中止する。以下は他のWorker用途も含む上位コマンドの設計例である。
 type WorkerRequest =
   | { id: string; type: 'RUN_OFFLINE'; slotId: number; nowMs: number; expectedTick: number }
   | { id: string; type: 'PREVIEW_POLICY'; state: PreviewState; draft: PolicyDraft }
@@ -705,6 +707,10 @@ calculating中は状態変更コマンドを拒否し、閲覧操作だけ許可
 awaitingEventではイベント選択、help、reportを許可し、通常政策確定と再開を禁止する。
 crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開まで進めない。
 ブラウザ戻るでは未確定draftだけ破棄確認し、保存済みコマンドを再実行しない。
+13 2 1 利用可能な画面高さとページ切替
+通常表示ではコンパクトな状態表示、可変の内容領域、画面固有の主要操作、共通ナビゲーションを利用可能な画面高さに配置する。動的viewport単位を使う場合も非対応環境の代替を用意し、セーフエリアとサイズ変更へ追従する。
+長文や履歴は内容の高さに応じてページを分け、すべての内容へ前後の切替で到達可能にする。単一ページの内容をoverflowで切り捨てたり、内容パネルのスクロールへ置き換えたりしない。計算中、エラー、複数の警告でも主要操作を画面外へ押し出さない。
+入力と専門家選択は未確定draftのUI状態としてページや画面の切替中も保持する。ページ切替は表示だけを変更し、政策確定、イベント選択、危機再開のcommandを実行しない。
 13 3 ホーム画面
 ホームと国家ビューは同じ時計状態を表示し、年月、手動／自動、進行／停止と理由、次の月までの残り時間、開始・一時停止・再開操作を提供する。
 1. 危機警告を1行表示する。警告がなければ重大な警告なしと明記する。
@@ -712,12 +718,14 @@ crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開
 3. 帰還時だけ3行報告を先頭付近に表示し、各行から根拠レポートへ遷移する。
 4. 政策発動 終了 選挙 シナリオ終了など次の節目を最大3件表示する。
 5. 入門では推奨操作を最大3件表示するが、確定ボタンを設けず政策会議へ誘導する。
+通常表示では時点・運営状態、最優先の危機警告、5カードと主要操作を同じ画面内に維持する。3行報告、変化要因、節目、提案は明示的な切替で表示し、すべてへ到達可能にする。
 13 4 政策会議とプレビュー
 上部に四半期枠の使用数、残数、次に枠が更新される月を常時表示する。
 実施中 予約中 終了予定を状態別に表示し、同一政策の重複を見分けられるIDと開始月を付ける。
 最大3案を比較し、効果開始、最大効果、12か月レンジ、副作用、全コスト、相互作用を同じ順序で並べる。
 不足時は確定ボタンをdisabledにするだけでなく、不足資源と必要量を文章で示す。
 最終確認はcommandIdを生成して一度だけ送信する。保存成功後に完了画面へ進む。
+政策入力、専門家選択、比較、助言、履歴はタブ・ページ・段階的な入力へ分ける。戻る、次へ、プレビュー、確定等の必要な操作は内容と重ならない位置に維持し、費用、重要な副作用、警告を確定前に確認できるようにする。
 13 5 予算 市場 レポート
 13 6 アクセシビリティ
 主要操作のタップ領域を44×44 CSS px以上にする。
@@ -726,6 +734,7 @@ crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開
 良化 悪化は色だけでなく上昇 低下 安定などの語と形で示す。
 prefers reduced motionでは数値遷移、チャート描画、新聞演出を停止する。
 360px幅および200パーセント文字拡大で横スクロールを主要操作に要求しない。比較表はカード縦積みに切り替える。
+ページ切替後は表示した内容へfocusを移し、詳細を閉じた後は開いた操作へfocusを戻す。非表示ページの操作を読み上げ・キーボードの対象にしない。200パーセント文字拡大時は必要な縦スクロールを許容し、通常表示の画面高さ制限より情報と操作の保持を優先する。
 14 PWA 非機能 セキュリティ設計
 14 0 Xserver配布
 Viteのbuild成果物をXserverへ静的配置する。Vite base pathは環境設定化し、ルート配下・サブディレクトリ配下の双方へ対応する。BrowserRouter採用時はdeploy/xserver/.htaccessでSPA fallbackを提供する。Service Worker更新でプレイ中を強制reloadしない。
@@ -973,6 +982,7 @@ offscreen領域 object pooling sprite atlasでDOM node数とGCを抑える。
 低性能判定時は人 車 天候の順に密度を下げ 静止背景と指標は維持する。
 prefers-reduced-motionでは交通と粒子を停止し 状態変化をラベルと静止差分で示す。
 Canvasには代替の地域一覧と説明をDOMで併設し keyboard操作を提供する。
+通常表示ではヘッダー、指標、ナビゲーションを除いた残りの高さに景観を収める。地域詳細、ニュース、地域一覧、表示設定はタブ・ページ・閉じられる詳細画面へ分け、地域選択や危機マーカーを縮小・トリミングで失わない。詳細の開閉で画面全体を縦に伸ばさず、画像なしでも関連指標と理由へ到達可能にする。
 24 反応 コンボ Voice イベント 国家史
 24 1 ReactionSnapshot
 interface ReactionSnapshot {

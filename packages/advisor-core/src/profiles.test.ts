@@ -40,4 +40,21 @@ describe("versioned expert profiles", () => {
       ),
     ).toBe(true);
   });
+
+  it("updates polite tone independently while retaining every identity and priority", () => {
+    const legacy = expertProfilesForContentVersion("1.1.0");
+    expect(legacy[0]?.tone).toBe("落ち着いて結論から説明する");
+    expect(expertProfilesForContentVersion("1.0.0")[0]?.tone).toBe(
+      legacy[0]?.tone,
+    );
+    expect(expertProfilesForContentVersion("1.2.0")).toEqual(expertProfiles);
+    expect(
+      expertProfiles.every(({ tone }) => tone.includes("です・ます")),
+    ).toBe(true);
+    const identity = (profile: (typeof legacy)[number]) =>
+      Object.fromEntries(
+        Object.entries(profile).filter(([key]) => key !== "tone"),
+      );
+    expect(expertProfiles.map(identity)).toEqual(legacy.map(identity));
+  });
 });

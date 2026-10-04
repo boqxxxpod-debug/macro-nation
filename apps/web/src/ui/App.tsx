@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { DurationMode, GameState } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
@@ -18,17 +25,34 @@ import {
 } from "../application/game-service";
 import { PreviewClient } from "../infrastructure/preview-client";
 import { AIPreview } from "../devtools/AIPreview";
-import { Home, PolicyForm, Preview, Report } from "./GameViews";
+import {
+  Home,
+  PolicyForm,
+  Preview,
+  Report,
+  type PolicyFormDraftState,
+} from "./GameViews";
+import { PageDeck } from "./PageDeck";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
 import { migrateFirstPlayableSave } from "../application/save-migration";
-import { display, label, period } from "./game-format";
+import { display, eventDisplayName, label, period } from "./game-format";
 import { GameClockController } from "../application/game-clock";
 import { selectHomeIndicators } from "../application/home-view";
 import { TimeControls } from "./TimeControls";
 import { clockStatus } from "./time-status";
 
 type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+const DIFFICULTY_LABELS = {
+  intro: "入門",
+  standard: "標準",
+  expert: "専門",
+} as const;
+const LEARNING_MODE_LABELS = {
+  casual: "カジュアル",
+  standard: "標準",
+  learning: "学習",
+} as const;
 const NAV_LABELS = {
   home: "ホーム",
   policies: "政策会議",
@@ -80,6 +104,113 @@ function durationLabel(state: GameState): string {
     ? `${selected.years}年・${selected.months}か月`
     : "期間未設定";
 }
+function policyTitle(
+  state: GameState,
+  policy: GameState["policies"]["active"][number],
+): string {
+  const rule = policyRules(state.configSnapshot).find(
+    (item) => item.policyType === policy.type,
+  );
+  return rule ? label(rule.policyId) : "政策";
+}
+type ErrorContext = "action" | "load" | "save" | "preview";
+function errorMessage(cause: unknown, context: ErrorContext): string {
+  const message = cause instanceof Error ? cause.message : "";
+  if (/保存データの版に対応していません/.test(message))
+    return "この保存データは現在の版に対応していません。保存したときの版で開いてください。";
+  if (/Config Snapshot/.test(message))
+    return "保存データを確認できませんでした。別の保存先を選ぶか、保存したときの版で開いてください。";
+  if (/保存データを検証できません|保存データを確認できません/.test(message))
+    return "保存データを確認できませんでした。別の保存先から続けるか、空いている保存先で新しく始めてください。";
+  if (/Save slot already exists|slot occupied/.test(message))
+    return "この保存先にはゲームがあります。続きから開くか、空いている保存先を選んでください。";
+  if (/Saved game changed|stale state|concurrent save/i.test(message))
+    return "保存したゲームの状態が変わりました。画面を再読み込みし、最後に保存された状態を確認してください。";
+  if (
+    /Stale.*(preview|draft)|Stale preview response|ゲームの状態が変わりました/i.test(
+      message,
+    )
+  )
+    return "ゲームの状態が変わりました。政策会議に戻り、見通しをもう一度確認してください。";
+  if (/Quarterly policy slots exhausted/.test(message))
+    return "この四半期の政策枠を使い切りました。次の更新月を確認してください。";
+  if (
+    /Insufficient available|Insufficient.*cost|Insufficient resources/.test(
+      message,
+    )
+  )
+    return "政策に必要な資源が足りません。政策会議で費用を確認し、設定を見直してください。";
+  if (
+    /Invalid policy input|Policy input|requires a value|Missing value for|Policy.*quarters/.test(
+      message,
+    )
+  )
+    return "政策の設定を確認できませんでした。政策会議に戻り、設定値と実施時期を確認してください。";
+  if (/one to three unique experts/.test(message))
+    return "専門家を1〜3人選んでから、見通しを確認してください。";
+  if (/Cannot change policy after the game has ended/.test(message))
+    return "このゲームの運営は終了しています。終了評価で結果を確認できます。";
+  if (
+    /No saved game in slot|保存済みのゲームがありません|保存したゲームが見つかりません/.test(
+      message,
+    )
+  )
+    return "保存したゲームが見つかりませんでした。「はじめる・続きから」で保存先を確認してください。";
+  if (/終了または危機停止中|運営の終了時や危機への対応中/.test(message))
+    return "運営が終了しているか、危機のため一時停止しています。ホームで状態を確認してください。";
+  if (
+    /再開できる危機がありません|いまは危機への対応待ちではありません/.test(
+      message,
+    )
+  )
+    return "いまは危機への対応待ちではありません。ホームで現在の状況を確認しましょう。";
+  if (
+    /選択待ちのイベントがありません|いまは対応を選ぶイベントがありません/.test(
+      message,
+    )
+  )
+    return "対応待ちの出来事はありません。ホームで現在の状況を確認しましょう。";
+  if (
+    /イベント記録が見つかりません|対応するイベントの記録を確認できません/.test(
+      message,
+    )
+  )
+    return "出来事の記録を確認できませんでした。画面を再読み込みし、保存したゲームの状態を確認してください。";
+  if (
+    /シナリオの終了・危機条件がありません|ゲームの終了条件と危機条件を確認できません/.test(
+      message,
+    )
+  )
+    return "ゲームの終了条件と危機条件を確認できませんでした。空いている保存先で新しく始めてください。";
+  if (
+    /経過時間が正しくありません|オフライン経過が長すぎます|離れていた時間/.test(
+      message,
+    )
+  )
+    return "離れていた時間を確認できませんでした。保存したゲームを読み込み直して状況を確認しましょう。";
+  if (/保存機能が使えるブラウザー/.test(message))
+    return "このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。";
+  if (/自動進行の計算機能を利用できません/.test(message))
+    return "このブラウザーでは自動進行の計算機能を利用できません。手動モードで続けることができます。";
+  if (
+    /自動進行の計算が中断|時間進行の計算結果|自動進行の計算結果/.test(message)
+  )
+    return "自動進行の計算を完了できなかったため、最後に保存した月で止めました。再開するか、手動モードで続けてください。";
+  if (context === "load")
+    return "保存したゲームを読み込めませんでした。ブラウザーの保存設定を確認し、画面を再読み込みしてください。";
+  if (context === "preview")
+    return "政策の見通しを確認できませんでした。政策会議に戻り、設定を確認してもう一度お試しください。";
+  if (
+    /storage unavailable|Could not (open save database|read saved game|save game|create save)/i.test(
+      message,
+    ) ||
+    (cause instanceof Error && cause.name === "QuotaExceededError")
+  )
+    return "保存を確認できませんでした。ブラウザーの保存設定や空き容量を確認し、画面を再読み込みして最後に保存された状態を確認してください。";
+  if (context === "save")
+    return "保存を確認できませんでした。画面を再読み込みし、最後に保存された状態を確認してください。";
+  return "操作を完了できませんでした。画面を再読み込みし、最後に保存された状態を確認してください。";
+}
 function routeFromLocation(): Route {
   const path = window.location.pathname;
   if (path.endsWith("/policies/preview")) return "preview";
@@ -89,6 +220,7 @@ function routeFromLocation(): Route {
   if (path.endsWith("/nation")) return "nation";
   return "home";
 }
+
 function slotFromLocation(): GameState["slotId"] | null {
   const matched = window.location.pathname.match(/\/game\/([123])(?:\/|$)/);
   return matched ? (Number(matched[1]) as GameState["slotId"]) : null;
@@ -117,11 +249,70 @@ export function App({
   const actionSequence = useRef(0);
   const navigationSequence = useRef(0);
   const previousClockState = useRef<GameState | null>(null);
+
   const confirmationId = useRef<string | null>(null);
   const startCommandId = useRef(crypto.randomUUID());
   if (!previewClient.current) previewClient.current = new PreviewClient();
   const [state, setState] = useState<GameState | null>(null);
   const [route, setRoute] = useState<Route>(routeFromLocation);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [largeText, setLargeText] = useState(false);
+  useLayoutEffect(() => {
+    const refresh = () => {
+      setLargeText(
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).fontSize,
+        ) >= 24 || (window.visualViewport?.scale ?? 1) >= 1.5,
+      );
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      if (
+        document.documentElement.style.getPropertyValue("--viewport-height") !==
+        `${height}px`
+      )
+        document.documentElement.style.setProperty(
+          "--viewport-height",
+          `${height}px`,
+        );
+    };
+    refresh();
+    window.addEventListener("resize", refresh);
+    window.visualViewport?.addEventListener("resize", refresh);
+    const observer = new MutationObserver(refresh);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+    // Font settings and stylesheet updates also change rem sizes without
+    // changing html attributes or the viewport. Observe that layout directly.
+    const fontProbe = document.createElement("span");
+    fontProbe.setAttribute("aria-hidden", "true");
+    Object.assign(fontProbe.style, {
+      position: "fixed",
+      width: "1rem",
+      height: "1rem",
+      left: "0",
+      top: "0",
+      visibility: "hidden",
+      pointerEvents: "none",
+      contain: "strict",
+    });
+    document.body.append(fontProbe);
+    const fontObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(refresh);
+    fontObserver?.observe(fontProbe);
+    return () => {
+      observer.disconnect();
+      fontObserver?.disconnect();
+      fontProbe.remove();
+      window.removeEventListener("resize", refresh);
+      window.visualViewport?.removeEventListener("resize", refresh);
+    };
+  }, []);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [returnReportOpen, setReturnReportOpen] = useState(false);
+  const [policyDraft, setPolicyDraft] = useState<PolicyFormDraftState>();
   const [preview, setPreview] = useState<PreviewOutput | null>(null);
   const [comparisons, setComparisons] = useState<readonly PreviewOutput[]>([]);
   const [counterfactuals, setCounterfactuals] = useState<
@@ -169,6 +360,9 @@ export function App({
       setCounterfactuals([]);
       setPreviewExpertIds(["macro"]);
       setReturnReport(null);
+      setReturnReportOpen(false);
+      setMessageOpen(false);
+      setPolicyDraft(undefined);
       setOfflineProgress("");
       setError("");
       setNotice("");
@@ -222,6 +416,8 @@ export function App({
               `${label(item.id)} ${item.delta >= 0 ? "+" : ""}${display(item.id, item.delta)}`,
           );
         setReturnReport({ months, status: clockStatus(saved), changes });
+        setReturnReportOpen(true);
+        setMessageOpen(true);
       }
     } catch {
       // The controller publishes the durable state and a recoverable error.
@@ -232,6 +428,8 @@ export function App({
 
   const navigate = useCallback(
     async (next: Route, replace = false) => {
+      setMenuOpen(false);
+      setMessageOpen(false);
       previewClient.current?.cancel();
       const selectedSession = session.current;
       const request = ++navigationSequence.current;
@@ -297,7 +495,8 @@ export function App({
         )
           void navigate("ending", true);
       }
-      if (snapshot.error) setError(snapshot.error);
+      if (snapshot.error)
+        setError(errorMessage(new Error(snapshot.error), "action"));
     });
   }, [gameClock, navigate]);
 
@@ -353,20 +552,21 @@ export function App({
           else if (first) await reconcileOffline();
           if (!active) return;
           const recovery = loaded.find((item) => item.recovered);
-          if (recovery?.reason) setNotice(recovery.reason);
+          if (recovery?.reason)
+            setNotice(
+              `保存先${recovery.id}は直前の保存から読み込みました。進み具合を確認してから続けてください。`,
+            );
           const corrupt = loaded.find((item) => !item.saved && item.reason);
           if (corrupt?.reason)
-            setError(`スロット${corrupt.id}: ${corrupt.reason}`);
+            setError(
+              `保存先${corrupt.id}：${errorMessage(new Error(corrupt.reason), "load")}`,
+            );
           setLoading(false);
         }
       })
       .catch((cause: unknown) => {
         if (active) {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "保存を読み込めませんでした",
-          );
+          setError(errorMessage(cause, "load"));
           setLoading(false);
         }
       });
@@ -376,6 +576,8 @@ export function App({
   }, [repository, gameClock, selectGame, reconcileOffline]);
   useEffect(() => {
     const pop = () => {
+      setMenuOpen(false);
+      setMessageOpen(false);
       previewClient.current?.cancel();
       void navigate(routeFromLocation(), true);
     };
@@ -388,6 +590,60 @@ export function App({
       document.querySelector<HTMLElement>(".game-view h2")?.focus();
   }, [route, loading, activeGameId]);
   useEffect(() => () => previewClient.current?.cancel(), []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    document.querySelector<HTMLElement>(".game-view .page-content")?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        requestAnimationFrame(() =>
+          document.querySelector<HTMLElement>(".shell-menu")?.focus(),
+        );
+      }
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [menuOpen]);
+  useEffect(() => {
+    if (messageOpen)
+      document
+        .querySelector<HTMLElement>(".message-overlay .page-content")
+        ?.focus();
+  }, [messageOpen]);
+  useEffect(() => {
+    if (!messageOpen) return;
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMessageOpen(false);
+        document
+          .querySelector<HTMLElement>(
+            returnReportOpen ? ".shell-return-report" : ".shell-message",
+          )
+          ?.focus();
+      }
+      if (event.key !== "Tab") return;
+      const controls = [
+        ...document.querySelectorAll<HTMLElement>(
+          ".message-overlay button:not(:disabled), .message-overlay [tabindex='0']",
+        ),
+      ].filter((node) => !node.closest("[hidden]"));
+      const first = controls[0],
+        last = controls.at(-1);
+      if (
+        event.shiftKey &&
+        (document.activeElement === first ||
+          !controls.includes(document.activeElement as HTMLElement))
+      ) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, [messageOpen, returnReportOpen]);
 
   useEffect(() => {
     if (!gameClock) return;
@@ -397,7 +653,11 @@ export function App({
       if (snapshot.state?.runState !== "running") return;
       setClockSnapshot(snapshot);
       if (snapshot.busy) return;
-      if ((snapshot.state.pendingOfflineSteps ?? 0) > 0)
+      const anchor = snapshot.state.clock.lastProcessedWallClockMs;
+      const warning = snapshot.state.clock.warning === "CLOCK_MOVED_BACKWARD";
+      if (typeof anchor === "number" && nowMs() < anchor !== warning)
+        void gameClock.checkpoint().catch(() => undefined);
+      else if ((snapshot.state.pendingOfflineSteps ?? 0) > 0)
         void reconcileOffline();
       else if (snapshot.remainingMs <= 0)
         void gameClock.synchronize().catch(() => undefined);
@@ -419,9 +679,12 @@ export function App({
       window.removeEventListener("pagehide", pagehide);
       gameClock.selectGame(null);
     };
-  }, [gameClock, reconcileOffline]);
+  }, [gameClock, reconcileOffline, nowMs]);
 
-  async function action(work: () => Promise<void>) {
+  async function action(
+    work: () => Promise<void>,
+    context: ErrorContext = "action",
+  ) {
     if (inFlight.current) return;
     const request = ++actionSequence.current;
     inFlight.current = true;
@@ -432,7 +695,7 @@ export function App({
       await work();
     } catch (cause) {
       if (request === actionSequence.current)
-        setError(cause instanceof Error ? cause.message : "処理に失敗しました");
+        setError(errorMessage(cause, context));
     } finally {
       if (request === actionSequence.current) {
         setActionBusy(false);
@@ -441,7 +704,10 @@ export function App({
     }
   }
   async function start() {
-    if (!repository) throw new Error("この端末では保存機能を利用できません");
+    if (!repository)
+      throw new Error(
+        "このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。",
+      );
     const selectedSession = session.current;
     const requestedSlot = slotId;
     const created = await createGame(
@@ -551,7 +817,9 @@ export function App({
       preview.stateHash !== policyStateHash(state) ||
       preview.draftHash !== policyDraftHash(preview.previewedDraft)
     )
-      throw new Error("ゲーム状態が変わりました。再試算してください");
+      throw new Error(
+        "ゲームの状態が変わりました。政策会議に戻り、見通しをもう一度確認してください。",
+      );
     const saved = await gameClock?.mutate((activeRepository, activeSlot) =>
       confirmPolicy(
         activeRepository,
@@ -587,6 +855,7 @@ export function App({
     setPreview(null);
     confirmationId.current = null;
     setNotice("政策を確定し、端末に保存しました。");
+    setPolicyDraft(undefined);
     navigate("home", true);
   }
 
@@ -628,235 +897,271 @@ export function App({
 
   return (
     <main
-      className={
-        route === "nation" && state ? "app-shell app-shell-nation" : "app-shell"
-      }
+      className={`app-shell viewport-shell${largeText ? " enlarged-text" : ""}${state ? " game-shell" : " launch-shell"}${route === "nation" && state ? " app-shell-nation" : ""}`}
     >
       <header className="hero">
         <p className="eyebrow">国家運営シミュレーション</p>
         <h1>MACRO NATION</h1>
         <p className="lead">
-          政策の時間差とトレードオフを、数字と理由から読み解く。
+          政策の時間差や良い点・注意点を、数字と理由から確かめます。
         </p>
+        {(error || notice) && (
+          <button
+            className="shell-message"
+            aria-label={error ? "エラーの詳細" : "通知の詳細"}
+            onClick={() => {
+              setReturnReportOpen(false);
+              setMessageOpen(true);
+            }}
+          >
+            {error ? "エラー" : "通知"}
+          </button>
+        )}
+        {returnReport && state && (
+          <button
+            className="shell-message shell-return-report"
+            aria-label="帰還報告"
+            onClick={() => {
+              setReturnReportOpen(true);
+              setMessageOpen(true);
+            }}
+          >
+            帰還報告
+          </button>
+        )}
+        {state && (
+          <button
+            className="shell-menu"
+            aria-expanded={menuOpen}
+            onClick={() => {
+              setMenuOpen((open) => !open);
+              setMessageOpen(false);
+            }}
+          >
+            メニュー
+          </button>
+        )}
       </header>
       {loading ? (
-        <p role="status">保存データを読み込み中…</p>
+        <p role="status">保存したゲームを読み込んでいます…</p>
       ) : !state ? (
         <section className="welcome" aria-labelledby="start-heading">
-          <h2 id="start-heading">起動・保存スロット</h2>
-          <p>
-            架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
-          </p>
-          <div className="launch-actions" aria-label="起動メニュー">
-            <button
-              type="button"
-              aria-expanded={launchPanel === "history"}
-              aria-controls="save-history"
-              onClick={() =>
-                setLaunchPanel((current) =>
-                  current === "history" ? null : "history",
-                )
-              }
-            >
-              保存履歴
-            </button>
-            <button
-              type="button"
-              aria-expanded={launchPanel === "help"}
-              aria-controls="launch-help"
-              onClick={() =>
-                setLaunchPanel((current) =>
-                  current === "help" ? null : "help",
-                )
-              }
-            >
-              遊び方・設定
-            </button>
-          </div>
-          {launchPanel === "history" && (
-            <section
-              id="save-history"
-              className="panel launch-panel"
-              aria-labelledby="save-history-heading"
-            >
-              <h3 id="save-history-heading">保存履歴</h3>
-              {slots.size === 0 ? (
-                <p>保存された国家運営はまだありません。</p>
-              ) : (
-                <ol>
-                  {[...slots.entries()]
-                    .sort(
-                      (left, right) => right[1].monthIndex - left[1].monthIndex,
-                    )
-                    .map(([id, saved]) => (
-                      <li key={id}>
-                        <strong>スロット{id}</strong>：{durationLabel(saved)}、
-                        {saved.monthIndex}か月まで進行、
-                        {saved.runState === "completed"
-                          ? "期間満了"
-                          : saved.runState === "failed"
-                            ? "運営失敗"
-                            : "運営中"}
-                      </li>
-                    ))}
-                </ol>
-              )}
-              <p className="quiet">
-                終了済みゲームの評価・国家史（最大10件）はUI11国家史で扱う後続機能です。ここでは保存スロットの進行履歴を表示します。
-              </p>
-            </section>
-          )}
-          {launchPanel === "help" && (
-            <section
-              id="launch-help"
-              className="panel launch-panel"
-              aria-labelledby="launch-help-heading"
-            >
-              <h3 id="launch-help-heading">遊び方・端末設定</h3>
-              <ul>
-                <li>新規開始では期間、難易度、説明量、seedを選びます。</li>
-                <li>進行中の設定と期間は開始後に変更できません。</li>
-                <li>
-                  保存はこの端末内だけで行い、ログインや通信を必要としません。
-                </li>
-              </ul>
-            </section>
-          )}
-          <div className="slot-grid" aria-label="保存スロット">
-            {SLOT_IDS.map((id) => {
-              const saved = slots.get(id);
-              return (
-                <article className="panel" key={id}>
-                  <h3>スロット{id}</h3>
-                  <p>
-                    {saved
-                      ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${saved.difficulty}・${saved.learningMode}`
-                      : "空き"}
-                  </p>
-                  {saved ? (
-                    <button
-                      onClick={() => {
-                        selectGame(saved);
-                        void navigate("home");
-                        void reconcileOffline();
-                      }}
-                    >
-                      スロット{id}の続きから
-                    </button>
-                  ) : (
-                    <button
-                      disabled={busy}
-                      aria-pressed={slotId === id}
-                      onClick={() => setSlotId(id)}
-                    >
-                      スロット{id}で新しく始める
-                    </button>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-          <section
-            className="panel start-options"
-            aria-labelledby="scenario-heading"
-          >
-            <h3 id="scenario-heading">新しいゲームの設定</h3>
-            <label>
-              シナリオ
-              <select defaultValue="SCN-01">
-                <option value="SCN-01">SCN-01 小さな開放経済</option>
-              </select>
-            </label>
-            <label>
-              難易度
-              <select
-                value={difficulty}
-                onChange={(event) =>
-                  setDifficulty(event.target.value as GameState["difficulty"])
-                }
+          <h2 id="start-heading" tabIndex={-1}>
+            はじめる・続きから
+          </h2>
+          <PageDeck
+            label="開始設定"
+            actions={
+              <button
+                className="primary"
+                disabled={busy || !repository}
+                onClick={() => void action(start, "save")}
               >
-                <option value="intro">入門（手厚い説明）</option>
-                <option value="standard">標準（要点を説明）</option>
-                <option value="expert">専門（最小限の説明）</option>
-              </select>
-            </label>
-            <fieldset>
-              <legend>期間</legend>
-              <div className="duration-grid">
-                {DURATIONS.map((duration) => (
-                  <label className="duration-card" key={duration.id}>
-                    <input
-                      type="radio"
-                      name="duration"
-                      value={duration.id}
-                      checked={durationMode === duration.id}
-                      onChange={() => setDurationMode(duration.id)}
-                    />
-                    <strong>
-                      {duration.years}年（{duration.months}か月）
-                    </strong>
-                    <span>想定時間: {duration.time}</span>
-                    <span>学べる論点: {duration.focus}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <label>
-              説明モード
-              <select
-                value={learningMode}
-                onChange={(event) =>
-                  setLearningMode(
-                    event.target.value as NonNullable<
-                      GameState["learningMode"]
-                    >,
+                はじめる
+              </button>
+            }
+          >
+            <p>
+              架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
+            </p>
+            <div className="launch-actions" aria-label="開始メニュー">
+              <button
+                type="button"
+                aria-expanded={launchPanel === "history"}
+                aria-controls="save-history"
+                onClick={() =>
+                  setLaunchPanel((current) =>
+                    current === "history" ? null : "history",
                   )
                 }
               >
-                <option value="casual">カジュアル（結論を中心に表示）</option>
-                <option value="standard">標準（理由を短く表示）</option>
-                <option value="learning">学習（用語と理論も表示）</option>
-              </select>
-            </label>
-            <label>
-              再現用seed（任意）
-              <input
-                value={startSeed}
-                maxLength={80}
-                placeholder="未入力なら自動生成"
-                onChange={(event) => setStartSeed(event.target.value)}
-              />
-            </label>
-            <button
-              className="primary"
-              disabled={busy || !repository}
-              onClick={() => void action(start)}
-            >
-              ゲームを始める
-            </button>
-            {!repository && (
-              <p role="alert">端末の保存機能を利用できません。</p>
+                保存したゲーム
+              </button>
+              <button
+                type="button"
+                aria-expanded={launchPanel === "help"}
+                aria-controls="launch-help"
+                onClick={() =>
+                  setLaunchPanel((current) =>
+                    current === "help" ? null : "help",
+                  )
+                }
+              >
+                遊び方・設定
+              </button>
+            </div>
+            {launchPanel === "history" && (
+              <section
+                id="save-history"
+                className="panel launch-panel"
+                aria-labelledby="save-history-heading"
+              >
+                <h3 id="save-history-heading">保存したゲーム</h3>
+                {slots.size === 0 ? (
+                  <p>保存したゲームはまだありません。</p>
+                ) : (
+                  <ol>
+                    {[...slots.entries()]
+                      .sort(
+                        (left, right) =>
+                          right[1].monthIndex - left[1].monthIndex,
+                      )
+                      .map(([id, saved]) => (
+                        <li key={id}>
+                          <strong>保存先{id}</strong>：{durationLabel(saved)}、
+                          {saved.monthIndex}か月まで進行、
+                          {saved.runState === "completed"
+                            ? "予定期間を終了"
+                            : saved.runState === "failed"
+                              ? "危機で終了"
+                              : "運営中"}
+                        </li>
+                      ))}
+                  </ol>
+                )}
+                <p className="quiet">
+                  各保存先の進み具合を確認できます。保存したゲームは「続きから」で開けます。
+                </p>
+              </section>
             )}
-          </section>
+            {launchPanel === "help" && (
+              <section
+                id="launch-help"
+                className="panel launch-panel"
+                aria-labelledby="launch-help-heading"
+              >
+                <h3 id="launch-help-heading">遊び方・端末設定</h3>
+                <ul>
+                  <li>はじめる前に、期間、難易度、説明量を選びます。</li>
+                  <li>開始後は、設定と期間を変更できません。</li>
+                  <li>
+                    保存はこの端末内だけで行い、ログインや通信を必要としません。
+                  </li>
+                </ul>
+              </section>
+            )}
+            <div className="slot-grid" aria-label="保存先">
+              {SLOT_IDS.map((id) => {
+                const saved = slots.get(id);
+                return (
+                  <article className="panel" key={id}>
+                    <h3>保存先{id}</h3>
+                    <p>
+                      {saved
+                        ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${DIFFICULTY_LABELS[saved.difficulty]}・${LEARNING_MODE_LABELS[saved.learningMode ?? "standard"]}`
+                        : "まだ保存されていません。"}
+                    </p>
+                    {saved ? (
+                      <button
+                        onClick={() => {
+                          selectGame(saved);
+                          void navigate("home");
+                          void reconcileOffline();
+                        }}
+                      >
+                        保存先{id}の続きから
+                      </button>
+                    ) : (
+                      <button
+                        disabled={busy}
+                        aria-pressed={slotId === id}
+                        onClick={() => setSlotId(id)}
+                      >
+                        保存先{id}ではじめる
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+            <section
+              className="panel start-options"
+              aria-labelledby="scenario-heading"
+            >
+              <h3 id="scenario-heading">新しいゲームの設定</h3>
+              <label>
+                シナリオ
+                <select defaultValue="SCN-01">
+                  <option value="SCN-01">小さな開放経済</option>
+                </select>
+              </label>
+              <label>
+                難易度
+                <select
+                  value={difficulty}
+                  onChange={(event) =>
+                    setDifficulty(event.target.value as GameState["difficulty"])
+                  }
+                >
+                  <option value="intro">入門（手厚い説明）</option>
+                  <option value="standard">標準（要点を説明）</option>
+                  <option value="expert">専門（最小限の説明）</option>
+                </select>
+              </label>
+              <fieldset>
+                <legend>期間</legend>
+                <div className="duration-grid">
+                  {DURATIONS.map((duration) => (
+                    <label className="duration-card" key={duration.id}>
+                      <input
+                        type="radio"
+                        name="duration"
+                        value={duration.id}
+                        checked={durationMode === duration.id}
+                        onChange={() => setDurationMode(duration.id)}
+                      />
+                      <strong>
+                        {duration.years}年（{duration.months}か月）
+                      </strong>
+                      <span>想定時間: {duration.time}</span>
+                      <span>この期間で学べること：{duration.focus}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label>
+                説明モード
+                <select
+                  value={learningMode}
+                  onChange={(event) =>
+                    setLearningMode(
+                      event.target.value as NonNullable<
+                        GameState["learningMode"]
+                      >,
+                    )
+                  }
+                >
+                  <option value="casual">カジュアル（結論を中心に表示）</option>
+                  <option value="standard">標準（理由を短く表示）</option>
+                  <option value="learning">学習（用語と理論も表示）</option>
+                </select>
+              </label>
+              <label>
+                再現用コード（任意）
+                <input
+                  value={startSeed}
+                  maxLength={80}
+                  placeholder="未入力なら自動生成"
+                  aria-describedby="reproduction-help"
+                  onChange={(event) => setStartSeed(event.target.value)}
+                />
+              </label>
+              <p id="reproduction-help" className="quiet">
+                空欄なら自動で作ります。同じコードと開始設定を使い、ゲームの版・設定データ・選ぶ政策・進め方も同じにすると、結果を再現できます。
+              </p>
+
+              {!repository && (
+                <p role="alert">
+                  このブラウザーでは保存できません。保存機能が使えるブラウザーで開いてください。
+                </p>
+              )}
+            </section>
+          </PageDeck>
         </section>
       ) : (
         <>
           <nav className="nav" aria-label="ゲーム画面">
-            <button type="button" onClick={() => selectGame(null)}>
-              保存スロット
-            </button>
-            {(
-              [
-                "home",
-                "policies",
-                "report",
-                "nation",
-                ...(state.runState === "completed" ||
-                state.runState === "failed"
-                  ? ["ending" as const]
-                  : []),
-              ] as const
-            ).map((id) => (
+            {(["home", "policies", "report", "nation"] as const).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -873,244 +1178,382 @@ export function App({
             ))}
           </nav>
           <div className="game-view">
-            <p
-              className={
-                route === "nation" ? "eyebrow nation-shell-context" : "eyebrow"
-              }
-            >
-              SCN-01・{period(state)}・第{Math.floor(state.monthIndex / 3) + 1}
-              四半期
-            </p>
-            {route === "home" && (
-              <>
-                <h2 tabIndex={-1}>国家ホーム</h2>
-                <Home
-                  state={state}
-                  timeControls={timeControls}
-                  onOpenReport={() => navigate("report")}
-                  onOpenPolicies={() => navigate("policies")}
-                />
-                <button onClick={() => navigate("nation")}>
-                  国家の景観を見る
-                </button>
-                {state.runState === "crisisStopped" && (
-                  <section className="panel crisis">
-                    <h3>緊急会議</h3>
-                    <p>
-                      危機条件に達したため進行を停止しました。政策会議で対策を検討し、明示的に再開してください。次の月も危機が続くと失敗になります。
-                    </p>
-                    <button onClick={() => navigate("policies")}>
-                      緊急政策を検討する
-                    </button>{" "}
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void action(async () => {
-                          const resumed = await gameClock?.mutate(
-                            (activeRepository, activeSlot) =>
-                              resumeCrisis(activeRepository, activeSlot),
-                          );
-                          if (!resumed) return;
-                          setNotice(
-                            "危機対応を保存し、再開できる状態になりました。",
-                          );
-                        })
-                      }
-                    >
-                      危機対応を確認して再開
-                    </button>
-                  </section>
-                )}
-                {state.runState === "awaitingEvent" && (
-                  <section
-                    className="panel crisis"
-                    aria-labelledby="event-heading"
+            {(menuOpen || (route !== "home" && route !== "nation")) && (
+              <p
+                className={
+                  route === "nation"
+                    ? "eyebrow nation-shell-context"
+                    : "eyebrow"
+                }
+              >
+                {period(state)}・第{Math.floor(state.monthIndex / 3) + 1}
+                四半期・
+                {state.runState === "crisisStopped"
+                  ? "危機対応で一時停止"
+                  : state.runState === "awaitingEvent"
+                    ? "イベント対応待ち"
+                    : state.runState === "completed"
+                      ? "予定期間を終了"
+                      : state.runState === "failed"
+                        ? "危機で終了"
+                        : busy
+                          ? "計算中"
+                          : "運営中"}
+              </p>
+            )}
+            {menuOpen ? (
+              <PageDeck
+                label="画面メニュー"
+                actions={
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      requestAnimationFrame(() =>
+                        document
+                          .querySelector<HTMLElement>(".shell-menu")
+                          ?.focus(),
+                      );
+                    }}
                   >
-                    <h3 id="event-heading">突発イベント：対応を選択</h3>
-                    <p>
-                      {state.events.pendingChoiceEventId}{" "}
-                      が発生しました。準備度による軽減はすでに基準被害と分けて記録されています。
-                    </p>
-                    <div className="actions">
-                      {(
-                        [
-                          ["protect-households", "家計を優先"],
-                          ["protect-businesses", "企業を優先"],
-                          ["balanced", "均衡対応"],
-                        ] as const
-                      ).map(([choiceId, text]) => (
-                        <button
-                          key={choiceId}
-                          disabled={busy}
-                          onClick={() =>
-                            void action(async () => {
-                              const resolved = await gameClock?.mutate(
-                                (activeRepository, activeSlot) =>
-                                  resolveEvent(
-                                    activeRepository,
-                                    activeSlot,
-                                    choiceId,
-                                  ),
-                              );
-                              if (!resolved) return;
-                              setNotice("イベント対応を保存しました。");
-                            })
-                          }
-                        >
-                          {text}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
-                {(state.runState === "completed" ||
-                  state.runState === "failed") && (
-                  <section className="panel">
-                    <h3>運営の終了</h3>
-                    <button
-                      className="primary"
-                      onClick={() => navigate("ending")}
-                    >
-                      終了評価を見る
-                    </button>
-                  </section>
-                )}
-                <div className="actions">
-                  <button onClick={() => navigate("policies")}>
-                    政策を考える
+                    閉じる
                   </button>
-                  <button onClick={() => navigate("report")}>理由を見る</button>
-                </div>
-              </>
-            )}
-            {route === "policies" && (
-              <>
-                <h2 tabIndex={-1}>政策会議</h2>
-                <p className="meeting">
-                  残り {policyMeetingStatus(state).slotsRemaining} /
-                  3枠。次の更新は
-                  {policyMeetingStatus(state).nextPolicyMonth + 1}月目。
-                </p>
-                <section className="panel">
-                  <h3>実施中・予約中</h3>
-                  {[...state.policies.active, ...state.policies.reserved]
-                    .length ? (
-                    <ul>
-                      {[
-                        ...state.policies.active,
-                        ...state.policies.reserved,
-                      ].map((policy) => (
-                        <li key={policy.policyId}>
-                          {policy.policyId}：
-                          {policy.status === "active" ? "実施中" : "予約中"}、
-                          {policy.activationMonth + 1}月目開始
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>政策はまだありません。</p>
-                  )}
-                </section>
-                <PolicyForm
-                  state={state}
-                  busy={busy}
-                  onPreview={(draft, expertIds) =>
-                    void action(() => previewDraft(draft, expertIds))
-                  }
-                />
-                {comparisons.length > 0 && (
-                  <section className="panel">
-                    <h3>比較した案（最大3件）</h3>
-                    <ul>
-                      {comparisons.map((item) => (
-                        <li key={item.draftHash}>
-                          {label(item.previewedDraft?.ruleId ?? "")}
-                          ：12か月後の成長差{" "}
-                          {item.indicators
-                            .find(
-                              (indicator) =>
-                                indicator.indicatorId === "realGdp",
-                            )
-                            ?.month12.deltaBase.toFixed(2)}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-              </>
-            )}
-            {route === "preview" && (
-              <>
-                <h2 tabIndex={-1}>政策プレビュー</h2>
-                <Preview
-                  output={preview}
-                  counterfactuals={counterfactuals}
-                  expertIds={previewExpertIds}
-                  contentVersion={state.versions.contentVersion}
-                  busy={busy}
-                  onConfirm={() => void action(confirm)}
-                />
-                <button onClick={() => navigate("policies")}>
-                  政策会議へ戻る
+                }
+              >
+                <h2 tabIndex={-1}>画面メニュー</h2>
+                <button
+                  onClick={() => {
+                    selectGame(null);
+                    setPolicyDraft(undefined);
+                    setMenuOpen(false);
+                  }}
+                >
+                  はじめる・続きから
                 </button>
-              </>
-            )}
-            {route === "report" && (
+                {import.meta.env.DEV && <AIPreview />}
+                {Object.entries(NAV_LABELS).map(([id, text]) => (
+                  <button key={id} onClick={() => navigate(id as Route)}>
+                    {text}
+                  </button>
+                ))}
+              </PageDeck>
+            ) : (
               <>
-                <h2 tabIndex={-1}>経済レポート</h2>
-                <Report state={state} />
-              </>
-            )}
-            {route === "nation" && (
-              <>
-                <h2 tabIndex={-1} className="nation-page-heading">
-                  国家ビュー
-                </h2>
-                <NationView
-                  state={state}
-                  timeControls={timeControls}
-                  onReport={() => navigate("report")}
-                />
-              </>
-            )}
-            {route === "ending" && (
-              <>
-                <h2 tabIndex={-1}>終了評価</h2>
-                {state.runState === "completed" ||
-                state.runState === "failed" ? (
-                  <Ending state={state} onReport={() => navigate("report")} />
-                ) : (
-                  <p>{state.clock.endMonth}か月の終了後に評価を表示します。</p>
+                {route === "home" && (
+                  <>
+                    <h2 tabIndex={-1}>国家ホーム</h2>
+                    <Home
+                      state={state}
+                      timeControls={timeControls}
+                      onOpenReport={() => navigate("report")}
+                      onOpenPolicies={() => navigate("policies")}
+                      response={
+                        state.runState === "crisisStopped" ||
+                        state.runState === "awaitingEvent" ||
+                        state.runState === "completed" ||
+                        state.runState === "failed" ? (
+                          <>
+                            {state.runState === "crisisStopped" && (
+                              <section className="panel crisis">
+                                <h3>緊急会議</h3>
+                                <p>
+                                  危機のため、一時停止しています。政策会議で対策を考え、「危機対応を確認して再開」を選んでください。次の月も危機が続くと、運営が終了します。
+                                </p>
+                                <button onClick={() => navigate("policies")}>
+                                  緊急政策を検討する
+                                </button>{" "}
+                                <button
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void action(async () => {
+                                      const resumed = await gameClock?.mutate(
+                                        (activeRepository, activeSlot) =>
+                                          resumeCrisis(
+                                            activeRepository,
+                                            activeSlot,
+                                          ),
+                                      );
+                                      if (!resumed) return;
+                                      setNotice(
+                                        "危機対応を保存し、再開できる状態になりました。",
+                                      );
+                                    })
+                                  }
+                                >
+                                  危機対応を確認して再開
+                                </button>
+                              </section>
+                            )}
+                            {state.runState === "awaitingEvent" && (
+                              <section
+                                className="panel crisis"
+                                aria-labelledby="event-heading"
+                              >
+                                <h3 id="event-heading">
+                                  突発イベント：対応を選んでください
+                                </h3>
+                                <p>
+                                  出来事の内容：
+                                  {eventDisplayName(
+                                    state.events.pendingChoiceEventId ?? "",
+                                    state,
+                                  )}
+                                  。これまでの備えで軽減できた被害は、すでに反映しています。対応を選ぶと、次の月に進めます。
+                                </p>
+                                <div className="actions">
+                                  {(
+                                    [
+                                      ["protect-households", "家計を優先"],
+                                      ["protect-businesses", "企業を優先"],
+                                      ["balanced", "バランスを取る"],
+                                    ] as const
+                                  ).map(([choiceId, text]) => (
+                                    <button
+                                      key={choiceId}
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void action(async () => {
+                                          const resolved =
+                                            await gameClock?.mutate(
+                                              (activeRepository, activeSlot) =>
+                                                resolveEvent(
+                                                  activeRepository,
+                                                  activeSlot,
+                                                  choiceId,
+                                                ),
+                                            );
+                                          if (!resolved) return;
+                                          setNotice(
+                                            "イベント対応を保存しました。",
+                                          );
+                                        })
+                                      }
+                                    >
+                                      {text}
+                                    </button>
+                                  ))}
+                                </div>
+                              </section>
+                            )}
+                            {(state.runState === "completed" ||
+                              state.runState === "failed") && (
+                              <section className="panel">
+                                <h3>
+                                  {state.runState === "completed"
+                                    ? "予定期間を終えました"
+                                    : "危機で運営が終了しました"}
+                                </h3>
+                                <button
+                                  className="primary"
+                                  onClick={() => navigate("ending")}
+                                >
+                                  終了評価を見る
+                                </button>
+                              </section>
+                            )}
+                          </>
+                        ) : undefined
+                      }
+                    />
+                  </>
+                )}
+                {route === "policies" && (
+                  <>
+                    <h2 tabIndex={-1}>政策会議</h2>
+                    <p className="meeting">
+                      残り {policyMeetingStatus(state).slotsRemaining} /
+                      3枠。次の更新は
+                      {policyMeetingStatus(state).nextPolicyMonth + 1}月目。
+                    </p>
+                    <PolicyForm
+                      state={state}
+                      {...(policyDraft ? { draftState: policyDraft } : {})}
+                      onDraftChange={setPolicyDraft}
+                      extra={
+                        <>
+                          <section className="panel">
+                            <h3>実施中・予約中</h3>
+                            {[
+                              ...state.policies.active,
+                              ...state.policies.reserved,
+                            ].length ? (
+                              <ul>
+                                {[
+                                  ...state.policies.active,
+                                  ...state.policies.reserved,
+                                ].map((policy) => (
+                                  <li key={policy.policyId}>
+                                    {policyTitle(state, policy)}：
+                                    {policy.status === "active"
+                                      ? "実施中"
+                                      : "予約中"}
+                                    、{policy.activationMonth + 1}月目に開始
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p>実施中・予約中の政策はありません。</p>
+                            )}
+                          </section>
+                          {comparisons.length > 0 && (
+                            <section className="panel">
+                              <h3>比べた案（最大3件）</h3>
+                              <ul>
+                                {comparisons.map((item) => (
+                                  <li key={item.draftHash}>
+                                    {label(item.previewedDraft?.ruleId ?? "")}
+                                    ：12か月後の成長差{" "}
+                                    {item.indicators
+                                      .find(
+                                        (indicator) =>
+                                          indicator.indicatorId === "realGdp",
+                                      )
+                                      ?.month12.deltaBase.toFixed(2)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+                          )}
+                        </>
+                      }
+                      busy={busy}
+                      onPreview={(draft, expertIds) =>
+                        void action(
+                          () => previewDraft(draft, expertIds),
+                          "preview",
+                        )
+                      }
+                    />
+                  </>
+                )}
+                {route === "preview" && (
+                  <>
+                    <h2 tabIndex={-1}>政策の見通し</h2>
+                    <Preview
+                      output={preview}
+                      counterfactuals={counterfactuals}
+                      expertIds={previewExpertIds}
+                      contentVersion={state.versions.contentVersion}
+                      busy={busy}
+                      onConfirm={() => void action(confirm, "save")}
+                      onBack={() => navigate("policies")}
+                    />
+                  </>
+                )}
+                {route === "report" && (
+                  <>
+                    <h2 tabIndex={-1}>経済レポート</h2>
+                    <Report state={state} />
+                  </>
+                )}
+                {route === "nation" && (
+                  <>
+                    <h2 tabIndex={-1} className="nation-page-heading">
+                      国家ビュー
+                    </h2>
+                    <NationView
+                      state={state}
+                      timeControls={timeControls}
+                      onReport={() => navigate("report")}
+                    />
+                  </>
+                )}
+                {route === "ending" && (
+                  <>
+                    <h2 tabIndex={-1}>終了評価</h2>
+                    {state.runState === "completed" ||
+                    state.runState === "failed" ? (
+                      <Ending
+                        state={state}
+                        onReport={() => navigate("report")}
+                      />
+                    ) : (
+                      <p>
+                        予定の{state.clock.endMonth}
+                        か月を終えるか、危機で運営が終了すると、評価を確認できます。
+                      </p>
+                    )}
+                  </>
                 )}
               </>
             )}
           </div>
         </>
       )}
-      {busy && <p role="status">計算・保存中…</p>}
-      {offlineProgress && (
-        <p role="status">離席中の時間を反映中 · {offlineProgress}</p>
+      {busy && (
+        <p role="status" className="sr-only">
+          計算・保存中…
+        </p>
       )}
-      {returnReport && state && (
-        <section className="panel return-report" aria-label="帰還報告">
-          <h3>おかえりなさい</h3>
-          <p>
-            {returnReport.months}か月を反映しました。{returnReport.status}
-          </p>
-          <p>主な変化：{returnReport.changes.join("、")}</p>
-        </section>
+      {offlineProgress && (
+        <p role="status" className="sr-only">
+          離席中の時間を反映中 · {offlineProgress}
+        </p>
       )}
       {notice && (
-        <p role="status" className="notice">
+        <p role="status" className="sr-only">
           {notice}
         </p>
       )}
       {error && (
-        <p role="alert" className="error">
+        <p role="alert" className="sr-only">
           {error}
         </p>
       )}
-      {import.meta.env.DEV && <AIPreview />}
+      {messageOpen && (
+        <div
+          className="message-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={
+            returnReportOpen && returnReport
+              ? "帰還報告"
+              : error
+                ? "エラーの詳細"
+                : "通知の詳細"
+          }
+        >
+          <PageDeck
+            label={
+              returnReportOpen && returnReport
+                ? "帰還報告"
+                : error
+                  ? "エラーの詳細"
+                  : "通知の詳細"
+            }
+            actions={
+              <button
+                onClick={() => {
+                  setMessageOpen(false);
+                  document
+                    .querySelector<HTMLElement>(
+                      returnReportOpen
+                        ? ".shell-return-report"
+                        : ".shell-message",
+                    )
+                    ?.focus();
+                }}
+              >
+                詳細を閉じる
+              </button>
+            }
+          >
+            {returnReportOpen && returnReport ? (
+              <>
+                <h2 tabIndex={-1}>おかえりなさい</h2>
+                <p>
+                  {returnReport.months}か月を反映しました。{returnReport.status}
+                </p>
+                <p>主な変化：{returnReport.changes.join("、")}</p>
+              </>
+            ) : (
+              <>
+                <h2 tabIndex={-1}>{error ? "エラーの詳細" : "通知の詳細"}</h2>
+                <p>{error || notice}</p>
+              </>
+            )}
+          </PageDeck>
+        </div>
+      )}
     </main>
   );
 }

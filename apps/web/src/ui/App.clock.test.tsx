@@ -9,12 +9,20 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@macro-nation/domain";
-import { createGame, type GameRepository } from "../application/game-service";
+import {
+  calculateMonth,
+  createGame,
+  type GameRepository,
+} from "../application/game-service";
 import { policyStateHash } from "../application/policy-view";
 import { App } from "./App";
+import { OfflineMonthClient } from "../infrastructure/offline-month-client";
 
 beforeAll(() => {
   vi.stubGlobal("crypto", webcrypto);
+  vi.spyOn(OfflineMonthClient.prototype, "calculate").mockImplementation(
+    async (state) => calculateMonth(state, true),
+  );
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 afterEach(() => {
@@ -80,6 +88,32 @@ async function autoMode() {
 }
 
 describe("game clock UI", () => {
+  it("gives manual-mode recovery guidance when the automatic calculator is unavailable", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "first-playable-48", 1, "casual");
+    let now = 0;
+    vi.useFakeTimers();
+    await act(async () => {
+      render(<App repository={memory.repository} nowMs={() => now} />);
+    });
+    await autoMode();
+    await click("自動進行を始める");
+    vi.mocked(OfflineMonthClient.prototype.calculate).mockRejectedValueOnce(
+      new Error(
+        "自動進行の計算機能を利用できません。手動モードで続けることができます。",
+      ),
+    );
+    now += 300_000;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "手動モードで続けることができます",
+    );
+    expect(memory.slots.get(1)?.monthIndex).toBe(0);
+    expect(memory.slots.get(1)?.runState).toBe("paused");
+  });
+
   it("keeps tutorial progression manual until its configured introductory period ends", async () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "first-playable-48");
@@ -131,7 +165,7 @@ describe("game clock UI", () => {
     expect(screen.getByLabelText("次の月までの残り時間")).toHaveTextContent(
       "あと 3:00",
     );
-    await click("国家の景観を見る");
+    await click("国家ビュー");
     const pause = screen.getByRole("button", { name: "一時停止" });
     pause.focus();
     now += 180_000;
@@ -154,6 +188,57 @@ describe("game clock UI", () => {
     expect(screen.getByRole("button", { name: "再開" })).toBeEnabled();
   });
 
+  it("records a backward clock while viewing the game and clears its notice when time reaches the anchor", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "first-playable-48", 1, "casual");
+    let now = 1_000_000;
+    vi.useFakeTimers();
+    await act(async () => {
+      render(<App repository={memory.repository} nowMs={() => now} />);
+    });
+    await autoMode();
+    await click("自動進行を始める");
+    const running = structuredClone(memory.slots.get(1)!);
+    const anchor = running.clock.lastProcessedWallClockMs!;
+
+    now = anchor - 60_000;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(memory.slots.get(1)?.clock.warning).toBe("CLOCK_MOVED_BACKWARD");
+    expect(memory.slots.get(1)?.clock.lastProcessedWallClockMs).toBe(anchor);
+    expect(screen.getByText("時刻の調整待ち")).toBeVisible();
+    expect(screen.getByText(/端末の時刻が保存時より前/)).toBeVisible();
+    expect(memory.slots.get(1)?.monthIndex).toBe(0);
+    expect(memory.slots.get(1)?.economy).toEqual(running.economy);
+    expect(memory.slots.get(1)?.rng).toEqual(running.rng);
+
+    const warningWrites = memory.attempts;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(memory.attempts).toBe(warningWrites);
+    await click("国家ビュー");
+    expect(screen.getByText("時刻の調整待ち")).toBeVisible();
+    now = anchor;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(memory.slots.get(1)?.clock.warning).toBeUndefined();
+    expect(memory.slots.get(1)?.clock.lastProcessedWallClockMs).toBe(anchor);
+    expect(memory.slots.get(1)?.clock.remainderMs).toBe(
+      running.clock.remainderMs,
+    );
+    expect(screen.getByText("進行中")).toBeVisible();
+    expect(
+      screen.queryByText(/端末の時刻が保存時より前/),
+    ).not.toBeInTheDocument();
+    expect(memory.slots.get(1)?.monthIndex).toBe(0);
+    expect(memory.slots.get(1)?.economy).toEqual(running.economy);
+    expect(memory.slots.get(1)?.rng).toEqual(running.rng);
+    expect(memory.attempts).toBe(warningWrites + 1);
+  });
+
   it("waits for a durable pause before opening policy and does not resume on close", async () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "first-playable-48", 1, "casual");
@@ -165,7 +250,7 @@ describe("game clock UI", () => {
     await autoMode();
     await click("自動進行を始める");
     const release = memory.holdSave();
-    await click("政策を考える");
+    await click("政策会議");
     expect(
       screen.getByRole("heading", { name: "国家ホーム" }),
     ).toBeInTheDocument();
@@ -174,9 +259,7 @@ describe("game clock UI", () => {
       release();
     });
     expect(window.location.pathname).toBe("/game/1/policies");
-    expect(
-      screen.getByRole("button", { name: "1年・5年を比較する" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "見通しを確認" })).toBeEnabled();
     expect(memory.slots.get(1)?.clock.stopReason).toBe("policy");
     now += 600_000;
     await act(async () => {
@@ -220,7 +303,9 @@ describe("game clock UI", () => {
     expect(screen.getByRole("region", { name: "帰還報告" })).toHaveTextContent(
       "1か月を反映しました",
     );
-    await click("経済レポートで理由を見る");
+    await click("詳細を閉じる");
+    expect(screen.getByRole("button", { name: "帰還報告" })).toHaveFocus();
+    await click("レポート");
     expect(window.location.pathname).toBe("/game/2/report");
   });
 
@@ -259,6 +344,7 @@ describe("game clock UI", () => {
         await vi.advanceTimersByTimeAsync(1_000);
       });
       expect(memory.slots.get(1)?.monthIndex).toBe(2);
+      await click("詳細を閉じる");
       await click("一時停止");
       visibility.mockReturnValue("hidden");
       await act(async () => {
@@ -301,9 +387,9 @@ describe("game clock UI", () => {
       screen.getByRole("heading", { name: "国家ホーム" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "1年・5年を比較する" }),
+      screen.queryByRole("button", { name: "見通しを確認" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("storage unavailable");
+    expect(screen.getByRole("alert")).toHaveTextContent("保存");
     expect(memory.slots.get(1)?.monthIndex).toBe(0);
     expect(window.location.pathname).toBe("/game/1");
   });
@@ -323,7 +409,7 @@ describe("game clock UI", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    expect(screen.getByRole("alert")).toHaveTextContent("storage unavailable");
+    expect(screen.getByRole("alert")).toHaveTextContent("保存");
     expect(
       screen.getByRole("region", { name: "時間の進行" }),
     ).toHaveTextContent("計算・保存エラー");
