@@ -58,6 +58,20 @@ jobs:
           path: artifacts/issue-89/
           if-no-files-found: ignore
 
+      - name: Capture nation motion before and after
+        if: always() && github.event_name == 'pull_request' && steps.playwright.outcome == 'success'
+        env:
+          SCREENSHOT_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/capture-nation-motion.mjs
+
+      - name: Upload nation motion comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nation-motion-comparison
+          path: artifacts/issue-92/
+          if-no-files-found: ignore
+
       - name: Upload viewport failure screenshots
         if: always()
         uses: actions/upload-artifact@v4

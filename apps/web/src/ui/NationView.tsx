@@ -368,6 +368,7 @@ export function NationView({
   const model = useMemo(() => selectNationView(state), [state]);
   const [selected, setSelected] = useState<RegionId>("city");
   const [artFailed, setArtFailed] = useState(false);
+  const [artLoaded, setArtLoaded] = useState(false);
   type DetailPage = "region" | "regions" | "news" | "voices" | "settings";
   const [detailPage, setDetailPage] = useState<DetailPage | null>(null);
   const detailsOpen = detailPage !== null;
@@ -499,7 +500,11 @@ export function NationView({
               alt="山と農村、再生可能エネルギー、都市、工業、鉄道、港湾、空港が海でつながる国家の景観"
               width="941"
               height="1672"
-              onError={() => setArtFailed(true)}
+              onLoad={() => setArtLoaded(true)}
+              onError={() => {
+                setArtLoaded(false);
+                setArtFailed(true);
+              }}
             />
           )}
           <div className="nation-scene-heading">
@@ -523,7 +528,11 @@ export function NationView({
               </div>
             </div>
           </div>
-          <NationMotion model={model} controlsTarget={controlsTarget} />
+          <NationMotion
+            model={model}
+            controlsTarget={controlsTarget}
+            sceneAvailable={artLoaded && !artFailed}
+          />
           {REGION_IDS.map((id) => (
             <button
               className={"nation-hotspot nation-hotspot-" + id}
@@ -690,7 +699,7 @@ export function NationView({
                     画質は自動・高画質・標準・軽量から選べます。自動では端末に合わせて調整します。
                   </p>
                   <p>
-                    端末で「動きの軽減」を設定すると、人や乗り物の動きが止まります。静止した景観と地域の名前から、同じ情報を確認できます。
+                    画面の「景観の動きを止める」または端末の「動きの軽減」で、人や乗り物を停止できます。静止中も地域名と指標を確認できます。
                   </p>
                   <p>
                     景観はゲーム内の経済の様子を表しています。現実の経済を予測するものではありません。

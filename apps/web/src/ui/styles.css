@@ -895,6 +895,11 @@ label select {
   width: 100%;
   height: 100%;
   min-height: 0;
+  transition: filter 700ms ease-in-out;
+}
+.nation-view .nation-landscape,
+.nation-view .nation-motion-canvas {
+  /* Both replaced elements use the same crop of the 941 × 1672 artwork. */
   object-fit: cover;
   object-position: 50% 15%;
 }
@@ -906,6 +911,17 @@ label select {
 }
 .nation-scene[data-weather="alert"] .nation-landscape {
   filter: saturate(0.75) contrast(0.92);
+}
+.nation-scene[data-time="evening"][data-weather="alert"] .nation-landscape {
+  filter: sepia(0.1) saturate(0.75) contrast(0.92);
+}
+.nation-scene[data-time="night"][data-weather="alert"] .nation-landscape {
+  filter: brightness(0.68) saturate(0.75) contrast(0.92);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nation-view .nation-landscape {
+    transition: none;
+  }
 }
 .nation-scene-heading {
   position: absolute;
@@ -1803,10 +1819,10 @@ label select {
 .viewport-shell .nation-settings-motion .nation-motion-controls {
   position: static;
   font-size: 0.75rem;
-  padding: 2px 4px;
+  padding: 0 4px;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 6px;
   align-items: center;
 }
 .viewport-shell .nation-settings-motion .nation-motion-controls label {
@@ -1814,8 +1830,19 @@ label select {
   align-items: center;
   gap: 4px;
   margin: 0;
+  min-width: 0;
+  min-height: 44px;
+}
+.viewport-shell
+  .nation-settings-motion
+  .nation-motion-controls
+  input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
 }
 .viewport-shell .nation-settings-motion .nation-motion-diagnostics {
+  grid-column: 1 / -1;
   line-height: 1.2;
 }
 .viewport-shell .nation-settings-motion .nation-motion-controls select {

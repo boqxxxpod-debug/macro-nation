@@ -191,6 +191,48 @@ async function expectNoHorizontalScroll(page: Page) {
   ).toEqual([]);
 }
 
+async function expectNationArtworkAlignment(page: Page) {
+  const artwork = page.locator(".nation-view img.nation-landscape");
+  await expect
+    .poll(() =>
+      artwork.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBe(941);
+  const canvas = page.locator(".nation-view canvas.nation-motion-canvas");
+  await expect(canvas).toBeVisible();
+  const alignment = await page.evaluate(() => {
+    const image = document.querySelector<HTMLImageElement>(
+      ".nation-view img.nation-landscape",
+    )!;
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      ".nation-view canvas.nation-motion-canvas",
+    )!;
+    const imageRect = image.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    return {
+      imageSize: [image.naturalWidth, image.naturalHeight],
+      canvasSize: [canvas.width, canvas.height],
+      imageFit: getComputedStyle(image).objectFit,
+      canvasFit: getComputedStyle(canvas).objectFit,
+      imagePosition: getComputedStyle(image).objectPosition,
+      canvasPosition: getComputedStyle(canvas).objectPosition,
+      offsets: [
+        canvasRect.left - imageRect.left,
+        canvasRect.top - imageRect.top,
+        canvasRect.width - imageRect.width,
+        canvasRect.height - imageRect.height,
+      ],
+    };
+  });
+  expect(alignment.imageSize).toEqual([941, 1672]);
+  expect(alignment.canvasSize).toEqual(alignment.imageSize);
+  expect(alignment.imageFit).toBe("cover");
+  expect(alignment.canvasFit).toBe(alignment.imageFit);
+  expect(alignment.canvasPosition).toBe(alignment.imagePosition);
+  expect(alignment.imagePosition).toBe("50% 15%");
+  expect(alignment.offsets.every((offset) => Math.abs(offset) < 1)).toBe(true);
+}
+
 async function inspectDeck(page: Page, deck: Locator) {
   await waitForPageLayout(page);
   const previous = deck.getByRole("button", { name: /の前のページ$/ });
@@ -515,6 +557,7 @@ for (const viewport of VIEWPORTS) {
     await expect(
       page.getByRole("heading", { name: "国家ビュー" }),
     ).toBeFocused();
+    await expectNationArtworkAlignment(page);
     await inspectPages(page);
     if (viewport.width === 360)
       await testInfo.attach("nation-360-after", {

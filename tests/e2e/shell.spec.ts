@@ -306,11 +306,13 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await page.getByRole("button", { name: "国家ビュー" }).click();
   await expect(page).toHaveURL(/\/game\/1\/nation$/);
   await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
-  await expect(page.locator("canvas.nation-motion-canvas")).toHaveCount(0);
   await expect(page.locator("img.nation-landscape")).toHaveJSProperty(
     "naturalWidth",
     941,
   );
+  const stillLayer = page.locator("canvas.nation-motion-canvas");
+  await expect(stillLayer).toBeVisible();
+  await expect(stillLayer).toHaveAttribute("data-motion", "still");
   await expect(
     page.getByRole("button", { name: /港湾の様子を見る：/ }),
   ).toBeVisible();

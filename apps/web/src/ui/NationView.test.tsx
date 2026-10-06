@@ -9,7 +9,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGame, type GameRepository } from "../application/game-service";
 import { NationView } from "./NationView";
 
-vi.mock("./NationMotion", () => ({ NationMotion: () => null }));
+vi.mock("./NationMotion", () => ({
+  NationMotion: ({ sceneAvailable }: { sceneAvailable: boolean }) => (
+    <span
+      data-testid="nation-motion-gate"
+      data-scene-available={sceneAvailable}
+    />
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -68,10 +75,25 @@ describe("NationView detail navigation", () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
       window.setTimeout(() => callback(0), 0),
     );
-    render(<NationView state={await game()} onReport={vi.fn()} />);
+    const state = { ...(await game()), runState: "crisisStopped" as const };
+    render(<NationView state={state} onReport={vi.fn()} />);
+    expect(screen.getByTestId("nation-motion-gate")).toHaveAttribute(
+      "data-scene-available",
+      "false",
+    );
     fireEvent.error(screen.getByRole("img"));
+    expect(screen.getByTestId("nation-motion-gate")).toHaveAttribute(
+      "data-scene-available",
+      "false",
+    );
     expect(
       screen.getByRole("img", { name: /都市、農村、工業、港湾/ }),
+    ).toBeVisible();
+    expect(screen.getByRole("group", { name: "国家の主要指標" })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: /出来事の詳細：危機への対応を待っています/,
+      }),
     ).toBeVisible();
     expect(
       screen.getAllByRole("button", { name: /の様子を見る：/ }),
@@ -86,5 +108,14 @@ describe("NationView detail navigation", () => {
     expect(screen.getByRole("dialog", { name: "地域一覧" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "詳細を閉じる" }));
     await waitFor(() => expect(news).toHaveFocus());
+  });
+
+  it("starts the image-aligned scene only after the artwork has loaded", async () => {
+    render(<NationView state={await game()} onReport={vi.fn()} />);
+    const image = screen.getByRole("img");
+    const motion = screen.getByTestId("nation-motion-gate");
+    expect(motion).toHaveAttribute("data-scene-available", "false");
+    fireEvent.load(image);
+    expect(motion).toHaveAttribute("data-scene-available", "true");
   });
 });
