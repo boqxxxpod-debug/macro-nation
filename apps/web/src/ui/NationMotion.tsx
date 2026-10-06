@@ -5,6 +5,7 @@ import {
   createSpriteAtlas,
   createSpritePool,
   drawMotionFrame,
+  drawStillFrame,
   frameRateStatus,
   initialQualityTier,
   nextQualityTier,
@@ -14,6 +15,7 @@ import {
 } from "./nation-motion";
 
 type QualitySetting = "auto" | QualityTier;
+const PAUSED_STORAGE_KEY = "macro-nation-motion-paused";
 const QUALITY_LABELS: Record<QualityTier, string> = {
   high: "高画質",
   medium: "標準",
@@ -32,13 +34,24 @@ function prefersReducedMotion() {
   );
 }
 
+function savedMotionPreference() {
+  try {
+    return window.localStorage.getItem(PAUSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function NationMotion({
   model,
   controlsTarget,
+  sceneAvailable = true,
 }: {
   model: NationViewModel;
   /** Keep drawing mounted while placing its controls in the settings screen. */
   controlsTarget?: HTMLElement | null;
+  /** The image-specific paths must never be drawn over the SVG fallback. */
+  sceneAvailable?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poolRef = useRef<ReturnType<typeof createSpritePool> | null>(null);
@@ -48,7 +61,9 @@ export function NationMotion({
   const [setting, setSetting] = useState<QualitySetting>("auto");
   const [autoTier, setAutoTier] = useState(deviceTier);
   const [reduced, setReduced] = useState(prefersReducedMotion);
+  const [userPaused, setUserPaused] = useState(savedMotionPreference);
   const [fps, setFps] = useState<number | null>(null);
+  const stopped = reduced || userPaused || !sceneAvailable;
   const tier = setting === "auto" ? autoTier : setting;
   const performance = frameRateStatus(fps);
   const performanceLabel = {
@@ -70,8 +85,12 @@ export function NationMotion({
   }, []);
 
   useEffect(() => {
+    setFps(null);
+  }, [stopped]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (reduced || !canvas) return;
+    if (stopped || !canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     // Quality changes may restart the effect, while monthly model updates are
@@ -147,10 +166,38 @@ export function NationMotion({
       observer?.disconnect();
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
-  }, [reduced, tier, setting]);
+  }, [stopped, tier, setting]);
+
+  useEffect(() => {
+    if (!stopped || !sceneAvailable) return;
+    const context = canvasRef.current?.getContext("2d");
+    if (!context) return;
+    drawStillFrame(
+      context,
+      (poolRef.current ??= createSpritePool()),
+      model,
+      tier,
+    );
+  }, [stopped, sceneAvailable, model, tier]);
 
   const controls = (
     <div className="nation-motion-controls">
+      <label>
+        <input
+          type="checkbox"
+          checked={userPaused}
+          onChange={(event) => {
+            const paused = event.target.checked;
+            setUserPaused(paused);
+            try {
+              window.localStorage.setItem(PAUSED_STORAGE_KEY, String(paused));
+            } catch {
+              // Motion preference remains usable for this visit without storage.
+            }
+          }}
+        />
+        景観の動きを止める
+      </label>
       <label>
         景観の画質
         <select
@@ -166,18 +213,30 @@ export function NationMotion({
       <output
         className="nation-motion-diagnostics"
         aria-live="off"
-        data-performance={reduced ? "reduced" : performance}
+        data-performance={
+          reduced
+            ? "reduced"
+            : userPaused
+              ? "paused"
+              : !sceneAvailable
+                ? "unavailable"
+                : performance
+        }
       >
         {reduced
           ? "動きを減らす設定に合わせて、静止表示にしています"
-          : `画質 ${QUALITY_LABELS[tier]} · ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
+          : userPaused
+            ? "利用者の設定で景観の動きを止めています"
+            : !sceneAvailable
+              ? "背景画像を表示できないため、景観は静止表示です"
+              : `画質 ${QUALITY_LABELS[tier]} · ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
       </output>
     </div>
   );
 
   return (
     <>
-      {!reduced && (
+      {sceneAvailable && (
         <canvas
           ref={canvasRef}
           className="nation-motion-canvas"
@@ -185,6 +244,7 @@ export function NationMotion({
           height={MOTION_HEIGHT}
           aria-hidden="true"
           data-quality={tier}
+          data-motion={stopped ? "still" : "animated"}
         />
       )}
       {controlsTarget

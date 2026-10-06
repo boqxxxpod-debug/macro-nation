@@ -13,6 +13,7 @@ import { NationMotion } from "./NationMotion";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 async function model() {
@@ -27,6 +28,74 @@ async function model() {
 }
 
 describe("NationMotion lifecycle", () => {
+  it("lets the player stop motion and keeps that drawing preference across remounts", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    const request = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockReturnValue(5);
+    const cancel = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => {});
+    const view = await model();
+    const first = render(<NationMotion model={view} />);
+    expect(request).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByLabelText("景観の動きを止める"));
+    expect(cancel).toHaveBeenCalledWith(5);
+    expect(
+      first.container.querySelector("canvas.nation-motion-canvas"),
+    ).toHaveAttribute("data-motion", "still");
+    expect(
+      screen.getByText(/利用者の設定で景観の動きを止めています/),
+    ).toHaveAttribute("data-performance", "paused");
+    expect(window.localStorage.getItem("macro-nation-motion-paused")).toBe(
+      "true",
+    );
+
+    first.unmount();
+    render(<NationMotion model={view} />);
+    expect(screen.getByLabelText("景観の動きを止める")).toBeChecked();
+    expect(request).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps controls and stops image paths when the background is unavailable", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const request = vi.spyOn(window, "requestAnimationFrame");
+    const { container } = render(
+      <NationMotion model={await model()} sceneAvailable={false} />,
+    );
+    expect(container.querySelector("canvas.nation-motion-canvas")).toBeNull();
+    expect(screen.getByLabelText("景観の動きを止める")).toBeInTheDocument();
+    expect(screen.getByText(/背景画像を表示できないため/)).toHaveAttribute(
+      "data-performance",
+      "unavailable",
+    );
+    expect(request).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("keeps the selected quality when its controls leave and reopen in a settings screen", async () => {
     vi.stubGlobal("matchMedia", () => ({
       matches: true,
@@ -65,12 +134,22 @@ describe("NationMotion lifecycle", () => {
     const request = vi
       .spyOn(window, "requestAnimationFrame")
       .mockReturnValue(1);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const view = await model();
     const { container } = render(<NationMotion model={view} />);
-    expect(container.querySelector("canvas.nation-motion-canvas")).toBeNull();
+    expect(container.querySelector("canvas.nation-motion-canvas")).toHaveAttribute(
+      "data-motion",
+      "still",
+    );
     expect(
       screen.getByText(/動きを減らす設定に合わせて、静止表示にしています/),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("景観の動きを止める"));
+    fireEvent.click(screen.getByLabelText("景観の動きを止める"));
+    expect(container.querySelector("canvas.nation-motion-canvas")).toHaveAttribute(
+      "data-motion",
+      "still",
+    );
     expect(request).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
