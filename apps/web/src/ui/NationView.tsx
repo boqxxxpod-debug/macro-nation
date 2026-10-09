@@ -6,10 +6,12 @@ import {
   selectNationView,
   type RegionId,
   type RegionVisualState,
+  type StructureKind,
 } from "../application/nation-view";
 import { selectHomeIndicators } from "../application/home-view";
 import { describeCause, display, label } from "./game-format";
 import { NationMotion } from "./NationMotion";
+import { NationStructures } from "./NationStructures";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
 
@@ -21,7 +23,7 @@ const REGION_ICONS: Record<RegionId, string> = {
   harbor: "⚓",
   airport: "✈",
   transport: "▰",
-  energy: "☘",
+  energy: "⚡",
 };
 const REGION_BADGES: Record<RegionId, string> = {
   city: "都市・暮らし",
@@ -30,7 +32,29 @@ const REGION_BADGES: Record<RegionId, string> = {
   harbor: "港湾",
   airport: "空港",
   transport: "鉄道・交通",
-  energy: "再生可能エネルギー",
+  energy: "エネルギー設備",
+};
+const STRUCTURE_NAMES: Record<StructureKind, string> = {
+  house: "住宅",
+  apartment: "集合住宅",
+  office: "オフィス",
+  tower: "高層ビル",
+  workshop: "作業場",
+  factory: "工場",
+  plant: "製造施設",
+  depot: "物流倉庫",
+  warehouse: "港湾倉庫",
+  quay: "荷役施設",
+  crane: "荷役クレーン",
+  terminal: "貨物施設",
+  field: "農地区画",
+  greenhouse: "温室",
+  hangar: "格納庫",
+  station: "交通拠点",
+  solar: "太陽光設備",
+  turbine: "風力設備",
+  substation: "変電設備",
+  pylon: "送電設備",
 };
 
 function CityBlock({
@@ -75,7 +99,7 @@ function Landscape({
       className="nation-landscape"
       viewBox="0 0 1000 540"
       role="img"
-      aria-label="都市、農村、工業、港湾、空港、交通、発電設備を見渡す国家景観"
+      aria-label="都市、農村、工業、港湾、空港、交通、送電設備を見渡す国家景観"
     >
       <defs>
         <linearGradient id="nation-sky" x2="0" y2="1">
@@ -158,15 +182,12 @@ function Landscape({
         />
         <path d="M803 430 l40 -24 45 18 -40 23 Z" fill="#c4d2a0" />
         <path
-          d="M833 390 h18 v44 h-18 Z M869 396 h20 v36 h-20Z"
-          fill="#d9e2d1"
+          d="M833 432 845 378l12 54m-20-29h16m-13 17h11M866 432l12-48 12 48m-20-29h16m-14 18h12"
+          fill="none"
+          stroke="#d9e2d1"
+          strokeWidth="5"
         />
-        <path
-          d="M842 390 v-28 M879 396 v-26"
-          stroke="#e8e8d8"
-          strokeWidth="7"
-        />
-        <path d="M832 420 h70" stroke="#426e61" strokeWidth="7" />
+        <path d="M817 432h85" stroke="#426e61" strokeWidth="7" />
         <path
           d="M612 426 l98 -17 74 17 -90 26 Z M750 447 l58 -14 35 15 -57 15 Z"
           fill="#bbd4c1"
@@ -332,6 +353,18 @@ function regionDetails({
     >
       <p className="eyebrow">地域のいま · {STAGE_NAMES[region.stage]}</p>
       <h3>{region.label}</h3>
+      <p>
+        建物・施設の段階：{STAGE_NAMES[region.structureStage]}（景観上の
+        {region.structures.length}区画） · 今月の稼働：
+        {STAGE_NAMES[region.stage]}
+      </p>
+      <p>
+        景観上の施設：
+        {Array.from(
+          new Set(region.structures.map((item) => STRUCTURE_NAMES[item.kind])),
+        ).join("・")}
+      </p>
+      <p>{region.structureReason}</p>
       <p className="nation-metric">
         <strong>{region.value.toFixed(1)}</strong> {region.metricLabel}
       </p>
@@ -429,6 +462,7 @@ export function NationView({
   const stages = Object.fromEntries(
     REGION_IDS.map((id) => [id, model.regions[id].stage]),
   ) as Record<RegionId, number>;
+  const structures = REGION_IDS.flatMap((id) => model.regions[id].structures);
 
   return (
     <div className="nation-view">
@@ -496,8 +530,8 @@ export function NationView({
           ) : (
             <img
               className="nation-landscape"
-              src={import.meta.env.BASE_URL + "nation-coast.webp"}
-              alt="山と農村、再生可能エネルギー、都市、工業、鉄道、港湾、空港が海でつながる国家の景観"
+              src={import.meta.env.BASE_URL + "nation-terrain.webp"}
+              alt="山、農地、道路、鉄道、港と空港の区画が海でつながる国家の景観"
               width="941"
               height="1672"
               onLoad={() => setArtLoaded(true)}
@@ -506,6 +540,9 @@ export function NationView({
                 setArtFailed(true);
               }}
             />
+          )}
+          {artLoaded && !artFailed && (
+            <NationStructures structures={structures} />
           )}
           <div className="nation-scene-heading">
             <div className="nation-ambition">
@@ -703,6 +740,9 @@ export function NationView({
                   </p>
                   <p>
                     景観はゲーム内の経済の様子を表しています。現実の経済を予測するものではありません。
+                  </p>
+                  <p>
+                    建物と施設の区画数は地域の状態を示す目安で、実際の住宅戸数や工場数ではありません。
                   </p>
                 </section>
               )}

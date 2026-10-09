@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGame, type GameRepository } from "../application/game-service";
 import { NationView } from "./NationView";
+import { structureViewBox } from "./nation-structure-geometry";
 
 vi.mock("./NationMotion", () => ({
   NationMotion: ({ sceneAvailable }: { sceneAvailable: boolean }) => (
@@ -111,11 +112,30 @@ describe("NationView detail navigation", () => {
   });
 
   it("starts the image-aligned scene only after the artwork has loaded", async () => {
-    render(<NationView state={await game()} onReport={vi.fn()} />);
+    const state = await game();
+    render(<NationView state={state} onReport={vi.fn()} />);
     const image = screen.getByRole("img");
+    expect(image).toHaveAttribute("src", "/nation-terrain.webp");
     const motion = screen.getByTestId("nation-motion-gate");
     expect(motion).toHaveAttribute("data-scene-available", "false");
+    expect(document.querySelector("[data-layer='Structures']")).toBeNull();
     fireEvent.load(image);
     expect(motion).toHaveAttribute("data-scene-available", "true");
+    const layer = document.querySelector("[data-layer='Structures']");
+    expect(layer).not.toBeNull();
+    expect(layer?.querySelectorAll("[data-structure]")).toHaveLength(14);
+    expect(layer?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("matches the terrain cover crop for compact and tall scenes", () => {
+    const wide = structureViewBox(720, 1000).split(" ").map(Number);
+    expect(wide[0]).toBe(0);
+    expect(wide[1]).toBeGreaterThan(0);
+    expect(wide[2]).toBe(941);
+    expect(wide[3]).toBeCloseTo((1000 * 941) / 720);
+    const tall = structureViewBox(360, 800).split(" ").map(Number);
+    expect(tall[0]).toBeGreaterThan(0);
+    expect(tall[1]).toBe(0);
+    expect(tall[3]).toBe(1672);
   });
 });

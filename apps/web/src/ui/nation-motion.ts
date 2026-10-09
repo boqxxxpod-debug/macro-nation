@@ -494,26 +494,44 @@ function drawRegionalEffects(
   ambience: AmbientBlend,
 ) {
   const phase = sprites[0]?.phase ?? 0;
-  if (ambience.construction > 0.01)
+  const construction = model.regions.city.structures.at(-1);
+  if (ambience.construction > 0.01 && construction)
     drawCrane(
       context,
-      MOTION_ANCHORS.constructionCrane,
+      {
+        x: construction.x + construction.width * 0.55,
+        y: construction.y + construction.height * 0.12,
+      },
       phase,
       0.8 * ambience.construction,
     );
-  if (ambience.harbor > 0.01)
+  const harborCrane = model.regions.harbor.structures.find(
+    (structure) => structure.kind === "crane",
+  );
+  if (ambience.harbor > 0.01 && harborCrane)
     drawCrane(
       context,
-      MOTION_ANCHORS.harborCrane,
+      {
+        x: harborCrane.x + harborCrane.width * 0.78,
+        y: harborCrane.y + harborCrane.height * 0.25,
+      },
       phase + 2,
       0.75 * ambience.harbor,
     );
 
   if (tier !== "low") {
     // Steam is a visual cue for factory activity, not a pollution measurement.
-    const steamCount = tier === "high" ? MOTION_ANCHORS.steam.length : 1;
+    const factories = model.regions.industry.structures.filter(
+      (structure) => structure.kind === "factory" || structure.kind === "plant",
+    );
+    const steamCount =
+      tier === "high" ? factories.length : Math.min(1, factories.length);
     for (let index = 0; index < steamCount; index += 1) {
-      const anchor = MOTION_ANCHORS.steam[index]!;
+      const factory = factories[index]!;
+      const anchor = {
+        x: factory.x + factory.width * 0.75,
+        y: factory.y + factory.height * 0.12,
+      };
       for (let puff = 0; puff < model.regions.industry.stage; puff += 1) {
         const drift = (phase * 7 + puff * 13) % 45;
         context.save();
@@ -532,9 +550,19 @@ function drawRegionalEffects(
       }
     }
 
-    const turbines = tier === "high" ? MOTION_ANCHORS.turbines.length : 2;
+    const windFacilities = model.regions.energy.structures.filter(
+      (structure) => structure.kind === "turbine",
+    );
+    const turbines =
+      tier === "high"
+        ? windFacilities.length
+        : Math.min(2, windFacilities.length);
     for (let index = 0; index < turbines; index += 1) {
-      const anchor = MOTION_ANCHORS.turbines[index]!;
+      const facility = windFacilities[index]!;
+      const anchor = {
+        x: facility.x + facility.width * 0.51,
+        y: facility.y + facility.height * 0.29,
+      };
       const angle = phase * (0.65 + model.regions.energy.stage * 0.08) + index;
       context.save();
       context.globalAlpha *= 0.55;
@@ -584,8 +612,15 @@ function drawRegionalEffects(
     context.save();
     context.globalAlpha *= ambience.night * (0.4 + ambience.activity * 0.45);
     context.fillStyle = "#ffe6a1";
-    for (const point of MOTION_ANCHORS.windows)
-      context.fillRect(point.x, point.y, 3, 5);
+    for (const building of model.regions.city.structures) {
+      if (building.kind === "house") continue;
+      context.fillRect(
+        building.x + building.width * 0.55,
+        building.y + building.height * 0.55,
+        3,
+        5,
+      );
+    }
     for (const point of MOTION_ANCHORS.lamps) {
       context.beginPath();
       context.arc(point.x, point.y, 3, 0, Math.PI * 2);

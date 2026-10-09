@@ -897,29 +897,35 @@ label select {
   min-height: 0;
   transition: filter 700ms ease-in-out;
 }
+.nation-view .nation-structures {
+  filter: none;
+  transition: filter 700ms ease-in-out;
+}
 .nation-view .nation-landscape,
 .nation-view .nation-motion-canvas {
   /* Both replaced elements use the same crop of the 941 × 1672 artwork. */
   object-fit: cover;
   object-position: 50% 15%;
 }
-.nation-scene[data-time="evening"] .nation-landscape {
+.nation-scene[data-time="evening"] :is(.nation-landscape, .nation-structures) {
   filter: sepia(0.1) saturate(1.12);
 }
-.nation-scene[data-time="night"] .nation-landscape {
+.nation-scene[data-time="night"] :is(.nation-landscape, .nation-structures) {
   filter: brightness(0.68) saturate(0.8);
 }
-.nation-scene[data-weather="alert"] .nation-landscape {
+.nation-scene[data-weather="alert"] :is(.nation-landscape, .nation-structures) {
   filter: saturate(0.75) contrast(0.92);
 }
-.nation-scene[data-time="evening"][data-weather="alert"] .nation-landscape {
+.nation-scene[data-time="evening"][data-weather="alert"]
+  :is(.nation-landscape, .nation-structures) {
   filter: sepia(0.1) saturate(0.75) contrast(0.92);
 }
-.nation-scene[data-time="night"][data-weather="alert"] .nation-landscape {
+.nation-scene[data-time="night"][data-weather="alert"]
+  :is(.nation-landscape, .nation-structures) {
   filter: brightness(0.68) saturate(0.75) contrast(0.92);
 }
 @media (prefers-reduced-motion: reduce) {
-  .nation-view .nation-landscape {
+  .nation-view :is(.nation-landscape, .nation-structures) {
     transition: none;
   }
 }
@@ -1760,15 +1766,24 @@ label select {
   font-size: 0.75rem;
 }
 .viewport-shell .nation-scene-verse {
-  font-size: 0.875rem;
-  left: 8px;
-  right: 8px;
-  bottom: 6px;
-  text-align: center;
-  pointer-events: none;
-}
-.viewport-shell .nation-scene-verse br {
   display: none;
+}
+@media (max-width: 500px) {
+  .viewport-shell .nation-hotspot-city {
+    left: 2%;
+    top: 47%;
+    transform: translate(0, -50%);
+  }
+  .viewport-shell .nation-hotspot-industry {
+    left: auto;
+    right: 2%;
+    top: 56%;
+  }
+  .viewport-shell .nation-hotspot-transport {
+    left: 2%;
+    top: 65%;
+    transform: translate(0, -50%);
+  }
 }
 .nation-overview-actions {
   display: grid;

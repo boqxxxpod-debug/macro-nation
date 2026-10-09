@@ -14,6 +14,39 @@ export const REGION_IDS = [
 ] as const;
 export type RegionId = (typeof REGION_IDS)[number];
 export type VisualStage = 0 | 1 | 2 | 3;
+export type StructureStatus = "quiet" | "steady" | "busy" | "peak";
+export type StructureKind =
+  | "house"
+  | "apartment"
+  | "office"
+  | "tower"
+  | "workshop"
+  | "factory"
+  | "plant"
+  | "depot"
+  | "warehouse"
+  | "quay"
+  | "crane"
+  | "terminal"
+  | "field"
+  | "greenhouse"
+  | "hangar"
+  | "station"
+  | "solar"
+  | "turbine"
+  | "substation"
+  | "pylon";
+
+/** Fixed artwork coordinates; only selection and operating status are derived. */
+export interface NationStructure {
+  readonly id: string;
+  readonly kind: StructureKind;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly status: StructureStatus;
+}
 
 export const REGION_LABELS: Record<RegionId, string> = {
   city: "都市と暮らし",
@@ -29,6 +62,10 @@ export interface RegionVisualState {
   readonly id: RegionId;
   readonly label: string;
   readonly stage: VisualStage;
+  /** Confirmed, slow-moving capacity represented by buildings and facilities. */
+  readonly structureStage: VisualStage;
+  readonly structureReason: string;
+  readonly structures: readonly NationStructure[];
   readonly metricId: string;
   readonly metricLabel: string;
   readonly value: number;
@@ -66,6 +103,105 @@ export function stableStage(
       stage -= 1;
   }
   return stage as VisualStage;
+}
+
+interface StageRule {
+  readonly thresholds: readonly number[];
+  readonly margin: number;
+}
+
+interface StructureTransitionRule extends StageRule {
+  readonly movingAverageMonths: number;
+  readonly growthConfirmationMonths: number;
+  readonly declineConfirmationMonths: number;
+}
+
+interface StructureSlot {
+  readonly id: string;
+  readonly kind: StructureKind;
+  readonly minStage: VisualStage;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A structure changes only after several confirmed monthly averages. */
+export function stableStructureStage(
+  values: readonly number[],
+  config: StructureTransitionRule,
+): VisualStage {
+  let stage: VisualStage = 1;
+  let pending: VisualStage | null = null;
+  let confirmed = 0;
+  const window: number[] = [];
+  for (const value of values) {
+    if (!Number.isFinite(value)) {
+      window.length = 0;
+      pending = null;
+      confirmed = 0;
+      continue;
+    }
+    window.push(value);
+    if (window.length > config.movingAverageMonths) window.shift();
+    if (window.length < config.movingAverageMonths) continue;
+    const average = window.reduce((sum, item) => sum + item, 0) / window.length;
+    const target = stableStageFrom(stage, average, config);
+    if (target === stage) {
+      pending = null;
+      confirmed = 0;
+      continue;
+    }
+    if (target === pending) confirmed += 1;
+    else {
+      pending = target;
+      confirmed = 1;
+    }
+    const required =
+      target > stage
+        ? config.growthConfirmationMonths
+        : config.declineConfirmationMonths;
+    if (confirmed >= required) {
+      stage = target;
+      pending = null;
+      confirmed = 0;
+    }
+  }
+  return stage;
+}
+
+function stableStageFrom(
+  initial: VisualStage,
+  value: number,
+  config: StageRule,
+): VisualStage {
+  let stage: number = initial;
+  while (stage < 3 && value >= config.thresholds[stage]! + config.margin)
+    stage += 1;
+  while (stage > 0 && value < config.thresholds[stage - 1]! - config.margin)
+    stage -= 1;
+  return stage as VisualStage;
+}
+
+const STRUCTURE_STATUS = ["quiet", "steady", "busy", "peak"] as const;
+
+function selectStructures(
+  id: RegionId,
+  stage: VisualStage,
+  activity: VisualStage,
+): readonly NationStructure[] {
+  const slots = rules.structures.slots[id] as readonly StructureSlot[];
+  return slots
+    .filter((slot) => slot.minStage <= stage)
+    .map((slot) => ({
+      id: slot.id,
+      kind: slot.kind,
+      x: slot.x,
+      y: slot.y,
+      width: slot.width,
+      height: slot.height,
+      status: STRUCTURE_STATUS[activity],
+    }));
 }
 
 function initialNumber(state: GameState, field: string, fallback: number) {
@@ -176,19 +312,13 @@ export function selectNationView(state: GameState): NationViewModel {
       (values[metric.id] ?? metric.value) / (metric.baseline || 1);
     if (id === "city") {
       const employment =
-        1 +
-        (baseUnemployment -
-          (values.unemployment ?? state.economy.rates.unemployment)) *
-          5;
-      const trust =
-        (values.policyTrust ?? state.economy.sentiment.policyTrust) /
-        (baseTrust || 1);
+        1 + (baseUnemployment - (values.unemployment ?? baseUnemployment)) * 5;
+      const trust = (values.policyTrust ?? baseTrust) / (baseTrust || 1);
       return 0.6 * primary + 0.2 * employment + 0.2 * trust;
     }
     if (id === "countryside") {
       const consumption =
-        (values.consumption ?? state.economy.flows.consumption) /
-        (baseConsumption || 1);
+        (values.consumption ?? baseConsumption) / (baseConsumption || 1);
       return 0.7 * primary + 0.3 * consumption;
     }
     return primary;
@@ -205,8 +335,28 @@ export function selectNationView(state: GameState): NationViewModel {
         policyTrust: state.economy.sentiment.policyTrust,
         consumption: state.economy.flows.consumption,
       });
-      const series = values.length ? values : [now];
+      const series = values.length ? [...values] : [now];
       if (series.at(-1) !== now) series.push(now);
+      // Buildings are based only on confirmed monthly snapshots. A draft
+      // policy or a one-month shock may change activity, but never invents a
+      // finished building before enough committed results exist.
+      const structureStage = stableStructureStage(
+        values,
+        rules.structures.transition,
+      );
+      const previousStructureStage = stableStructureStage(
+        values.slice(0, -1),
+        rules.structures.transition,
+      );
+      const stage = stableStage(series, rules.stages[id]);
+      const structureReason =
+        structureStage > previousStructureStage
+          ? `${metric.label}の改善が複数月続き、固定区画に施設が増えました。`
+          : structureStage < previousStructureStage
+            ? `${metric.label}の低調が長く続き、施設の規模を縮小しました。`
+            : stage !== structureStage
+              ? `今月の${metric.label}は稼働状態に反映し、施設の規模は過去の月次結果を維持しています。`
+              : `施設の規模は${metric.label}の確定済み月次履歴を反映しています。`;
       const topCause = latest?.topCauses.find((cause) =>
         CAUSAL_IDS[id].includes(cause.indicatorId),
       );
@@ -215,7 +365,10 @@ export function selectNationView(state: GameState): NationViewModel {
         {
           id,
           label: REGION_LABELS[id],
-          stage: stableStage(series, rules.stages[id]),
+          stage,
+          structureStage,
+          structureReason,
+          structures: selectStructures(id, structureStage, stage),
           metricId: metric.id,
           metricLabel: metric.label,
           value: metric.value,
