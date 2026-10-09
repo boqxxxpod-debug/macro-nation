@@ -1,0 +1,269 @@
+{
+  "assetVersion": "expert-portraits-anime-v2",
+  "createdDate": "2026-10-03",
+  "profileSource": "packages/advisor-core/src/profiles.ts",
+  "profileSourceCommit": "68b8f15465e42b9068aedf82b264eb3340546825",
+  "generator": "ChatGPT built-in image generation",
+  "scope": "Portrait assets only; character roles, values and tones remain in the existing content master.",
+  "originalsAvailability": "PNG originals are in the accompanying ZIP; the asset branch contains optimized WebP files.",
+  "style": "Cute Japanese anime chibi portraits; large sparkling eyes, rounded faces, small mouths, cheerful cel colors.",
+  "supersedes": "expert-portraits-v1",
+  "experts": [
+    {
+      "expertId": "centralBank",
+      "displayName": "水城 静香",
+      "role": "中央銀行",
+      "portraitAssetKey": "central-bank",
+      "colorToken": "#315b70",
+      "altText": "紺のジャケットを着た中央銀行専門家、水城静香",
+      "original": {
+        "file": "sources/central-bank.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "c32b9434b4834b6a7f21136f09e44ffa7ce639a1675b60da63b5d16184224957"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/central-bank.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 26638,
+          "sha256": "3447871a5f756864c438476a936b2736cf4167ee038d99d58085661c6e506350"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/central-bank@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 66076,
+          "sha256": "c8f304bd67e5c5b2223c744119519dd15b6316ad62feb6a1b62daa8ee97bcfa4"
+        }
+      ]
+    },
+    {
+      "expertId": "fiscal",
+      "displayName": "大蔵 堅",
+      "role": "財政",
+      "portraitAssetKey": "fiscal",
+      "colorToken": "#6b4c3b",
+      "altText": "茶色のネクタイを着けた財政専門家、大蔵堅",
+      "original": {
+        "file": "sources/fiscal.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "f66d4c520c1bc5a9877b94e0a75bf085771877fb70bab6746a8149c6c4454396"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/fiscal.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 24308,
+          "sha256": "ebeca994f55770f38f3b7cc0cb2c9fc78a099f189f25ffc534f5f5b0f5dfb345"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/fiscal@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 62526,
+          "sha256": "82f29cdfd51da7268e23433c950e4c264ad655da886b945a09c3d85624549644"
+        }
+      ]
+    },
+    {
+      "expertId": "macro",
+      "displayName": "景山 めぐみ",
+      "role": "マクロ経済",
+      "portraitAssetKey": "macro",
+      "colorToken": "#4b568f",
+      "altText": "紫のスカーフを着けたマクロ経済専門家、景山めぐみ",
+      "original": {
+        "file": "sources/macro.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "52d90853737bb6560a6e507d4aaaac2fcb6453dc400f0c17bca904ba96002ce4"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/macro.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 28752,
+          "sha256": "ff0b562bd5fe6569b2db121b69d2c12fdcd6f56519de6cbd68d4eaa330d9bfca"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/macro@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 77168,
+          "sha256": "d29936e07fbc3dd01d6530b0326e5372050e23cc7963ed85e8614ee4b54b68b5"
+        }
+      ]
+    },
+    {
+      "expertId": "industry",
+      "displayName": "工藤 拓",
+      "role": "産業政策",
+      "portraitAssetKey": "industry",
+      "colorToken": "#775a22",
+      "altText": "黄土色の作業ジャケットを着た産業政策専門家、工藤拓",
+      "original": {
+        "file": "sources/industry.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "c634640184cceeed3bba6bb19dd65314b56a93b80be46e37908e7e80f861a51e"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/industry.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 24008,
+          "sha256": "0c7e8fcc5e6e6672ce50953980a9de7da65e5d213539ae6037525628116827a6"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/industry@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 62036,
+          "sha256": "78ce886398c96f2549cc0ed3a4aa8b31bb8980d3bbd6b9466a18441ad96df922"
+        }
+      ]
+    },
+    {
+      "expertId": "labor",
+      "displayName": "働木 あゆみ",
+      "role": "雇用労働",
+      "portraitAssetKey": "labor",
+      "colorToken": "#9b435c",
+      "altText": "赤いカーディガンを着た雇用労働専門家、働木あゆみ",
+      "original": {
+        "file": "sources/labor.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "48391335ac24578a20dbda606b03298c32d566a967242cf2322098e872a7c926"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/labor.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 27178,
+          "sha256": "8a2568a97bc989e88a0f33f8824f5d23c5c2a0b1e5000656cf0c1bebf34c15a3"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/labor@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 70828,
+          "sha256": "25e1a8833671cdbe89628b3eb771215a066277dbbf0657ee9c4441a2bba79c11"
+        }
+      ]
+    },
+    {
+      "expertId": "social",
+      "displayName": "福原 守",
+      "role": "社会政策",
+      "portraitAssetKey": "social",
+      "colorToken": "#357060",
+      "altText": "緑のシャツを着た社会政策専門家、福原守",
+      "original": {
+        "file": "sources/social.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "a979b38133e3a861155050d00926959bfe11b1cbf624169583c36797010f1ac8"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/social.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 21228,
+          "sha256": "2cedc527d738f8ecfecbf1d1ecbba2dafd05e1cf03cea497781f5d12cc2a0831"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/social@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 56104,
+          "sha256": "26d7ac0871653646959a92b0873f3b9013bb148473ca966cb5f3f7207ea451c2"
+        }
+      ]
+    },
+    {
+      "expertId": "demography",
+      "displayName": "世代 千歳",
+      "role": "人口長期",
+      "portraitAssetKey": "demography",
+      "colorToken": "#66527c",
+      "altText": "眼鏡と藤色の上着が特徴の人口長期専門家、世代千歳",
+      "original": {
+        "file": "sources/demography.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "06127e9ea17ffcdd90f4bb0990e3778b9187730c7c749b857159d5f945bd9618"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/demography.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 24796,
+          "sha256": "1aa061c6ca3b6e15d95b9703208217293d388f9f076218d4e35fa901d3e0ecf8"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/demography@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 67508,
+          "sha256": "c47a66962a425deae972533ed82904e9d339c2a0b5853ddeaa7b3dc42e375a03"
+        }
+      ]
+    },
+    {
+      "expertId": "environmentEnergy",
+      "displayName": "風間 光",
+      "role": "環境エネルギー",
+      "portraitAssetKey": "environment-energy",
+      "colorToken": "#2f7150",
+      "altText": "深緑のジャケットを着た環境エネルギー専門家、風間光",
+      "original": {
+        "file": "sources/environment-energy.png",
+        "width": 1254,
+        "height": 1254,
+        "sha256": "ccd0c34f3614e0e4ba41ff4558049a8a42738fb22158e1f740239c4bd2830831"
+      },
+      "variants": [
+        {
+          "density": "1x",
+          "file": "apps/web/public/experts/environment-energy.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 23022,
+          "sha256": "4207517d4f2b5cee6335d9df2b9978da9a1c55035c7156e7876309886f3c37a6"
+        },
+        {
+          "density": "2x",
+          "file": "apps/web/public/experts/environment-energy@2x.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 60334,
+          "sha256": "c31be08a2e879c1b8d07b34d7ad700b62d6925ed5b8b74cec8ba632a833f2a9d"
+        }
+      ]
+    }
+  ]
+}
