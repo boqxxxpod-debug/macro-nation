@@ -1,4 +1,4 @@
-/** Coordinates are measured on the 941 × 1672 nation-coast.webp artwork. */
+/** Shared terrain, structures and motion coordinates on nation-terrain.webp. */
 export const SCENE_WIDTH = 941;
 export const SCENE_HEIGHT = 1672;
 

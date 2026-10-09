@@ -215,13 +215,18 @@ describe("nation motion budget", () => {
       arc() {},
     } as unknown as CanvasRenderingContext2D;
     drawStillFrame(context, sprites, night, "low");
-    expect(fillRect).toHaveBeenCalledWith(430, 629, 3, 5);
+    const apartment = view.regions.city.structures.find(
+      (building) => building.kind === "apartment",
+    )!;
+    const windowX = apartment.x + apartment.width * 0.55;
+    const windowY = apartment.y + apartment.height * 0.55;
+    expect(fillRect).toHaveBeenCalledWith(windowX, windowY, 3, 5);
     expect(sprites.map((sprite) => [sprite.x, sprite.phase])).toEqual(
       positions,
     );
     fillRect.mockClear();
     drawStillFrame(context, sprites, { ...night, timeOfDay: "day" }, "low");
-    expect(fillRect).not.toHaveBeenCalledWith(430, 629, 3, 5);
+    expect(fillRect).not.toHaveBeenCalledWith(windowX, windowY, 3, 5);
   });
 
   it("keeps a multi-car train in one pool object and does not reset positions on a model change", async () => {
@@ -295,7 +300,7 @@ describe("nation motion budget", () => {
       stroke() {},
       fill() {},
       fillRect(x: number, y: number) {
-        if (x > 540 && x < 610 && y > 490 && y < 550) alphas.push(canvasAlpha);
+        if (x > 410 && x < 470 && y > 490 && y < 550) alphas.push(canvasAlpha);
       },
       arc() {},
       ellipse() {},

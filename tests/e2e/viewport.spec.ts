@@ -200,6 +200,8 @@ async function expectNationArtworkAlignment(page: Page) {
     .toBe(941);
   const canvas = page.locator(".nation-view canvas.nation-motion-canvas");
   await expect(canvas).toBeVisible();
+  const structures = page.locator(".nation-view svg.nation-structures");
+  await expect(structures).toBeVisible();
   const alignment = await page.evaluate(() => {
     const image = document.querySelector<HTMLImageElement>(
       ".nation-view img.nation-landscape",
@@ -207,10 +209,16 @@ async function expectNationArtworkAlignment(page: Page) {
     const canvas = document.querySelector<HTMLCanvasElement>(
       ".nation-view canvas.nation-motion-canvas",
     )!;
+    const structures = document.querySelector<SVGSVGElement>(
+      ".nation-view svg.nation-structures",
+    )!;
     const imageRect = image.getBoundingClientRect();
     const canvasRect = canvas.getBoundingClientRect();
+    const structuresRect = structures.getBoundingClientRect();
+    const crop = structures.viewBox.baseVal;
     return {
       imageSize: [image.naturalWidth, image.naturalHeight],
+      imageSource: image.currentSrc,
       canvasSize: [canvas.width, canvas.height],
       imageFit: getComputedStyle(image).objectFit,
       canvasFit: getComputedStyle(canvas).objectFit,
@@ -222,15 +230,41 @@ async function expectNationArtworkAlignment(page: Page) {
         canvasRect.width - imageRect.width,
         canvasRect.height - imageRect.height,
       ],
+      structureOffsets: [
+        structuresRect.left - imageRect.left,
+        structuresRect.top - imageRect.top,
+        structuresRect.width - imageRect.width,
+        structuresRect.height - imageRect.height,
+      ],
+      crop: [crop.x, crop.y, crop.width, crop.height],
+      sceneSize: [imageRect.width, imageRect.height],
+      structureCount: structures.querySelectorAll("[data-structure]").length,
     };
   });
   expect(alignment.imageSize).toEqual([941, 1672]);
+  expect(alignment.imageSource).toContain("nation-terrain.webp");
   expect(alignment.canvasSize).toEqual(alignment.imageSize);
   expect(alignment.imageFit).toBe("cover");
   expect(alignment.canvasFit).toBe(alignment.imageFit);
   expect(alignment.canvasPosition).toBe(alignment.imagePosition);
   expect(alignment.imagePosition).toBe("50% 15%");
   expect(alignment.offsets.every((offset) => Math.abs(offset) < 1)).toBe(true);
+  expect(alignment.structureOffsets.every((offset) => Math.abs(offset) < 1)).toBe(true);
+  const scale = Math.max(
+    alignment.sceneSize[0] / 941,
+    alignment.sceneSize[1] / 1672,
+  );
+  const visibleWidth = alignment.sceneSize[0] / scale;
+  const visibleHeight = alignment.sceneSize[1] / scale;
+  const expectedCrop = [
+    (941 - visibleWidth) * 0.5,
+    (1672 - visibleHeight) * 0.15,
+    visibleWidth,
+    visibleHeight,
+  ];
+  for (let index = 0; index < 4; index += 1)
+    expect(alignment.crop[index]).toBeCloseTo(expectedCrop[index]!, 2);
+  expect(alignment.structureCount).toBeGreaterThan(7);
 }
 
 async function inspectDeck(page: Page, deck: Locator) {

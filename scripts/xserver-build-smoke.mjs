@@ -5,11 +5,21 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmEntry = process.env.npm_execpath;
 
 function build(base, outDir) {
   const result = spawnSync(
-    npm,
-    ["run", "build", "--workspace", "@macro-nation/web", "--", "--outDir", outDir],
+    npmEntry ? process.execPath : npm,
+    [
+      ...(npmEntry ? [npmEntry] : []),
+      "run",
+      "build",
+      "--workspace",
+      "@macro-nation/web",
+      "--",
+      "--outDir",
+      outDir,
+    ],
     {
       cwd: root,
       env: { ...process.env, VITE_BASE_PATH: base },

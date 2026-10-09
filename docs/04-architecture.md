@@ -262,6 +262,7 @@ LLMExpertAdvisor等を追加可能にする。ただしブラウザへ秘密API 
 12. UIと国家ビュー
 UIはGameStateを直接加工して経済結果を生成しない。Application Selector/ViewModelを介する。
 Living NationはNationViewModelのみを描画し、景観オブジェクトを保存データへ持たない。
+固定地形の画像と可変施設・移動物の描画層は同一の版管理された座標系を共有する。施設区画・種別・稼働状態は確定済みGameStateの履歴と表示設定からselectorで純粋に再構成し、描画オブジェクトや画像生成結果を保存・Engineへ逆流させない。
 GDP、失業、輸出、インフラ等から景観段階を導出するが、描画結果からGameStateを変更しない。
 アニメーションframeとsimulation tickを分離する。
 
