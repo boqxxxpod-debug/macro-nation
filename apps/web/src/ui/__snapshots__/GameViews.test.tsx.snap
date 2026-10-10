@@ -66,8 +66,8 @@ exports[`game screen wording > shows progress and prevents duplicate preview req
 
 exports[`game screen wording > shows the allowed range when a policy value is invalid 1`] = `
 [
-  "設定値は-0.02〜0.3の範囲で入力してください。値を見直して、もう一度見通しを確認してください。",
-  "政策を進める準備が足りません。本文の案内を確認してください。",
+  "政策金利（年率・%）は-2〜30%の範囲で入力してください。値を見直して、もう一度見通しを確認してください。",
+  "政策の入力を確認してください。本文の案内を確認してください。",
 ]
 `;
 

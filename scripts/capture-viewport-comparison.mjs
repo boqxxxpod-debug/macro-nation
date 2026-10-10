@@ -245,6 +245,7 @@ async function journey(variant, project) {
     seed: /^(再現用seed（任意）|再現用コード（任意）)$/,
     compare: /^(1年・5年を比較する|見通しを確認)$/,
     preview: /^(政策プレビュー|政策の見通し)$/,
+    policyRate: /^(政策金利の設定値|政策金利（年率・%）)$/,
   };
   const url = await serve(path.join(project, "apps/web/dist"));
   const context = await browser.newContext({
@@ -275,11 +276,17 @@ async function journey(variant, project) {
     await capture(page, variant, "nation");
     await page.getByRole("button", { name: "政策会議", exact: true }).click();
     const value = page.getByRole("spinbutton", {
-      name: "政策金利の設定値",
+      name: copy.policyRate,
       exact: true,
     });
     await reveal(page, value);
-    await value.fill("0.05");
+    // Both UI versions must preview the same 5% policy rate. The updated
+    // input displays percentages, while the legacy input accepts decimals.
+    const percentageInput = page.getByRole("spinbutton", {
+      name: "政策金利（年率・%）",
+      exact: true,
+    });
+    await value.fill((await percentageInput.count()) === 1 ? "5" : "0.05");
     await page.getByRole("button", { name: copy.compare, exact: true }).click();
     await page
       .getByRole("heading", { name: copy.preview, exact: true })

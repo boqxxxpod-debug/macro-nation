@@ -94,9 +94,9 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
   await page.getByRole("button", { name: "政策会議", exact: true }).click();
   await reveal(
     page,
-    page.getByRole("spinbutton", { name: "政策金利の設定値" }),
+    page.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
   );
-  await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
+  await page.getByRole("spinbutton", { name: "政策金利（年率・%）" }).fill("5");
   await page.getByRole("button", { name: "見通しを確認" }).click();
   await expect(
     page.getByRole("heading", { name: "政策の見通し" }),
