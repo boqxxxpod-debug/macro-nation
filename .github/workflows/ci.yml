@@ -31,15 +31,12 @@ jobs:
       - name: Format, lint, typecheck, unit, architecture and production build
         run: npm run verify
 
-      - name: GitHub Pages subdirectory build
-        env:
-          VITE_BASE_PATH: /macro-nation/
-          VITE_AI_ENABLED: "false"
-        run: npm run build:pages
-
       - name: Install Playwright Chromium
         id: playwright
         run: npx playwright install --with-deps chromium
+
+      - name: GitHub Pages subdirectory build and portrait E2E
+        run: npm run test:e2e:pages
 
       - name: PWA and accessibility E2E
         run: npm run test:e2e
@@ -80,6 +77,21 @@ jobs:
           path: |
             test-results/**/test-failed-*.png
             test-results/**/error-context.md
+            test-results-pages/**/test-failed-*.png
+            test-results-pages/**/error-context.md
+          if-no-files-found: ignore
+
+      - name: Upload expert portrait review images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expert-portrait-review
+          path: |
+            test-results/**/picker-*.png
+            test-results/**/advice-*.png
+            test-results/**/enlarged-*.png
+            test-results-pages/**/picker-*.png
+            test-results-pages/**/advice-*.png
           if-no-files-found: ignore
 
       - name: Upload Playwright report

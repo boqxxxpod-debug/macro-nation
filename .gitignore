@@ -4,6 +4,7 @@ node_modules/
 coverage/
 playwright-report/
 test-results/
+test-results-pages/
 artifacts/headless/
 artifacts/issue-92/
 .DS_Store

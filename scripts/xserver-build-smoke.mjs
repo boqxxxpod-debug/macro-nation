@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -39,6 +39,37 @@ function build(base, outDir) {
     throw new Error(
       `Built HTML did not contain expected asset prefix "${expectedAssetPrefix}" for base "${base}".`,
     );
+  }
+
+  // Public portraits must ship byte-for-byte and be revisioned for offline updates.
+  const portraits = JSON.parse(
+    readFileSync(
+      join(root, "docs/assets/expert-portraits-v1/manifest.json"),
+      "utf8",
+    ),
+  ).experts.flatMap((expert) => expert.variants);
+  const serviceWorker = readFileSync(join(outputPath, "sw.js"), "utf8");
+  const expectedFiles = portraits.map((variant) =>
+    variant.file.split("/").at(-1),
+  );
+  const builtFiles = readdirSync(join(outputPath, "experts")).sort();
+  if (JSON.stringify(builtFiles) !== JSON.stringify(expectedFiles.sort())) {
+    throw new Error(
+      `Portrait files missing or duplicated in build for ${base}`,
+    );
+  }
+  for (const variant of portraits) {
+    const assetPath = variant.file.replace("apps/web/public/", "");
+    if (
+      !readFileSync(join(outputPath, assetPath)).equals(
+        readFileSync(join(root, variant.file)),
+      ) ||
+      !serviceWorker.includes(`url:"${assetPath}",revision:`)
+    ) {
+      throw new Error(
+        `Portrait ${assetPath} did not ship with a PWA revision for ${base}`,
+      );
+    }
   }
 
   rmSync(outputPath, { recursive: true, force: true });

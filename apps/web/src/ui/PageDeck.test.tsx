@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PageDeck } from "./PageDeck";
@@ -78,6 +79,86 @@ describe("PageDeck accessible content and retained input", () => {
     expect(
       screen.getByRole("region", { name: "政策の注意点" }),
     ).toHaveTextContent("次の副作用");
+    const ids = [...document.querySelectorAll("[id]")].map((node) => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("keeps the complete speaker identity on every fragment of long expert advice", () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(360);
+    const advice = [
+      { name: "景山 めぐみ", role: "マクロ経済", tone: "段階を追って教える" },
+      {
+        name: "水城 静香",
+        role: "中央銀行",
+        tone: "落ち着いて結論から説明する",
+      },
+    ];
+    const longReason =
+      "政策の波及には時間がかかり、雇用と物価の変化も確認します。".repeat(4);
+    render(
+      <PageDeck label="専門家の解説">
+        {advice.map((expert, index) => (
+          <article
+            key={expert.name}
+            aria-labelledby={`speaker-${index}`}
+            data-expert-name={expert.name}
+          >
+            <header id={`speaker-${index}`} data-page-title>
+              <img
+                src={`experts/${index}.webp`}
+                alt={`${expert.role}の専門家`}
+              />
+              <div>
+                <h4>{expert.role}</h4>
+                <p>
+                  {expert.name} · 口調：{expert.tone}
+                </p>
+              </div>
+            </header>
+            <p>結論：複数の指標を見て判断します。</p>
+            <p>やさしい理由：{longReason}</p>
+            <p>注意点：将来の数字には幅があります。</p>
+          </article>
+        ))}
+      </PageDeck>,
+    );
+    const next = screen.getByRole("button", {
+      name: "専門家の解説の次のページ",
+    });
+    const reached = new Map(advice.map((expert) => [expert.name, ""]));
+    let pages = 0;
+    do {
+      const article = screen.getByRole("article");
+      const expert = advice.find(
+        (item) => item.name === article.getAttribute("data-expert-name"),
+      )!;
+      const header = article.querySelector("header")!;
+      expect(within(header).getByRole("img")).toHaveAttribute(
+        "alt",
+        `${expert.role}の専門家`,
+      );
+      expect(header).toHaveTextContent(expert.name);
+      expect(header).toHaveTextContent(expert.role);
+      expect(header).toHaveTextContent(expert.tone);
+      expect(article).toHaveAccessibleName(
+        new RegExp(`${expert.role}.*${expert.name}.*${expert.tone}`),
+      );
+      const paragraph = article.querySelector(":scope > p")!;
+      reached.set(
+        expert.name,
+        reached.get(expert.name)! + paragraph.textContent,
+      );
+      pages++;
+      if (next.hasAttribute("disabled")) break;
+      fireEvent.click(next);
+    } while (pages < 100);
+    expect(next).toBeDisabled();
+    expect(pages).toBeGreaterThan(6);
+    for (const expert of advice) {
+      expect(reached.get(expert.name)).toBe(
+        `結論：複数の指標を見て判断します。やさしい理由：${longReason}注意点：将来の数字には幅があります。`,
+      );
+    }
     const ids = [...document.querySelectorAll("[id]")].map((node) => node.id);
     expect(new Set(ids).size).toBe(ids.length);
   });

@@ -22,7 +22,7 @@ exports[`game screen wording > guides the player when no preview exists 1`] = `"
 exports[`game screen wording > keeps legacy expert profiles while translating indicator IDs in their explanations 1`] = `
 [
   "結論：実質GDPは新しい政策を加えない場合と比べて悪化する見通しです。",
-  "別の視点： 水城 静香： 為替指数は新しい政策を加えない場合と比べて悪化する見通しです。 外部環境の揺れを一定の条件で想定した計算の幅です。この範囲に収まる確率を示すものではありません。 数字の振れを見ながら進めるのが妥当です。",
+  "為替指数は新しい政策を加えない場合と比べて悪化する見通しです。 外部環境の揺れを一定の条件で想定した計算の幅です。この範囲に収まる確率を示すものではありません。 数字の振れを見ながら進めるのが妥当です。",
 ]
 `;
 
