@@ -6,7 +6,11 @@ import {
   projectFacts,
   RuleBasedExpertAdvisor,
 } from "@macro-nation/advisor-core";
-import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
+import type {
+  ConfigSnapshot,
+  GameState,
+  MonthlyReportSnapshot,
+} from "@macro-nation/domain";
 import {
   createReservedPolicy,
   policyMeetingStatus,
@@ -957,6 +961,7 @@ export function PolicyForm({
 
 export function Preview({
   output,
+  configSnapshot,
   counterfactuals,
   expertIds,
   contentVersion,
@@ -965,6 +970,7 @@ export function Preview({
   onBack,
 }: {
   output: PreviewOutput | null;
+  configSnapshot: ConfigSnapshot;
   counterfactuals: readonly PreviewOutput[];
   expertIds: readonly string[];
   contentVersion: string;
@@ -1023,9 +1029,12 @@ export function Preview({
     (profile) => !expertIds.includes(profile.id),
   );
   const draft = output.previewedDraft;
-  const inputCopy = Object.values(policyInputCopy).find(
-    (copy) => copy.ruleId === draft?.ruleId,
+  const rule = policyRules(configSnapshot).find(
+    (item) => item.policyId === draft?.ruleId,
   );
+  const inputCopy = rule
+    ? policyInputCopy[rule.policyType as keyof typeof policyInputCopy]
+    : undefined;
   const effectStartMonth = output.primaryEffects.length
     ? Math.min(...output.primaryEffects.map((effect) => effect.startMonth))
     : null;
@@ -1061,7 +1070,7 @@ export function Preview({
       <section className="panel" aria-label="判断の要点">
         <p>
           <strong>政策案：</strong>
-          {draft ? label(draft.ruleId) : "今の政策を続ける"}
+          {draft ? label(rule?.policyType ?? draft.ruleId) : "今の政策を続ける"}
           {draft && (
             <>
               。{inputCopy?.label ?? "設定値"}：

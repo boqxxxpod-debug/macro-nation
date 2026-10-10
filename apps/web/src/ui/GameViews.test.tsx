@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { GameState } from "@macro-nation/domain";
+import type { ConfigSnapshot, GameState } from "@macro-nation/domain";
 import { percentRate, scorePoint, stockLevel } from "@macro-nation/domain";
 import {
   expertPortraitManifest,
@@ -19,7 +19,7 @@ import { PreviewClient } from "../infrastructure/preview-client";
 import type { PreviewOutput } from "../application/policy-view";
 import { createGame } from "../application/game-service";
 import { learningEntriesForReport } from "../application/learning";
-import { createReservedPolicy } from "../application/policy-view";
+import { createReservedPolicy, policyRules } from "../application/policy-view";
 import {
   Home,
   PolicyForm,
@@ -413,6 +413,7 @@ describe("game screen wording", () => {
     const before = structuredClone(preview);
     const { container, rerender } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -448,6 +449,7 @@ describe("game screen wording", () => {
     expect(onConfirm).toHaveBeenCalledOnce();
     rerender(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -531,6 +533,7 @@ describe("game screen wording", () => {
     const before = structuredClone(preview);
     render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -623,6 +626,7 @@ describe("game screen wording", () => {
       const before = structuredClone(preview);
       render(
         <Preview
+          configSnapshot={initial.configSnapshot}
           output={preview}
           counterfactuals={[]}
           expertIds={["macro"]}
@@ -640,12 +644,67 @@ describe("game screen wording", () => {
     },
   );
 
+  it.each([
+    ["interest-rate", 0.05, "政策金利（年率・%）", "5%"],
+    ["tax-package", -0.03, "税負担の変更幅（ポイント）", "-3ポイント"],
+    ["public-works", 0.04, "公共事業の追加規模（年間GDP比・%）", "4%"],
+    ["tariff", 0.25, "関税率（%）", "25%"],
+    ["fx-intervention", -0.02, "為替介入の規模（年間GDP比・%）", "-2%"],
+  ] as const)(
+    "uses the configured policy type for %s when policy rule IDs are customized",
+    (ruleId, value, settingLabel, settingValue) => {
+      const customRuleId = `custom-${ruleId}`;
+      const configSnapshot: ConfigSnapshot = {
+        ...initial.configSnapshot,
+        normalizedConfig: {
+          ...initial.configSnapshot.normalizedConfig,
+          policyRules: policyRules(initial.configSnapshot).map((rule) => ({
+            ...rule,
+            policyId: `custom-${rule.policyId}`,
+          })),
+        },
+      };
+      const rule = policyRules(configSnapshot).find(
+        (candidate) => candidate.policyId === customRuleId,
+      )!;
+      const preview: PreviewOutput = {
+        ...output,
+        previewedDraft: {
+          ...output.previewedDraft!,
+          ruleId: customRuleId,
+          value,
+        },
+      };
+      const previewBefore = structuredClone(preview);
+      const configBefore = structuredClone(configSnapshot);
+      render(
+        <Preview
+          configSnapshot={configSnapshot}
+          output={preview}
+          counterfactuals={[]}
+          expertIds={["macro"]}
+          contentVersion={initial.versions.contentVersion}
+          busy={false}
+          onConfirm={vi.fn()}
+        />,
+      );
+      const summary = screen.getByRole("region", { name: "判断の要点" });
+      const policy = within(summary).getByText("政策案：").closest("p")!;
+      expect(policy).toHaveTextContent(label(rule.policyType));
+      expect(policy).toHaveTextContent(`${settingLabel}：${settingValue}`);
+      expect(policy).not.toHaveTextContent(customRuleId);
+      expect(preview).toEqual(previewBefore);
+      expect(configSnapshot).toEqual(configBefore);
+    },
+  );
+
   it.each(["stateHash", "draftHash"] as const)(
     "requires acknowledgement again when the preview's %s changes",
     (key) => {
       const onConfirm = vi.fn();
       const onBack = vi.fn();
       const props = {
+        configSnapshot: initial.configSnapshot,
         counterfactuals: [],
         expertIds: ["macro"],
         contentVersion: initial.versions.contentVersion,
@@ -704,6 +763,7 @@ describe("game screen wording", () => {
   it("guides the player when no preview exists", () => {
     render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={null}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -722,6 +782,7 @@ describe("game screen wording", () => {
   it("keeps legacy expert profiles while translating indicator IDs in their explanations", () => {
     const { container } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -967,6 +1028,7 @@ describe("expert identity in policy meeting and preview", () => {
     const before = structuredClone(output);
     const { container } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
         expertIds={["fiscal", "labor"]}
