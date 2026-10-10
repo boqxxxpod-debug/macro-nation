@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
-  expertPortraitManifest,
   expertProfilesForContentVersion,
   ordinaryNews,
   projectFacts,
@@ -26,6 +25,7 @@ import {
 import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
+import { ExpertPortrait } from "./ExpertPortrait";
 import { isTutorialTime } from "../application/game-clock";
 import {
   learningEntryDisplay,
@@ -77,24 +77,6 @@ function preparednessIndicatorLabel(
     ?.find((event) => event.eventId === eventId)
     ?.preparednessIndicators.find((item) => item.id === id);
   return label(indicator?.path ?? id);
-}
-
-function ExpertPortrait({ expertId }: { expertId: string }) {
-  const portrait = expertPortraitManifest.find(
-    (item) => item.expertId === expertId,
-  );
-  if (!portrait) return null;
-  return (
-    <img
-      className="expert-portrait"
-      src={portrait.src}
-      srcSet={`${portrait.src2x} 2x`}
-      alt={portrait.altText}
-      onError={(event) => {
-        event.currentTarget.hidden = true;
-      }}
-    />
-  );
 }
 
 export function Home({
@@ -835,7 +817,7 @@ export function PolicyForm({
                 }
               />
               <ExpertPortrait expertId={expert.id} />
-              <span>
+              <span className="expert-identity-copy">
                 <strong>{expert.displayName ?? expert.role}</strong>
                 <span className="expert-role">
                   {expert.role} · {expert.tone}
@@ -1165,11 +1147,15 @@ export function Preview({
               key={expertId}
               style={{ "--expert-color": expert.colorToken } as CSSProperties}
             >
-              <ExpertPortrait expertId={expert.id} />
-              <h4>{expert.role}</h4>
-              <p className="quiet">
-                {expert.displayName ?? expert.role} · 口調：{expert.tone}
-              </p>
+              <header className="expert-identity" data-page-title>
+                <ExpertPortrait expertId={expert.id} />
+                <div className="expert-identity-copy">
+                  <h4>{expert.role}</h4>
+                  <p className="quiet">
+                    {expert.displayName ?? expert.role} · 口調：{expert.tone}
+                  </p>
+                </div>
+              </header>
               <p>
                 <strong>結論：</strong>
                 {adviceExplanation(
@@ -1197,17 +1183,34 @@ export function Preview({
           (() => {
             const dissent = advisor.advise(dissentingExpert, adviceContext);
             return (
-              <aside className="expert-dissent">
-                <strong>
-                  別の視点：{" "}
-                  {dissentingExpert.displayName ?? dissentingExpert.role}：
-                </strong>{" "}
-                {adviceExplanation(
-                  dissent.conclusion,
-                  dissentingExpert.priorityIndicators ??
-                    Object.keys(adviceContext.effects),
-                )}{" "}
-                {dissent.caution}
+              <aside
+                className="expert-dissent"
+                style={
+                  {
+                    "--expert-color": dissentingExpert.colorToken,
+                  } as CSSProperties
+                }
+              >
+                <header className="expert-identity" data-page-title>
+                  <ExpertPortrait expertId={dissentingExpert.id} />
+                  <div className="expert-identity-copy">
+                    <strong>
+                      別の視点：{" "}
+                      {dissentingExpert.displayName ?? dissentingExpert.role}
+                    </strong>
+                    <p className="quiet">
+                      {dissentingExpert.role} · 口調：{dissentingExpert.tone}
+                    </p>
+                  </div>
+                </header>
+                <p>
+                  {adviceExplanation(
+                    dissent.conclusion,
+                    dissentingExpert.priorityIndicators ??
+                      Object.keys(adviceContext.effects),
+                  )}{" "}
+                  {dissent.caution}
+                </p>
               </aside>
             );
           })()}

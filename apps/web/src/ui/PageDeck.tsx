@@ -141,8 +141,13 @@ function blocks(node: ReactNode, limit = 80, path = "root"): ReactNode[] {
     element.props.role !== "row" &&
     element.props.role !== "table"
   ) {
+    // Composite titles (for example an advisor portrait and identity) repeat
+    // together so a paginated explanation retains its speaker on every page.
     const title = children.find(
-      (child) => isValidElement(child) && headings.has(String(child.type)),
+      (child) =>
+        isValidElement(child) &&
+        (headings.has(String(child.type)) ||
+          (child as Native).props["data-page-title"] === true),
     );
     const content = children.filter((child) => child !== title);
     if (!content.length) return [cloneElement(element, { key: path })];

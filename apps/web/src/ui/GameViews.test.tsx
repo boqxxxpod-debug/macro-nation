@@ -6,10 +6,15 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@macro-nation/domain";
 import { scorePoint, stockLevel } from "@macro-nation/domain";
+import {
+  expertPortraitManifest,
+  expertProfilesForContentVersion,
+} from "@macro-nation/advisor-core";
 import { PreviewClient } from "../infrastructure/preview-client";
 import type { PreviewOutput } from "../application/policy-view";
 import { createGame } from "../application/game-service";
@@ -406,5 +411,148 @@ describe("game screen wording", () => {
     expect(
       screen.getByRole("button", { name: "特別報道を読む" }),
     ).toBeEnabled();
+  });
+});
+
+describe("expert identity in policy meeting and preview", () => {
+  it("shows each candidate's matching portrait, name, role and tone", () => {
+    render(<PolicyForm state={initial} onPreview={vi.fn()} busy={false} />);
+    const picker = screen.getByRole("group", {
+      name: "解説を聞く専門家（1〜3人）",
+    });
+    const profiles = expertProfilesForContentVersion(
+      initial.versions.contentVersion,
+    );
+    expect(within(picker).getAllByRole("checkbox")).toHaveLength(8);
+    for (const profile of profiles) {
+      const checkbox = within(picker).getByRole("checkbox", {
+        name: new RegExp(profile.displayName!),
+      });
+      const card = checkbox.closest("label")!;
+      const portrait = expertPortraitManifest.find(
+        (item) => item.expertId === profile.id,
+      )!;
+      expect(
+        within(card).getByRole("img", { name: portrait.altText }),
+      ).toHaveAttribute("src", `${import.meta.env.BASE_URL}${portrait.src}`);
+      expect(card).toHaveTextContent(profile.displayName!);
+      expect(card).toHaveTextContent(`${profile.role} · ${profile.tone}`);
+    }
+  });
+
+  it("preserves one-to-three selection and submits the selected expert IDs", () => {
+    const onPreview = vi.fn();
+    const onDraftChange = vi.fn();
+    const before = structuredClone(initial);
+    render(
+      <PolicyForm
+        state={initial}
+        onPreview={onPreview}
+        onDraftChange={onDraftChange}
+        busy={false}
+      />,
+    );
+    const profiles = expertProfilesForContentVersion(
+      initial.versions.contentVersion,
+    );
+    const expertCheckbox = (id: string) =>
+      screen.getByRole("checkbox", {
+        name: new RegExp(
+          profiles.find((profile) => profile.id === id)!.displayName!,
+        ),
+      });
+    expect(expertCheckbox("macro")).toBeChecked();
+    expect(expertCheckbox("macro")).toBeDisabled();
+    fireEvent.click(expertCheckbox("centralBank"));
+    fireEvent.click(expertCheckbox("fiscal"));
+    expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(3);
+    expect(expertCheckbox("labor")).toBeDisabled();
+    fireEvent.click(expertCheckbox("macro"));
+    expect(expertCheckbox("labor")).toBeEnabled();
+    fireEvent.click(expertCheckbox("centralBank"));
+    expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(1);
+    expect(expertCheckbox("fiscal")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
+    expect(onPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "draft" }),
+      ["fiscal"],
+    );
+    expect(onDraftChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expertIds: ["fiscal"] }),
+    );
+    expect(initial).toEqual(before);
+  });
+
+  it("keeps candidate identity and selection available after every image fails", () => {
+    const { container } = render(
+      <PolicyForm state={initial} onPreview={vi.fn()} busy={false} />,
+    );
+    for (const image of container.querySelectorAll(".expert-portrait img")) {
+      fireEvent.error(image);
+    }
+    expect(container.querySelector(".expert-portrait img")).toBeNull();
+    expect(
+      container.querySelectorAll(".expert-portrait-fallback"),
+    ).toHaveLength(8);
+    for (const profile of expertProfilesForContentVersion(
+      initial.versions.contentVersion,
+    )) {
+      const checkbox = screen.getByRole("checkbox", {
+        name: new RegExp(profile.displayName!),
+      });
+      expect(checkbox.closest("label")).toHaveTextContent(
+        `${profile.role} · ${profile.tone}`,
+      );
+    }
+    const fiscal = screen.getByRole("checkbox", { name: /大蔵 堅/ });
+    fireEvent.click(fiscal);
+    expect(fiscal).toBeChecked();
+  });
+
+  it("matches selected and dissenting advice portraits while retaining text on failure", () => {
+    const before = structuredClone(output);
+    const { container } = render(
+      <Preview
+        output={output}
+        counterfactuals={[]}
+        expertIds={["fiscal", "labor"]}
+        contentVersion={initial.versions.contentVersion}
+        busy={false}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const profiles = expertProfilesForContentVersion(
+      initial.versions.contentVersion,
+    );
+    const cards = container.querySelectorAll(".expert-advice, .expert-dissent");
+    expect(cards).toHaveLength(3);
+    for (const [index, expertId] of [
+      "fiscal",
+      "labor",
+      "centralBank",
+    ].entries()) {
+      const card = cards[index]!;
+      const profile = profiles.find((item) => item.id === expertId)!;
+      const portrait = expertPortraitManifest.find(
+        (item) => item.expertId === expertId,
+      )!;
+      const image = within(card as HTMLElement).getByRole("img", {
+        name: portrait.altText,
+      });
+      expect(image).toHaveAttribute(
+        "src",
+        `${import.meta.env.BASE_URL}${portrait.src}`,
+      );
+      // A header stays atomic when PageDeck paginates long advice.
+      expect(image.closest("header")).toHaveTextContent(profile.displayName!);
+      expect(image.closest("header")).toHaveTextContent(profile.role);
+      expect(image.closest("header")).toHaveTextContent(profile.tone);
+      fireEvent.error(image);
+      expect(card.querySelector("img")).toBeNull();
+      expect(card).toHaveTextContent(profile.displayName!);
+      expect(card).toHaveTextContent(profile.role);
+      expect(card).toHaveTextContent(profile.tone);
+    }
+    expect(output).toEqual(before);
   });
 });
