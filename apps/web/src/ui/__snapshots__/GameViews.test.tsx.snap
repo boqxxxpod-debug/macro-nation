@@ -37,7 +37,7 @@ exports[`game screen wording > offers policy choices without promising reserve r
 
 exports[`game screen wording > preserves preview values and confirmation while hiding internal IDs 1`] = `
 [
-  "効果と費用",
+  "判断の要点",
   "政策の組み合わせ",
   "効果を高め合う組み合わせ：税制 ＋ 公共事業",
   "効果を打ち消し合う組み合わせ：関税 ＋ 税制",

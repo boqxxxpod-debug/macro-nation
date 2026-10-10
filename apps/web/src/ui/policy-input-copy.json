@@ -1,5 +1,6 @@
 {
   "interestRate": {
+    "ruleId": "interest-rate",
     "label": "政策金利（年率・%）",
     "meaning": "採用後に設定する政策金利の年率です。入力欄の数値は%単位です。",
     "unit": "%",
@@ -10,6 +11,7 @@
     "equal": "現在の政策金利と同じ設定です。"
   },
   "taxPackage": {
+    "ruleId": "tax-package",
     "label": "税負担の変更幅（ポイント）",
     "meaning": "個別の税率ではなく、税制パッケージ全体の調整幅です。入力欄の数値はポイント単位です。",
     "unit": "ポイント",
@@ -20,6 +22,7 @@
     "equal": "基準と同じ変更幅です。"
   },
   "publicWorks": {
+    "ruleId": "public-works",
     "label": "公共事業の追加規模（年間GDP比・%）",
     "meaning": "年間GDPに対する追加公共投資プログラムの規模です。入力欄の数値は%単位です。",
     "unit": "%",
@@ -30,6 +33,7 @@
     "equal": "基準と同じ追加規模です。"
   },
   "tariff": {
+    "ruleId": "tariff",
     "label": "関税率（%）",
     "meaning": "輸入品にかける関税率です。入力欄の数値は%単位です。",
     "unit": "%",
@@ -40,6 +44,7 @@
     "equal": "基準と同じ関税率です。"
   },
   "fxIntervention": {
+    "ruleId": "fx-intervention",
     "label": "為替介入の規模（年間GDP比・%）",
     "meaning": "年間GDPに対する介入規模です。入力欄の数値は%単位です。",
     "unit": "%",

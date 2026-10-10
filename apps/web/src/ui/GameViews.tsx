@@ -1022,8 +1022,16 @@ export function Preview({
   const dissentingExpert = profiles.find(
     (profile) => !expertIds.includes(profile.id),
   );
+  const draft = output.previewedDraft;
+  const inputCopy = Object.values(policyInputCopy).find(
+    (copy) => copy.ruleId === draft?.ruleId,
+  );
+  const effectStartMonth = output.primaryEffects.length
+    ? Math.min(...output.primaryEffects.map((effect) => effect.startMonth))
+    : null;
   return (
     <PageDeck
+      key={reviewKey}
       label="政策の見通し"
       actions={
         <>
@@ -1049,36 +1057,64 @@ export function Preview({
         </>
       }
     >
-      <section className="panel">
-        <h3>効果と費用</h3>
+      <h3>判断の要点</h3>
+      <section className="panel" aria-label="判断の要点">
         <p>
-          政策の開始：
+          <strong>政策案：</strong>
+          {draft ? label(draft.ruleId) : "今の政策を続ける"}
+          {draft && (
+            <>
+              。{inputCopy?.label ?? "設定値"}：
+              {inputCopy ? policyDisplayNumber(draft.value) : draft.value}
+              {inputCopy?.unit ?? ""}
+            </>
+          )}
+        </p>
+        <p>
+          <strong>時期：</strong>政策の開始は
           {output.activationMonth === null
             ? "設定していません"
             : `${output.activationMonth + 1}月目`}
-          。いちばん効果が大きい時期：
-          {output.summaries.find(
-            (item) =>
-              item.indicatorId === "realGdp" && item.horizonMonths === 12,
-          )?.peakMonth ?? "—"}
+          、主効果の効き始めは
+          {effectStartMonth === null
+            ? "予定なし"
+            : `${effectStartMonth + 1}月目`}
+          。GDPへの効果がいちばん大きい時期は
+          {forecast(12, "realGdp")?.peakMonth ?? "—"}
           か月後。
         </p>
         <p>
-          主な効果は{output.primaryEffects.length}件、副作用は{" "}
-          {output.sideEffects.length}件です。
+          <strong>現状維持との差（1年後）：</strong>
+          {output.indicators
+            .filter((item) =>
+              ["realGdp", "inflation", "unemployment"].includes(
+                item.indicatorId,
+              ),
+            )
+            .map(
+              (item) =>
+                `${label(item.indicatorId)} ${item.month12.deltaBase > 0 ? "+" : ""}${display(item.indicatorId, item.month12.deltaBase)}`,
+            )
+            .join("、")}
+          。新しい政策を加えない場合と比べた中心値です。
         </p>
-        <ul>
-          {output.sideEffects.map((effect) => (
-            <li key={effect.effectId}>
-              {label(effect.targetPath)}：{effect.startMonth + 1}月目から
-            </li>
-          ))}
-        </ul>
         <p>
-          必要資源：政治資本 {output.costs.politicalCapital}、実施能力{" "}
-          {output.costs.implementationCapacity}、外貨準備{" "}
+          <strong>費用：</strong>政治資本 {output.costs.politicalCapital}
+          、実施能力 {output.costs.implementationCapacity}、外貨準備{" "}
           {output.costs.foreignReserves.toFixed(1)}、開始予算{" "}
           {output.costs.immediateBudget}。
+        </p>
+        <p>
+          <strong>副作用：</strong>
+          {output.sideEffects.length
+            ? output.sideEffects
+                .map(
+                  (effect) =>
+                    `${label(effect.targetPath)}（${effect.startMonth + 1}月目から）`,
+                )
+                .join("、")
+            : "この見通しで予定されている副作用はありません"}
+          。
         </p>
         {output.interactions.length > 0 && (
           <p>
@@ -1086,6 +1122,10 @@ export function Preview({
             件あります。効果が重なる点にも気をつけましょう。
           </p>
         )}
+        <p>
+          <strong>不確実性：</strong>確信度 {confidence}。主な要因は
+          {output.uncertainty.majorDrivers.map(label).join("、")}。
+        </p>
         <p>{uncertaintyNote}</p>
       </section>
       <section className="panel" aria-labelledby="interaction-heading">
@@ -1140,6 +1180,7 @@ export function Preview({
         <input
           type="checkbox"
           checked={reviewed}
+          disabled={busy}
           onChange={(event) =>
             setReviewedKey(event.target.checked ? reviewKey : null)
           }
