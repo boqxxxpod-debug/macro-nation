@@ -345,6 +345,14 @@ label select {
   background: #fff;
   color: #172a33;
 }
+.policy-value-field .policy-value-help {
+  display: block;
+  margin-top: 0.25rem;
+  color: #38505a;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
 .expert-picker {
   padding: 1rem;
   margin: 1rem 0;

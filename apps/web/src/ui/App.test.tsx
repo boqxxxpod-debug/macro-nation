@@ -419,9 +419,12 @@ describe("SCN-01 user journey", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "政策会議" }));
     expect(screen.getByText(/残り 3 \/ 3枠/)).toBeInTheDocument();
-    fireEvent.change(roleOnPage("政策会議", "spinbutton", "政策金利の設定値"), {
-      target: { value: "0.05" },
-    });
+    fireEvent.change(
+      roleOnPage("政策会議", "spinbutton", "政策金利（年率・%）"),
+      {
+        target: { value: "5" },
+      },
+    );
     fireEvent.click(roleOnPage("政策会議", "checkbox", /中央銀行/));
     fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
     expect(
@@ -464,6 +467,7 @@ describe("SCN-01 user journey", () => {
       await screen.findByText("政策を確定し、端末に保存しました。"),
     ).toBeInTheDocument();
     expect(memory.saved?.policies.reserved).toHaveLength(1);
+    expect(memory.saved?.policies.reserved[0]?.inputs?.value).toBe(0.05);
     expect(memory.saved?.policies.reserved[0]?.selectedExpertIds).toEqual([
       "macro",
       "centralBank",
@@ -503,22 +507,25 @@ describe("SCN-01 user journey", () => {
     await createGame(memory.repository, "ui-draft-pages");
     render(<App repository={memory.repository} />);
     fireEvent.click(await screen.findByRole("button", { name: "政策会議" }));
-    fireEvent.change(roleOnPage("政策会議", "spinbutton", "政策金利の設定値"), {
-      target: { value: "0.05" },
-    });
+    fireEvent.change(
+      roleOnPage("政策会議", "spinbutton", "政策金利（年率・%）"),
+      {
+        target: { value: "5" },
+      },
+    );
     fireEvent.change(roleOnPage("政策会議", "combobox", "政策を始める時期"), {
       target: { value: "2" },
     });
     fireEvent.click(roleOnPage("政策会議", "checkbox", /中央銀行/));
 
     expect(
-      roleOnPage("政策会議", "spinbutton", "政策金利の設定値"),
-    ).toHaveValue(0.05);
+      roleOnPage("政策会議", "spinbutton", "政策金利（年率・%）"),
+    ).toHaveValue(5);
     fireEvent.click(screen.getByRole("button", { name: "レポート" }));
     fireEvent.click(screen.getByRole("button", { name: "政策会議" }));
     expect(
-      roleOnPage("政策会議", "spinbutton", "政策金利の設定値"),
-    ).toHaveValue(0.05);
+      roleOnPage("政策会議", "spinbutton", "政策金利（年率・%）"),
+    ).toHaveValue(5);
     expect(roleOnPage("政策会議", "combobox", "政策を始める時期")).toHaveValue(
       "2",
     );

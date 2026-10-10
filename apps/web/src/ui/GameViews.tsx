@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   expertProfilesForContentVersion,
@@ -26,6 +26,7 @@ import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
 import { ExpertPortrait } from "./ExpertPortrait";
+import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
 import {
   learningEntryDisplay,
@@ -625,10 +626,22 @@ export function Report({ state }: { state: GameState }) {
 export type PolicyFormDraftState = {
   ruleId: string;
   value: number;
+  /** Keep the entered text across screen changes without rounding the submitted value. */
+  displayValue?: string | undefined;
   quartersAhead: number;
   policyId: string;
   expertIds: readonly string[];
 };
+
+/** Policy rules store decimal rates; the five built-in inputs show human-sized units. */
+function policyDisplayNumber(value: number): number {
+  return Number((value * 100).toPrecision(12));
+}
+
+function signedPolicyDisplayNumber(value: number): string {
+  const displayed = policyDisplayNumber(value);
+  return displayed > 0 ? `+${displayed}` : String(displayed);
+}
 
 export function PolicyForm({
   state,
@@ -666,13 +679,49 @@ export function PolicyForm({
     expertIds,
   } = draft;
   const rule = rules.find((item) => item.policyId === ruleId);
+  const inputCopy = rule
+    ? policyInputCopy[rule.policyType as keyof typeof policyInputCopy]
+    : undefined;
+  const inputId = useId();
+  const inputMin = rule?.inputs?.[0]?.min ?? rule?.inputMin;
+  const inputMax = rule?.inputs?.[0]?.max ?? rule?.inputMax;
+  const inputStep = rule?.inputs?.[0]?.step;
+  const scale = inputCopy ? 100 : 1;
+  const validValue =
+    Number.isFinite(value) &&
+    inputMin !== undefined &&
+    inputMax !== undefined &&
+    value >= inputMin &&
+    value <= inputMax &&
+    (inputStep === undefined ||
+      Math.abs(
+        (value - inputMin) / inputStep -
+          Math.round((value - inputMin) / inputStep),
+      ) <= 1e-8);
+  const rangeText =
+    inputMin !== undefined && inputMax !== undefined
+      ? `入力できる範囲：${inputCopy ? policyDisplayNumber(inputMin) : inputMin}〜${inputCopy ? policyDisplayNumber(inputMax) : inputMax}${inputCopy?.unit ?? ""}。`
+      : "";
+  const comparison = (() => {
+    if (!inputCopy || !rule) return "";
+    const basis =
+      inputCopy.basis === "current"
+        ? state.economy.rates.policyRate
+        : (rule.referenceValue ?? 0);
+    const basisText = `${inputCopy.basisLabel} ${policyDisplayNumber(basis)}${inputCopy.unit}`;
+    if (!validValue)
+      return `${basisText}。範囲内の値を入力すると、基準からの差を表示します。`;
+    const difference = value - basis;
+    if (difference === 0) return `${basisText}。${inputCopy.equal}`;
+    return `${basisText}から ${signedPolicyDisplayNumber(difference)}ポイント（${difference > 0 ? inputCopy.positive : inputCopy.negative}）。`;
+  })();
   function updateDraft(change: Partial<PolicyFormDraftState>) {
     const next = { ...draft, ...change };
     setLocalDraft(next);
     onDraftChange?.(next);
   }
   const meeting = policyMeetingStatus(state);
-  const shortage = (() => {
+  const policyIssue = (() => {
     try {
       const costs = createReservedPolicy(
         state,
@@ -692,15 +741,20 @@ export function PolicyForm({
         const available =
           resources[key] - held.reduce((sum, item) => sum + item.costs[key], 0);
         if (costs[key] > available)
-          return `${key === "foreignReserves" ? "外貨準備" : key === "politicalCapital" ? "政治資本" : key === "implementationCapacity" ? "実施能力" : "開始予算"}が足りません。必要 ${costs[key].toFixed(1)}、使える量 ${available.toFixed(1)}です。設定値や政策を見直して、もう一度見通しを確認してください。`;
+          return {
+            kind: "resources" as const,
+            message: `${key === "foreignReserves" ? "外貨準備" : key === "politicalCapital" ? "政治資本" : key === "implementationCapacity" ? "実施能力" : "開始予算"}が足りません。必要 ${costs[key].toFixed(1)}、使える量 ${available.toFixed(1)}です。設定値や政策を見直して、もう一度見通しを確認してください。`,
+          };
       }
-      return "";
+      return null;
     } catch {
-      const min = rule?.inputs?.[0]?.min ?? rule?.inputMin;
-      const max = rule?.inputs?.[0]?.max ?? rule?.inputMax;
-      return min !== undefined && max !== undefined
-        ? `設定値は${min}〜${max}の範囲で入力してください。値を見直して、もう一度見通しを確認してください。`
-        : "設定値を確認できませんでした。政策を選び直して、もう一度試してください。";
+      return {
+        kind: "input" as const,
+        message:
+          inputMin !== undefined && inputMax !== undefined
+            ? `${inputCopy?.label ?? "設定値"}は${inputCopy ? policyDisplayNumber(inputMin) : inputMin}〜${inputCopy ? policyDisplayNumber(inputMax) : inputMax}${inputCopy?.unit ?? ""}の範囲で入力してください。値を見直して、もう一度見通しを確認してください。`
+            : "設定値を確認できませんでした。政策を選び直して、もう一度試してください。",
+      };
     }
   })();
   return (
@@ -710,7 +764,7 @@ export function PolicyForm({
         <>
           <button
             className="primary"
-            disabled={busy || meeting.slotsRemaining === 0 || !!shortage}
+            disabled={busy || meeting.slotsRemaining === 0 || !!policyIssue}
             onClick={() => {
               onDraftChange?.(draft);
               onPreview(
@@ -727,10 +781,12 @@ export function PolicyForm({
           >
             {busy ? "見通しを計算しています…" : "見通しを確認"}
           </button>
-          {(shortage || meeting.slotsRemaining === 0) && (
+          {(policyIssue || meeting.slotsRemaining === 0) && (
             <span role="status" className="action-warning">
-              {shortage
-                ? "政策を進める準備が足りません。本文の案内を確認してください。"
+              {policyIssue
+                ? policyIssue.kind === "resources"
+                  ? "政策を進める準備が足りません。本文の案内を確認してください。"
+                  : "政策の入力を確認してください。本文の案内を確認してください。"
                 : "今四半期の政策枠は使い切りました。次の四半期にもう一度検討できます。"}
             </span>
           )}
@@ -749,6 +805,7 @@ export function PolicyForm({
               );
               updateDraft({
                 ruleId: event.target.value,
+                displayValue: undefined,
                 value:
                   next?.inputs?.[0]?.defaultValue ??
                   next?.referenceValue ??
@@ -764,19 +821,78 @@ export function PolicyForm({
             ))}
           </select>
         </label>
-        <label>
-          {label(ruleId)}の設定値
+        <label className="policy-value-field">
+          <span id={`${inputId}-label`}>
+            {inputCopy?.label ?? `${label(ruleId)}の設定値`}
+          </span>
+          {inputCopy && (
+            <span id={`${inputId}-meaning`} className="policy-value-help">
+              {inputCopy.meaning}
+            </span>
+          )}
           <input
             type="number"
             required
-            min={rule?.inputs?.[0]?.min ?? rule?.inputMin}
-            max={rule?.inputs?.[0]?.max ?? rule?.inputMax}
-            step={rule?.inputs?.[0]?.step ?? "any"}
-            value={value}
+            aria-labelledby={`${inputId}-label`}
+            aria-describedby={`${inputId}-meaning ${inputId}-range ${inputId}-comparison${inputCopy?.basis === "current" ? ` ${inputId}-reference` : ""}`}
+            min={
+              inputMin === undefined
+                ? undefined
+                : inputCopy
+                  ? policyDisplayNumber(inputMin)
+                  : inputMin
+            }
+            max={
+              inputMax === undefined
+                ? undefined
+                : inputCopy
+                  ? policyDisplayNumber(inputMax)
+                  : inputMax
+            }
+            step={
+              inputStep === undefined
+                ? "any"
+                : inputCopy
+                  ? policyDisplayNumber(inputStep)
+                  : inputStep
+            }
+            value={
+              draft.displayValue ??
+              (Number.isFinite(value)
+                ? inputCopy
+                  ? policyDisplayNumber(value)
+                  : value
+                : "")
+            }
             onChange={(event) =>
-              updateDraft({ value: Number(event.target.value) })
+              updateDraft({
+                displayValue: event.target.value,
+                value:
+                  event.target.value === ""
+                    ? Number.NaN
+                    : Number(event.target.value) / scale,
+              })
             }
           />
+          <span id={`${inputId}-range`} className="policy-value-help">
+            {rangeText}
+          </span>
+          {inputCopy && (
+            <span
+              id={`${inputId}-comparison`}
+              className="policy-value-help"
+              aria-live="polite"
+            >
+              {comparison}
+            </span>
+          )}
+          {inputCopy?.basis === "current" &&
+            rule?.referenceValue !== undefined && (
+              <span id={`${inputId}-reference`} className="policy-value-help">
+                効果計算の基準値は{policyDisplayNumber(rule.referenceValue)}
+                %です。
+              </span>
+            )}
         </label>
         <label>
           政策を始める時期
@@ -832,7 +948,7 @@ export function PolicyForm({
             今四半期の3枠を使い切りました。月を進めると、次の四半期に検討できます。
           </p>
         )}
-        {shortage && <p role="status">{shortage}</p>}
+        {policyIssue && <p role="status">{policyIssue.message}</p>}
       </section>
       {extra}
     </PageDeck>

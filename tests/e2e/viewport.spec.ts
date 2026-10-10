@@ -249,7 +249,9 @@ async function expectNationArtworkAlignment(page: Page) {
   expect(alignment.canvasPosition).toBe(alignment.imagePosition);
   expect(alignment.imagePosition).toBe("50% 15%");
   expect(alignment.offsets.every((offset) => Math.abs(offset) < 1)).toBe(true);
-  expect(alignment.structureOffsets.every((offset) => Math.abs(offset) < 1)).toBe(true);
+  expect(
+    alignment.structureOffsets.every((offset) => Math.abs(offset) < 1),
+  ).toBe(true);
   const scale = Math.max(
     alignment.sceneSize[0] / 941,
     alignment.sceneSize[1] / 1672,
@@ -357,15 +359,28 @@ async function inspectHome(page: Page) {
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 }
 
-async function previewPolicy(page: Page) {
+async function previewPolicy(page: Page, checkRateGuidance = false) {
   await page.getByRole("button", { name: "政策会議", exact: true }).click();
-  const value = page.getByRole("spinbutton", { name: "政策金利の設定値" });
+  const value = page.getByRole("spinbutton", { name: "政策金利（年率・%）" });
   await reach(page, value);
-  await value.fill("0.05");
+  await value.fill("5");
   await inspectPages(page);
   await reach(page, value);
-  await expect(value).toHaveValue("0.05");
-  await page.getByRole("button", { name: "見通しを確認" }).click();
+  await expect(value).toHaveValue("5");
+  if (checkRateGuidance) {
+    for (const text of [
+      /現在の政策金利/,
+      /入力できる範囲/,
+      /効果計算の基準値/,
+    ]) {
+      const explanation = page.getByText(text).first();
+      await reach(page, explanation);
+      await expect(explanation).toBeVisible();
+    }
+  }
+  const compare = page.getByRole("button", { name: "見通しを確認" });
+  await expect(compare).toBeEnabled();
+  await compare.click();
   await expect(
     page.getByRole("heading", { name: "政策の見通し" }),
   ).toBeFocused();
@@ -620,9 +635,9 @@ for (const viewport of VIEWPORTS) {
       });
     await inspectPages(page);
     await confirmPolicy(page);
-    expect(
-      (await savedState(page)).policyAdministration?.receipts,
-    ).toHaveLength(1);
+    const persisted = await savedState(page);
+    expect(persisted.policyAdministration?.receipts).toHaveLength(1);
+    expect(persisted.policies.reserved[0]?.inputs?.value).toBe(0.05);
     await page.getByRole("button", { name: "レポート", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "経済レポート" }),
@@ -651,6 +666,14 @@ for (const viewport of VIEWPORTS) {
     ).toBeVisible();
   });
 }
+
+test("360×640 policy rate guidance and outlook remain reachable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await startGame(page);
+  await previewPolicy(page, true);
+});
 
 test("long Japanese, warnings, crisis and event choices remain reachable at 360×640", async ({
   page,
@@ -723,7 +746,7 @@ test("200% text and keyboard retain policy confirmation and explicit crisis resu
   await page.getByRole("button", { name: "政策会議", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "政策会議" })).toBeFocused();
-  await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
+  await page.getByRole("spinbutton", { name: "政策金利（年率・%）" }).fill("5");
   await page.getByRole("button", { name: "見通しを確認" }).focus();
   await page.keyboard.press("Enter");
   await expect(
@@ -790,9 +813,9 @@ test("busy and long underlying errors show safe details without discarding a dra
   }, message);
   await startGame(page);
   await page.getByRole("button", { name: "政策会議", exact: true }).click();
-  const input = page.getByRole("spinbutton", { name: "政策金利の設定値" });
+  const input = page.getByRole("spinbutton", { name: "政策金利（年率・%）" });
   await reach(page, input);
-  await input.fill("0.05");
+  await input.fill("5");
   const compare = page.getByRole("button", {
     name: /^見通しを(?:確認|計算しています…)$/,
   });
@@ -821,7 +844,7 @@ test("busy and long underlying errors show safe details without discarding a dra
   await expect(dialog).toHaveCount(0);
   await expect(errorDetails).toBeFocused();
   await reach(page, input);
-  await expect(input).toHaveValue("0.05");
+  await expect(input).toHaveValue("5");
   expect(
     (await savedState(page)).policyAdministration?.receipts ?? [],
   ).toHaveLength(0);

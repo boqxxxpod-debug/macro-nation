@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@macro-nation/domain";
-import { scorePoint, stockLevel } from "@macro-nation/domain";
+import { percentRate, scorePoint, stockLevel } from "@macro-nation/domain";
 import {
   expertPortraitManifest,
   expertProfilesForContentVersion,
@@ -20,7 +20,13 @@ import type { PreviewOutput } from "../application/policy-view";
 import { createGame } from "../application/game-service";
 import { learningEntriesForReport } from "../application/learning";
 import { createReservedPolicy } from "../application/policy-view";
-import { Home, PolicyForm, Preview, Report } from "./GameViews";
+import {
+  Home,
+  PolicyForm,
+  Preview,
+  Report,
+  type PolicyFormDraftState,
+} from "./GameViews";
 import { display } from "./game-format";
 
 // Copy projections are tested in full; App and PageDeck tests cover pagination.
@@ -124,6 +130,215 @@ function reportState(): GameState {
 }
 
 describe("game screen wording", () => {
+  it.each([
+    [
+      "interest-rate",
+      "政策金利（年率・%）",
+      "-2〜30%",
+      "5",
+      0.05,
+      "+3ポイント（引き上げ）",
+    ],
+    [
+      "tax-package",
+      "税負担の変更幅（ポイント）",
+      "-5〜5ポイント",
+      "-3",
+      -0.03,
+      "-3ポイント（減税方向）",
+    ],
+    [
+      "public-works",
+      "公共事業の追加規模（年間GDP比・%）",
+      "0〜8%",
+      "4",
+      0.04,
+      "+4ポイント（追加投資を拡大）",
+    ],
+    [
+      "tariff",
+      "関税率（%）",
+      "0〜100%",
+      "25",
+      0.25,
+      "+25ポイント（関税を引き上げ）",
+    ],
+    [
+      "fx-intervention",
+      "為替介入の規模（年間GDP比・%）",
+      "-5〜5%",
+      "-2",
+      -0.02,
+      "-2ポイント（自国通貨売り・外貨準備が増加）",
+    ],
+  ] as const)(
+    "%s explains its unit, range and direction while preserving the decimal draft",
+    (ruleId, name, range, displayed, internal, direction) => {
+      const onPreview = vi.fn();
+      render(<PolicyForm state={initial} onPreview={onPreview} busy={false} />);
+      fireEvent.change(screen.getByRole("combobox", { name: "政策の種類" }), {
+        target: { value: ruleId },
+      });
+      const input = screen.getByRole("spinbutton", { name });
+      expect(input).toHaveAttribute("min");
+      expect(input).toHaveAttribute("max");
+      const description = input
+        .getAttribute("aria-describedby")!
+        .split(" ")
+        .map((id) => document.getElementById(id)?.textContent ?? "")
+        .join(" ");
+      expect(description).toContain(range);
+      fireEvent.change(input, { target: { value: displayed } });
+      expect(input).toHaveValue(Number(displayed));
+      expect(
+        screen.getByText((text) => text.includes(direction)),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
+      expect(onPreview).toHaveBeenCalledWith(
+        expect.objectContaining({ ruleId, value: internal }),
+        ["macro"],
+      );
+    },
+  );
+
+  it("compares interest to the live rate while identifying its separate model reference", () => {
+    render(
+      <PolicyForm
+        state={{
+          ...initial,
+          economy: {
+            ...initial.economy,
+            rates: { ...initial.economy.rates, policyRate: percentRate(0.035) },
+          },
+        }}
+        onPreview={vi.fn()}
+        busy={false}
+      />,
+    );
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
+      {
+        target: { value: "4" },
+      },
+    );
+    expect(
+      screen.getByText(/現在の政策金利 3.5%から \+0.5ポイント/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("効果計算の基準値は2%です。")).toBeInTheDocument();
+  });
+
+  it.each(["3.5", "2.12345678901234"])(
+    "keeps entered %s%% across draft restoration without rounding the submitted value",
+    (displayed) => {
+      const onPreview = vi.fn();
+      const onDraftChange = vi.fn<(draft: PolicyFormDraftState) => void>();
+      const view = render(
+        <PolicyForm
+          state={initial}
+          onPreview={onPreview}
+          onDraftChange={onDraftChange}
+          busy={false}
+        />,
+      );
+      const input = screen.getByRole("spinbutton", {
+        name: "政策金利（年率・%）",
+      });
+      fireEvent.change(input, { target: { value: displayed } });
+      expect(input).toHaveValue(Number(displayed));
+      expect(input).toHaveAttribute("value", displayed);
+      const rememberedDraft = onDraftChange.mock.calls.at(-1)![0];
+      view.unmount();
+      render(
+        <PolicyForm
+          state={initial}
+          onPreview={onPreview}
+          draftState={rememberedDraft}
+          busy={false}
+        />,
+      );
+      expect(
+        screen.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
+      ).toHaveAttribute("value", displayed);
+      fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
+      expect(onPreview).toHaveBeenCalledWith(
+        expect.objectContaining({ value: Number(displayed) / 100 }),
+        ["macro"],
+      );
+    },
+  );
+
+  it("resets the displayed value and baseline when switching from a rate to a change amount", () => {
+    render(<PolicyForm state={initial} onPreview={vi.fn()} busy={false} />);
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
+      { target: { value: "3.5" } },
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "政策の種類" }), {
+      target: { value: "tax-package" },
+    });
+    expect(
+      screen.getByRole("spinbutton", { name: "税負担の変更幅（ポイント）" }),
+    ).toHaveValue(0);
+    expect(
+      screen.getByText(/税負担の変更なしを表す基準 0ポイント/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/現在の政策金利/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["interest-rate", "政策金利（年率・%）", -2, 30, -0.02, 0.3],
+    ["tax-package", "税負担の変更幅（ポイント）", -5, 5, -0.05, 0.05],
+    ["public-works", "公共事業の追加規模（年間GDP比・%）", 0, 8, 0, 0.08],
+    ["tariff", "関税率（%）", 0, 100, 0, 1],
+    ["fx-intervention", "為替介入の規模（年間GDP比・%）", -5, 5, -0.05, 0.05],
+  ] as const)(
+    "%s accepts its unchanged configured boundaries in display units",
+    (ruleId, name, min, max, internalMin, internalMax) => {
+      const onPreview = vi.fn();
+      render(<PolicyForm state={initial} onPreview={onPreview} busy={false} />);
+      fireEvent.change(screen.getByRole("combobox", { name: "政策の種類" }), {
+        target: { value: ruleId },
+      });
+      const input = screen.getByRole("spinbutton", { name });
+      expect(input).toHaveAttribute("min", String(min));
+      expect(input).toHaveAttribute("max", String(max));
+      for (const [displayed, internal] of [
+        [min, internalMin],
+        [max, internalMax],
+      ]) {
+        fireEvent.change(input, { target: { value: String(displayed) } });
+        expect(
+          screen.getByRole("button", { name: "見通しを確認" }),
+        ).toBeEnabled();
+        fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
+        expect(onPreview).toHaveBeenLastCalledWith(
+          expect.objectContaining({ ruleId, value: internal }),
+          ["macro"],
+        );
+      }
+    },
+  );
+
+  it("keeps an empty or out-of-range percentage invalid instead of treating it as zero", () => {
+    const onPreview = vi.fn();
+    render(<PolicyForm state={initial} onPreview={onPreview} busy={false} />);
+    const input = screen.getByRole("spinbutton", {
+      name: "政策金利（年率・%）",
+    });
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input).toHaveValue(null);
+    expect(screen.getByRole("button", { name: "見通しを確認" })).toBeDisabled();
+    expect(
+      screen.getByText(/政策金利（年率・%）は-2〜30%の範囲/),
+    ).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "31" } });
+    expect(input).toHaveValue(31);
+    expect(screen.getByRole("button", { name: "見通しを確認" })).toBeDisabled();
+    expect(screen.getByText(/範囲内の値を入力すると/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "見通しを確認" }));
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
   it.each(["paused", "awaitingEvent", "crisisStopped"] as const)(
     "explains the next step for %s on Home",
     (runState) => {
