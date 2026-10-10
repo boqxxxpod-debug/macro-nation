@@ -229,9 +229,9 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
   expect((await readSave(page)).monthIndex).toBe(0);
   await reveal(
     page,
-    page.getByRole("spinbutton", { name: "政策金利の設定値" }),
+    page.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
   );
-  await page.getByRole("spinbutton", { name: "政策金利の設定値" }).fill("0.05");
+  await page.getByRole("spinbutton", { name: "政策金利（年率・%）" }).fill("5");
   await page.getByRole("button", { name: "見通しを確認" }).click();
   await expect(
     page.getByRole("heading", { name: "政策の見通し" }),
@@ -254,6 +254,7 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
   await page.reload();
   await expect(controls(page)).toContainText("停止中");
   expect((await readSave(page)).monthIndex).toBe(0);
+  expect((await readSave(page)).policies.reserved[0]?.inputs.value).toBe(0.05);
   await controls(page)
     .getByRole("button", { name: "再開", exact: true })
     .click();
