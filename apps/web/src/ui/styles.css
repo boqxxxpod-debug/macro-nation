@@ -1953,6 +1953,50 @@ label select {
   color: #172a33;
   background: #f2f1eb;
 }
+.first-play-guide {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  color: #172a33;
+  font-size: 0.875rem;
+}
+.first-play-guide header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.first-play-guide h3,
+.first-play-guide p {
+  margin: 0;
+  line-height: 1.4;
+}
+.first-play-guide button {
+  padding: 4px 8px;
+}
+.launch-intro p,
+.start-summary {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.launch-intro {
+  flex: 0 0 auto;
+}
+.launch-loop {
+  font-weight: 700;
+}
+.start-summary {
+  grid-column: 1 / -1;
+}
+.launch-shell .page-actions > button {
+  grid-column: 1 / -1;
+}
 .nation-detail-header {
   display: flex;
   align-items: center;

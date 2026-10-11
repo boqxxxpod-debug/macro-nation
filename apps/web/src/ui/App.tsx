@@ -44,6 +44,9 @@ import { GameClockController } from "../application/game-clock";
 import { selectHomeIndicators } from "../application/home-view";
 import { TimeControls } from "./TimeControls";
 import { clockStatus } from "./time-status";
+import { tutorialContent } from "./tutorial-content";
+import { gameGoalContent, gameGuideContent } from "./GameGuide";
+import gameGuideCopy from "./game-guide-copy.json";
 
 type Route =
   | "home"
@@ -269,6 +272,7 @@ export function App({
   const [state, setState] = useState<GameState | null>(null);
   const [route, setRoute] = useState<Route>(routeFromLocation);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [largeText, setLargeText] = useState(false);
   useLayoutEffect(() => {
     const refresh = () => {
@@ -375,6 +379,7 @@ export function App({
       setReturnReport(null);
       setReturnReportOpen(false);
       setMessageOpen(false);
+      setHelpOpen(false);
       setPolicyDraft(undefined);
       setOfflineProgress("");
       setError("");
@@ -633,7 +638,7 @@ export function App({
     };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
-  }, [menuOpen]);
+  }, [menuOpen, helpOpen]);
   useEffect(() => {
     if (messageOpen)
       document
@@ -738,6 +743,11 @@ export function App({
     selectGame(null);
     setMenuOpen(false);
     setRoute("nation");
+  }
+  function openGameHelp() {
+    setHelpOpen(true);
+    setMenuOpen(true);
+    setMessageOpen(false);
   }
   async function start() {
     if (!repository)
@@ -971,6 +981,7 @@ export function App({
             aria-expanded={menuOpen}
             onClick={() => {
               setMenuOpen((open) => !open);
+              setHelpOpen(false);
               setMessageOpen(false);
             }}
           >
@@ -985,21 +996,46 @@ export function App({
           <h2 id="start-heading" tabIndex={-1}>
             はじめる・続きから
           </h2>
+          <div className="launch-intro">
+            <p>{gameGuideCopy.objective}</p>
+            <p className="launch-loop">{gameGuideCopy.loop}</p>
+            <p>{gameGuideCopy.launchContext}</p>
+          </div>
           <PageDeck
             label="開始設定"
             actions={
-              <button
-                className="primary"
-                disabled={busy || !repository}
-                onClick={() => void action(start, "save")}
-              >
-                はじめる
-              </button>
+              <>
+                <p
+                  className="start-summary"
+                  aria-label={gameGuideCopy.summary.label}
+                >
+                  {gameGuideCopy.summary.difficulty}：
+                  {DIFFICULTY_LABELS[difficulty]}・
+                  {gameGuideCopy.summary.duration}：
+                  {
+                    DURATIONS.find((duration) => duration.id === durationMode)!
+                      .years
+                  }
+                  {gameGuideCopy.summary.years}・
+                  {gameGuideCopy.summary.learningMode}：
+                  {LEARNING_MODE_LABELS[learningMode]}・
+                  {gameGuideCopy.summary.slot}：{slotId}・
+                  {gameGuideCopy.summary.seed}：
+                  {startSeed.trim()
+                    ? gameGuideCopy.summary.seedEntered
+                    : gameGuideCopy.summary.seedAutomatic}
+                </p>
+                <button
+                  className="primary"
+                  disabled={busy || !repository}
+                  onClick={() => void action(start, "save")}
+                >
+                  はじめる
+                </button>
+              </>
             }
           >
-            <p>
-              架空国家の政策を選び、数字と理由から変化を確かめます。ゲームはこの端末だけに自動保存されます。
-            </p>
+            {gameGoalContent()}
             <div className="launch-actions" aria-label="開始メニュー">
               <button
                 type="button"
@@ -1023,7 +1059,7 @@ export function App({
                   )
                 }
               >
-                遊び方・設定
+                {gameGuideCopy.title}
               </button>
             </div>
             {launchPanel === "history" && (
@@ -1066,14 +1102,8 @@ export function App({
                 className="panel launch-panel"
                 aria-labelledby="launch-help-heading"
               >
-                <h3 id="launch-help-heading">遊び方・端末設定</h3>
-                <ul>
-                  <li>はじめる前に、期間、難易度、説明量を選びます。</li>
-                  <li>開始後は、設定と期間を変更できません。</li>
-                  <li>
-                    保存はこの端末内だけで行い、ログインや通信を必要としません。
-                  </li>
-                </ul>
+                <h3 id="launch-help-heading">{gameGuideCopy.title}</h3>
+                {gameGuideContent()}
               </section>
             )}
             <div className="slot-grid" aria-label="保存先">
@@ -1234,36 +1264,56 @@ export function App({
             )}
             {menuOpen ? (
               <PageDeck
-                label="画面メニュー"
+                key={helpOpen ? "help" : "menu"}
+                label={helpOpen ? gameGuideCopy.title : "画面メニュー"}
                 actions={
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      requestAnimationFrame(() =>
-                        document
-                          .querySelector<HTMLElement>(".shell-menu")
-                          ?.focus(),
-                      );
-                    }}
-                  >
-                    閉じる
-                  </button>
+                  <>
+                    {helpOpen && (
+                      <button onClick={() => setHelpOpen(false)}>
+                        {gameGuideCopy.backToMenu}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        requestAnimationFrame(() =>
+                          document
+                            .querySelector<HTMLElement>(".shell-menu")
+                            ?.focus(),
+                        );
+                      }}
+                    >
+                      {helpOpen ? gameGuideCopy.close : "閉じる"}
+                    </button>
+                  </>
                 }
               >
-                <h2 tabIndex={-1}>画面メニュー</h2>
-                <button
-                  onClick={() => {
-                    openSlots();
-                  }}
-                >
-                  はじめる・続きから
-                </button>
-                {import.meta.env.DEV && <AIPreview />}
-                {Object.entries(NAV_LABELS).map(([id, text]) => (
-                  <button key={id} onClick={() => navigate(id as Route)}>
-                    {text}
-                  </button>
-                ))}
+                {helpOpen ? (
+                  <>
+                    <h2 tabIndex={-1}>{gameGuideCopy.title}</h2>
+                    {gameGuideContent()}
+                  </>
+                ) : (
+                  <>
+                    <h2 tabIndex={-1}>画面メニュー</h2>
+                    <button
+                      onClick={() => {
+                        openSlots();
+                      }}
+                    >
+                      はじめる・続きから
+                    </button>
+                    <button onClick={openGameHelp}>
+                      {gameGuideCopy.title}
+                    </button>
+                    {import.meta.env.DEV && <AIPreview />}
+                    {Object.entries(NAV_LABELS).map(([id, text]) => (
+                      <button key={id} onClick={() => navigate(id as Route)}>
+                        {text}
+                      </button>
+                    ))}
+                  </>
+                )}
               </PageDeck>
             ) : (
               <>
@@ -1509,6 +1559,16 @@ export function App({
                       timeControls={timeControls}
                       onReport={() => navigate("report")}
                       guidanceKey={selectLatestConfirmedPolicy(state)?.policyId}
+                      firstPlay={
+                        state.monthIndex === 0 &&
+                        state.runState === "paused" &&
+                        !selectLatestConfirmedPolicy(state)
+                          ? {
+                              onPolicies: () => void navigate("policies"),
+                              onHelp: openGameHelp,
+                            }
+                          : undefined
+                      }
                       navigation={
                         <NationMenu
                           state={state}
@@ -1526,7 +1586,7 @@ export function App({
                       {policyConfirmationContent({
                         state,
                         onOpenReport: () => void navigate("report"),
-                      })}
+                      }) ?? tutorialContent(state)}
                     </NationView>
                   </>
                 )}

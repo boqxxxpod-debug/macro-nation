@@ -290,6 +290,11 @@ async function journey(variant, project) {
     await page
       .getByRole("heading", { name: "国家ビュー", exact: true })
       .waitFor();
+    const closeGuide = page.getByRole("button", {
+      name: "案内を閉じる",
+      exact: true,
+    });
+    if (await closeGuide.isVisible()) await closeGuide.click();
     await capture(page, variant, "nation");
     await page
       .getByRole("button", { name: /^(政策会議|政策を考える)$/, exact: true })

@@ -325,6 +325,7 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
   await expect(page).toHaveURL(/\/game\/1\/nation$/);
   await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+  await page.getByRole("button", { name: "案内を閉じる", exact: true }).click();
   await expect(page.locator("img.nation-landscape")).toHaveJSProperty(
     "naturalWidth",
     941,
@@ -358,6 +359,7 @@ test("nation regions remain accessible with reduced motion and after direct relo
   ).toBeVisible();
   await page.getByRole("button", { name: "詳細を閉じる" }).click();
   await page.reload();
+  await page.getByRole("button", { name: "案内を閉じる", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "地域一覧", exact: true }),
   ).toBeVisible();

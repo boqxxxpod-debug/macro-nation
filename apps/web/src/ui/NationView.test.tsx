@@ -36,6 +36,49 @@ async function game() {
 }
 
 describe("NationView detail navigation", () => {
+  it("keeps the first action guide dismissible without changing the game", async () => {
+    const state = await game();
+    const before = structuredClone(state);
+    const onPolicies = vi.fn();
+    const onHelp = vi.fn();
+    const view = render(
+      <NationView
+        state={state}
+        onReport={vi.fn()}
+        firstPlay={{ onPolicies, onHelp }}
+      />,
+    );
+    expect(screen.getByRole("region", { name: "最初の一手" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "国家の主要指標" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "政策を検討する" }));
+    expect(onPolicies).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "遊び方・設定" }));
+    expect(onHelp).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "案内を閉じる" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "案内を再表示" }),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.queryByRole("region", { name: "最初の一手" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "案内を再表示" }));
+    expect(screen.getByRole("region", { name: "最初の一手" })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "最初の一手" })).toHaveFocus(),
+    );
+    expect(
+      screen.getByRole("button", { name: "案内を再表示" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    view.rerender(
+      <NationView state={{ ...state, monthIndex: 1 }} onReport={vi.fn()} />,
+    );
+    expect(
+      screen.queryByRole("region", { name: "最初の一手" }),
+    ).not.toBeInTheDocument();
+    expect(state).toEqual(before);
+  });
   it("closes policy guidance when switching to a game without a confirmed policy", async () => {
     const state = await game();
     const onReport = vi.fn();

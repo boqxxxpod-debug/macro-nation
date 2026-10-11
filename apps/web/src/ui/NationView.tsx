@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import type { GameState } from "@macro-nation/domain";
 import {
@@ -14,6 +21,8 @@ import { NationMotion } from "./NationMotion";
 import { NationStructures } from "./NationStructures";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
+import { FirstPlayGuide } from "./FirstPlayGuide";
+import firstPlayCopy from "./first-play-copy.json";
 
 const STAGE_NAMES = ["低調", "安定", "活発", "非常に活発"] as const;
 const REGION_ICONS: Record<RegionId, string> = {
@@ -394,6 +403,7 @@ export function NationView({
   timeControls,
   navigation,
   guidanceKey,
+  firstPlay,
   onReport,
   children,
 }: {
@@ -401,10 +411,19 @@ export function NationView({
   timeControls?: ReactNode;
   navigation?: ReactNode;
   guidanceKey?: string | undefined;
+  firstPlay?: { onPolicies(): void; onHelp(): void } | undefined;
   onReport(): void;
   children?: ReactNode;
 }) {
   const model = useMemo(() => selectNationView(state), [state]);
+  const guideId = useId();
+  const [guideOpen, setGuideOpen] = useState(Boolean(firstPlay));
+  const showGuide = Boolean(firstPlay) && guideOpen;
+  const guideTrigger = useRef<HTMLButtonElement>(null);
+  const closeGuide = () => {
+    setGuideOpen(false);
+    requestAnimationFrame(() => guideTrigger.current?.focus());
+  };
   const [selected, setSelected] = useState<RegionId>("city");
   const [artFailed, setArtFailed] = useState(false);
   const [artLoaded, setArtLoaded] = useState(false);
@@ -537,7 +556,7 @@ export function NationView({
           className="nation-scene"
           data-time={model.timeOfDay}
           data-weather={model.weatherKey}
-          hidden={detailsOpen}
+          hidden={detailsOpen || showGuide}
         >
           {artFailed ? (
             <Landscape stages={stages} crisis={model.overlays.length > 0} />
@@ -627,6 +646,15 @@ export function NationView({
           )}
         </div>
 
+        {showGuide && !detailsOpen && firstPlay && (
+          <FirstPlayGuide
+            id={guideId}
+            state={state}
+            onPolicies={firstPlay.onPolicies}
+            onHelp={firstPlay.onHelp}
+            onClose={closeGuide}
+          />
+        )}
         {detailPage !== null && (
           <section
             ref={detailRef}
@@ -769,17 +797,29 @@ export function NationView({
       <div
         className="nation-overview-actions"
         aria-label="国家ビューの詳細"
-        data-guidance={Boolean(children)}
+        data-guidance={Boolean(children || firstPlay)}
         hidden={detailsOpen}
       >
-        {children && (
+        {(children || firstPlay) && (
           <button
             type="button"
-            aria-haspopup="dialog"
-            aria-controls="nation-detail-screen"
-            onClick={(event) => openDetails("guidance", event.currentTarget)}
+            aria-haspopup={firstPlay ? undefined : "dialog"}
+            aria-expanded={firstPlay ? showGuide : undefined}
+            aria-controls={firstPlay ? guideId : "nation-detail-screen"}
+            ref={guideTrigger}
+            onClick={(event) => {
+              if (firstPlay) {
+                setGuideOpen(true);
+                requestAnimationFrame(() =>
+                  document
+                    .getElementById(guideId)
+                    ?.querySelector<HTMLElement>("h3")
+                    ?.focus(),
+                );
+              } else openDetails("guidance", event.currentTarget);
+            }}
           >
-            運営の案内
+            {firstPlay ? firstPlayCopy.reopen : "運営の案内"}
           </button>
         )}
         <button
