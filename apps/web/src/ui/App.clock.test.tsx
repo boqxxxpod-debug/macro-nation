@@ -11,6 +11,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@macro-nation/domain";
 import {
   calculateMonth,
+  confirmPolicy,
   createGame,
   type GameRepository,
 } from "../application/game-service";
@@ -87,7 +88,159 @@ async function autoMode() {
   });
 }
 
+async function savedConfirmedPolicy(
+  repository: GameRepository,
+  progressionMode: "manual" | "auto",
+) {
+  const initial = await createGame(
+    repository,
+    "first-playable-48",
+    1,
+    "casual",
+  );
+  const paused: GameState = {
+    ...initial,
+    clock: { ...initial.clock, progressionMode, stopReason: "policy" },
+  };
+  await repository.save(policyStateHash(initial), paused);
+  const stateHash = policyStateHash(paused);
+  return confirmPolicy(repository, 1, {
+    kind: "commit",
+    commandId: "confirmed-rate-command",
+    expectedStateHash: stateHash,
+    draft: {
+      status: "previewed",
+      policyId: "confirmed-rate-policy",
+      ruleId: "interest-rate",
+      value: 0.05,
+      quartersAhead: 0,
+      previewStateHash: stateHash,
+    },
+  });
+}
+
 describe("game clock UI", () => {
+  it("restores a confirmed policy with its human-readable setting and manual next step", async () => {
+    const memory = memoryRepository();
+    const confirmed = await savedConfirmedPolicy(memory.repository, "manual");
+    let now = 900_000;
+    vi.useFakeTimers();
+    await act(async () => {
+      render(<App repository={memory.repository} nowMs={() => now} />);
+    });
+    expect(screen.getByRole("combobox", { name: "ホームの詳細" })).toHaveValue(
+      "policy",
+    );
+    const policy = screen.getByLabelText("確定した政策の内容");
+    expect(policy).toHaveTextContent("政策金利（年率・%）：5%");
+    expect(policy).toHaveTextContent("開始予定：1月目");
+    expect(policy).toHaveTextContent("状態：開始待ち（予約中）");
+    expect(policy).toHaveTextContent("確定した時点では発動していません");
+    expect(policy).toHaveTextContent("「1か月進める」で月を進めてください。");
+    expect(
+      screen.getByRole("region", { name: "時間の進行" }),
+    ).toHaveTextContent("停止中 · 政策会議で停止");
+    now += 600_000;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    await click("政策会議");
+    expect(document.querySelector(".game-view > .eyebrow")).toHaveTextContent(
+      "手動・停止中 · 政策会議で停止",
+    );
+    await click("レポート");
+    expect(document.querySelector(".game-view > .eyebrow")).toHaveTextContent(
+      "手動・停止中 · 政策会議で停止",
+    );
+    expect(memory.slots.get(1)?.monthIndex).toBe(confirmed.monthIndex);
+    expect(memory.slots.get(1)?.policies).toEqual(confirmed.policies);
+    await click("ホーム");
+    await click("1か月進める");
+    expect(memory.slots.get(1)?.monthIndex).toBe(1);
+    expect(memory.slots.get(1)?.policies.reserved).toHaveLength(0);
+    expect(memory.slots.get(1)?.policies.active).toHaveLength(1);
+    expect(memory.slots.get(1)?.policyAdministration?.receipts).toHaveLength(1);
+    const activePolicy = screen.getByLabelText("確定した政策の内容");
+    expect(activePolicy).toHaveTextContent("政策金利（年率・%）：5%");
+    expect(activePolicy).toHaveTextContent("開始月：1月目。状態：実施中");
+    expect(activePolicy).toHaveTextContent(
+      "開始と効果が表れる時期には時間差があります",
+    );
+    await click("レポートで結果を見る");
+    expect(window.location.pathname).toBe("/game/1/report");
+    expect(
+      screen.getByRole("heading", { name: "経済レポート" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a confirmed auto policy paused across reload until explicit resume activates it once", async () => {
+    const memory = memoryRepository();
+    const confirmed = await savedConfirmedPolicy(memory.repository, "auto");
+    let now = 900_000;
+    vi.useFakeTimers();
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<App repository={memory.repository} nowMs={() => now} />);
+    });
+    const policy = screen.getByLabelText("確定した政策の内容");
+    expect(policy).toHaveTextContent("状態：開始待ち（予約中）");
+    expect(policy).toHaveTextContent("時間の進行で「再開」");
+    expect(policy).toHaveTextContent("政策の確定や再読込だけでは進みません");
+    const pausedWrites = memory.attempts;
+    now += 600_000;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    await click("政策会議");
+    await click("レポート");
+    expect(document.querySelector(".game-view > .eyebrow")).toHaveTextContent(
+      "自動・停止中 · 政策会議で停止",
+    );
+    await click("ホーム");
+    view.unmount();
+    now += 900_000;
+    await act(async () => {
+      render(<App repository={memory.repository} nowMs={() => now} />);
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(
+      screen.getByRole("region", { name: "時間の進行" }),
+    ).toHaveTextContent("停止中 · 政策会議で停止");
+    expect(screen.getByRole("button", { name: "再開" })).toBeEnabled();
+    expect(memory.slots.get(1)).toEqual(confirmed);
+    expect(memory.attempts).toBe(pausedWrites);
+    await click("再開");
+    expect(memory.slots.get(1)?.runState).toBe("running");
+    expect(memory.slots.get(1)?.clock.lastProcessedWallClockMs).toBe(now);
+    now += 299_999;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(memory.slots.get(1)?.monthIndex).toBe(0);
+    now += 1;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(memory.slots.get(1)?.monthIndex).toBe(1);
+    expect(memory.slots.get(1)?.policies.reserved).toHaveLength(0);
+    expect(memory.slots.get(1)?.policies.active).toEqual([
+      expect.objectContaining({
+        policyId: "confirmed-rate-policy",
+        status: "active",
+        inputs: { value: 0.05 },
+      }),
+    ]);
+    expect(memory.slots.get(1)?.policyAdministration?.receipts).toHaveLength(1);
+    const ticked = structuredClone(memory.slots.get(1)!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(memory.slots.get(1)).toEqual(ticked);
+    expect(screen.getByLabelText("確定した政策の内容")).toHaveTextContent(
+      "状態：実施中",
+    );
+  });
+
   it("gives manual-mode recovery guidance when the automatic calculator is unavailable", async () => {
     const memory = memoryRepository();
     await createGame(memory.repository, "first-playable-48", 1, "casual");
