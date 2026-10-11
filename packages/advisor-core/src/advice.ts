@@ -3,8 +3,10 @@ import type {
   ExpertProfile,
   RuleBasedAdviceContext,
 } from "./contracts";
+import content from "./content-v1.2.0.json";
+import { indicatorDisplayName, renderContent } from "./display-names";
 
-const endings: Readonly<Record<string, string>> = {
+const legacyEndings: Readonly<Record<string, string>> = {
   measured: "数字の振れを見ながら進めるのが妥当です。",
   cautious: "財源と将来負担を同時に確認しましょう。",
   teacher: "短期と長期を分けて考えてみましょう。",
@@ -31,13 +33,51 @@ export class RuleBasedExpertAdvisor {
           a.indicator.localeCompare(b.indicator),
       );
     const focus = ranked[0] ?? { indicator: "realGdp", value: 0 };
+    if (
+      context.contentVersion === "1.0.0" ||
+      context.contentVersion === "1.1.0"
+    ) {
+      const direction =
+        focus.value > 0 ? "改善" : focus.value < 0 ? "悪化" : "ほぼ横ばい";
+      return {
+        expertId: profile.id,
+        conclusion: `${focus.indicator}は無追加政策比で${direction}する見通しです。`,
+        reason: `${profile.values}を重視し、共通の予測結果から影響の大きい項目を先に確認しました。`,
+        caution: `${context.uncertainty} ${legacyEndings[profile.toneKey ?? ""] ?? "前提が変わる可能性も確認しましょう。"}`,
+      };
+    }
+    // Missing priority facts are not evidence of a zero effect.
+    const available = ranked.filter(
+      ({ indicator, value }) =>
+        Object.hasOwn(context.effects, indicator) && Number.isFinite(value),
+    );
+    const currentFocus = available[0];
     const direction =
-      focus.value > 0 ? "改善" : focus.value < 0 ? "悪化" : "ほぼ横ばい";
+      currentFocus && currentFocus.value > 0
+        ? content.directions.up
+        : currentFocus && currentFocus.value < 0
+          ? content.directions.down
+          : content.directions.flat;
     return {
       expertId: profile.id,
-      conclusion: `${focus.indicator}は無追加政策比で${direction}する見通しです。`,
-      reason: `${profile.values}を重視し、共通の予測結果から影響の大きい項目を先に確認しました。`,
-      caution: `${context.uncertainty} ${endings[profile.toneKey ?? ""] ?? "前提が変わる可能性も確認しましょう。"}`,
+      conclusion: currentFocus
+        ? renderContent(content.adviceConclusion, {
+            indicator: indicatorDisplayName(currentFocus.indicator),
+            direction,
+          })
+        : content.noEvidenceConclusion,
+      reason: renderContent(
+        currentFocus ? content.adviceReason : content.noEvidenceReason,
+        { values: profile.values },
+      ),
+      caution: [
+        context.uncertainty,
+        (content.endings as Readonly<Record<string, string>>)[
+          profile.toneKey ?? ""
+        ] ?? content.defaultCaution,
+      ]
+        .filter(Boolean)
+        .join(" "),
     };
   }
 }

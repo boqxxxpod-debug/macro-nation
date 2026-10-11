@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GameState, ReviewSnapshot } from "@macro-nation/domain";
 import { createGame, type GameRepository } from "./game-service";
-import { endingHistorySummary, nationalHistory } from "./history";
+import {
+  endingHistorySummary,
+  historyCauseDisplay,
+  historyReferenceDisplay,
+  nationalHistory,
+} from "./history";
 
 async function initial(seed = "history-replay"): Promise<GameState> {
   let saved: GameState | null = null;
@@ -116,6 +121,82 @@ describe("national history", () => {
     ]);
     expect(endingHistorySummary(failed).failureCauseRefs).toContain(
       "decision-before-failure",
+    );
+  });
+
+  it("displays durable references and distinct endings without rewriting history", async () => {
+    const state = await initial("history-labels");
+    const policy = {
+      policyId: "opaque-decision",
+      sourceCommandId: "opaque-command",
+      type: "taxPackage",
+      decidedMonth: 0,
+      activationMonth: 1,
+      status: "completed",
+      slotQuarter: 0,
+      costs: {
+        politicalCapital: 0,
+        implementationCapacity: 0,
+        foreignReserves: 0,
+        immediateBudget: 0,
+      },
+    } as const;
+    const game: GameState = {
+      ...state,
+      policies: { ...state.policies, completed: [policy] },
+    };
+    const before = structuredClone(game);
+    expect(historyReferenceDisplay("opaque-command", game)).toBe("税制");
+    expect(historyCauseDisplay("policy:opaque-decision", game)).toBe(
+      "税制の政策",
+    );
+    expect(historyReferenceDisplay("balanced", game)).toBe(
+      "家計と企業を支える対応",
+    );
+    expect(historyReferenceDisplay("review:120", game)).toBe(
+      "5年ごとの振り返り",
+    );
+    expect(historyReferenceDisplay(`${game.gameId}:structure:120`, game)).toBe(
+      "10年ごとの国の変化",
+    );
+    expect(historyReferenceDisplay("reaction:3:citizens", game)).toBe(
+      "国民の反応",
+    );
+    expect(historyReferenceDisplay("ending:completed", game)).toBe(
+      "予定の期間を終えた運営",
+    );
+    expect(historyReferenceDisplay("ending:failed", game)).toBe(
+      "危機による運営の終了",
+    );
+    expect(historyReferenceDisplay("unknown-internal-id", game)).toBe(
+      "過去の記録",
+    );
+    expect(nationalHistory(game)[0]?.referenceIds).toEqual([
+      "opaque-command",
+      "opaque-decision",
+    ]);
+    expect(game).toEqual(before);
+  });
+
+  it("uses saved event titles for event references and preparedness", async () => {
+    const state = await initial("saved-event-title");
+    const game: GameState = {
+      ...state,
+      configSnapshot: {
+        ...state.configSnapshot,
+        normalizedConfig: {
+          ...state.configSnapshot.normalizedConfig,
+          content: {
+            events: [{ eventId: "saved-event", title: "保存時のイベント名" }],
+          },
+        },
+      },
+    };
+    expect(historyReferenceDisplay("saved-event", game)).toBe(
+      "保存時のイベント名",
+    );
+    expect(historyCauseDisplay("event:saved-event:preparedness", game)).toBe(
+      "保存時のイベント名への備え",
     );
   });
 });

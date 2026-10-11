@@ -1,7 +1,8 @@
 import type { ExpertProfile } from "./contracts";
+import content from "./content-v1.2.0.json";
 
 /** The eight roles already specified for UI04. Portraits and names belong to its content manifest. */
-export const expertProfiles: readonly ExpertProfile[] = [
+const legacyProfiles: readonly ExpertProfile[] = [
   {
     id: "centralBank",
     displayName: "水城 静香",
@@ -100,12 +101,23 @@ export const expertProfiles: readonly ExpertProfile[] = [
   },
 ];
 
+/** The approved identities and priorities stay fixed; only the new content tone changes. */
+export const expertProfiles: readonly ExpertProfile[] = legacyProfiles.map(
+  (profile) => ({
+    ...profile,
+    tone:
+      (content.tones as Readonly<Record<string, string>>)[
+        profile.toneKey ?? ""
+      ] ?? profile.tone,
+  }),
+);
+
 /** Keep advice from existing saves reproducible when profile content evolves. */
 export function expertProfilesForContentVersion(
   contentVersion: string,
 ): readonly ExpertProfile[] {
   if (contentVersion === "1.0.0") {
-    return expertProfiles.map(
+    return legacyProfiles.map(
       ({ id, role, values, tone, portraitAssetKey }) => ({
         id,
         role,
@@ -115,23 +127,21 @@ export function expertProfilesForContentVersion(
       }),
     );
   }
+  if (contentVersion === "1.1.0") return legacyProfiles;
   return expertProfiles;
 }
 
-/**
- * Text-only portrait assets keep the static deployment and review patch portable.
- * The SVG is intentionally simple: identity also remains available as adjacent text.
- */
+/** Relative static asset paths let the web app resolve its configured deployment base. */
 export const expertPortraitManifest = expertProfiles.map((profile) => {
-  const initials = (profile.displayName ?? profile.role)
-    .replaceAll(" ", "")
-    .slice(0, 2);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img"><rect width="128" height="128" rx="64" fill="${profile.colorToken}"/><circle cx="64" cy="48" r="25" fill="#f1c6a8"/><path d="M25 128c3-31 18-47 39-47s36 16 39 47" fill="#f4f0e6"/><text x="64" y="116" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#172a33">${initials}</text></svg>`;
-  const src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  const portraitAssetKey = profile.portraitAssetKey;
+  if (!portraitAssetKey) {
+    throw new Error(`Missing portrait asset key for expert ${profile.id}`);
+  }
   return {
     expertId: profile.id,
-    src,
-    src2x: src,
+    portraitAssetKey,
+    src: `experts/${portraitAssetKey}.webp`,
+    src2x: `experts/${portraitAssetKey}@2x.webp`,
     altText: profile.portraitAltText ?? "",
   };
 });

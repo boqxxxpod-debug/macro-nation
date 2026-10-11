@@ -4,7 +4,7 @@
   "configSchemaVersion": "1",
   "modelVersion": "0.1.2",
   "calibrationVersion": "advanced-small-open-v1.0.0",
-  "contentVersion": "1.1.0",
+  "contentVersion": "1.2.0",
   "rngVersion": "xoshiro128ss-v1",
   "compatibleEngine": {
     "min": "0.1.0",
@@ -17,7 +17,7 @@
     "policyRules.json": "e6d83acb9b846d8c3b99c43c9de8342d7b40b942e34046f74e4244011c8c43ab",
     "calibrationTargets.json": "6cf744e97f9366526f9c4fe3d79679e6190ef3d788b94a9c60624d114ebe8c42",
     "sources.json": "7760c3e9333e6cb5a0f272638977cf378d6c609f92f763c14adb83d4831fe712",
-    "content.json": "48b38b6358ef49423d91f13544495ff9bbc56d272eedc9402b30157ee983572b",
+    "content.json": "009744bcaaa5e46ff5e54f92cd943c1a4d62bde0221193d685e7c584c5b84ef5",
     "balanced-v0.1.0.json": "55204d44c957153cedcbafd42ce37d886739be63f0d603211d13f1e45f147c2c",
     "limits-v1.json": "380a250b60633083dd483447b1827c17e1720c2a0c78ed6f1d3a3a85abd0e050",
     "effect-curves-v1.json": "af863a76b9d3e3394df6221d590d2cb82381e9dcc7e31d0f892a7a4accd85fbd",

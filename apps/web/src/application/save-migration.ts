@@ -10,15 +10,20 @@ import {
 } from "@macro-nation/simulation-engine";
 import type { GameRepository } from "./game-service";
 
-/** The 0.1.7 to 0.1.8 transition adds only SCN-01 play rules to the snapshot. */
+/** Economic snapshots stay unchanged when schema 3 adds web clock metadata. */
 export async function migrateFirstPlayableSave(
   repository: GameRepository,
   state: GameState,
 ): Promise<GameState> {
+  if (!["1", "2", "3"].includes(state.versions.saveSchemaVersion))
+    throw new Error("保存データの版に対応していません。元の版で再開してください");
   if (
     state.versions.engineVersion === ENGINE_VERSION &&
     state.clock.endMonth !== undefined &&
-    state.versions.saveSchemaVersion === "2"
+    state.versions.saveSchemaVersion === "3" &&
+    state.clock.progressionMode !== undefined &&
+    state.clock.lastProcessedWallClockMs !== undefined &&
+    state.clock.remainderMs !== undefined
   )
     return state;
   if (
@@ -55,12 +60,32 @@ export async function migrateFirstPlayableSave(
         configHash: await sha256Hex(stableStringify(normalizedConfig)),
       }
     : state.configSnapshot;
-  const durationMode = "short" as const;
+  const hasDuration = state.versions.engineVersion !== "0.1.7" && state.clock.endMonth !== undefined &&
+    ["2", "3"].includes(state.versions.saveSchemaVersion);
+  const durationMode = hasDuration ? state.durationMode ?? "short" : "short";
+  const needsClockDefaults = state.clock.progressionMode === undefined;
+  const runState = needsClockDefaults &&
+    (state.runState === "running" || state.runState === "calculating")
+    ? "paused" : state.runState;
   const migrated: GameState = {
     ...state,
+    runState,
     durationMode,
     learningMode: state.learningMode ?? "standard",
-    clock: { ...state.clock, durationMode, endMonth: 48 },
+    clock: {
+      ...state.clock,
+      durationMode,
+      endMonth: hasDuration ? state.clock.endMonth! : 48,
+      progressionMode: needsClockDefaults ? "manual" : state.clock.progressionMode ?? "manual",
+      lastProcessedWallClockMs: needsClockDefaults ? null : state.clock.lastProcessedWallClockMs ?? null,
+      remainderMs: needsClockDefaults ? 0 : state.clock.remainderMs ?? 0,
+      ...(needsClockDefaults ? {
+        stopReason: runState === "awaitingEvent" ? "event"
+          : runState === "crisisStopped" ? "crisis"
+          : runState === "completed" ? "completed"
+          : runState === "failed" ? "failed" : "manual",
+      } as const : {}),
+    },
     history: {
       ...state.history,
       appliedMilestones: state.history.appliedMilestones ?? [],
@@ -70,11 +95,19 @@ export async function migrateFirstPlayableSave(
     versions: {
       ...state.versions,
       engineVersion: ENGINE_VERSION,
-      saveSchemaVersion: "2",
+      saveSchemaVersion: "3",
       ...(needsPlayableRules ? { configVersion: "0.1.3" } : {}),
     },
     configSnapshot,
   };
-  await repository.save(policyStateHash(state), migrated);
+  try {
+    await repository.save(policyStateHash(state), migrated);
+  } catch (error) {
+    // React StrictMode and another tab can read the same old generation. Only
+    // reuse an identical committed migration; a different game is never written.
+    const latest = await repository.load(state.slotId);
+    if (latest && policyStateHash(latest) === policyStateHash(migrated)) return latest;
+    throw error;
+  }
   return migrated;
 }

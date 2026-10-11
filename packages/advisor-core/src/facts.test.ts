@@ -50,4 +50,19 @@ describe("projectFacts", () => {
     expect(facts.indicators.gdpGrowth).toBeUndefined();
     expect(facts.indicators.fxChange).toBeUndefined();
   });
+
+  it("retains the reported value and its annual unit without adding optimistic claims", () => {
+    const facts = projectFacts(state);
+    const before = structuredClone(facts);
+    const news = ordinaryNews(facts);
+    expect(news.explanation).toContain("物価上昇率（年率）は4.8%です。");
+    expect(news.explanation).not.toContain("景気は拡大");
+    expect(facts).toEqual(before);
+    expect(ordinaryNews(facts, "1.1.0").headline).toBe(
+      "物価の上昇が家計に影響",
+    );
+    expect(ordinaryNews(facts, "1.1.0").explanation).toBe(
+      "物価上昇率は4.8%。家計負担と景気の両方を確認しましょう。",
+    );
+  });
 });

@@ -95,4 +95,34 @@ describe("Nation Voice selector", () => {
     };
     expect(selectNationVoices(state)).toEqual([]);
   });
+
+  it("uses the run's content version while retaining reaction facts and old voice templates", async () => {
+    const initial = await fixture();
+    const state: GameState = {
+      ...initial,
+      monthIndex: 2,
+      versions: { ...initial.versions, contentVersion: "1.1.0" },
+      history: {
+        ...initial.history,
+        reports: [
+          {
+            monthIndex: 3,
+            values: {},
+            topCauses: [],
+            reactions: [reaction("citizens", 3, 2, "prices")],
+          },
+        ],
+      },
+    };
+    const before = structuredClone(state);
+    const legacy = selectNationVoices(state)[0]!;
+    const current = selectNationVoices({
+      ...state,
+      versions: { ...state.versions, contentVersion: "1.2.0" },
+    })[0]!;
+    expect(legacy.message).toBe("暮らしへの良い変化を感じています");
+    expect(current.message).toBe("暮らしに、よい変化を感じています。");
+    expect({ ...current, message: legacy.message }).toEqual(legacy);
+    expect(state).toEqual(before);
+  });
 });

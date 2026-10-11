@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ending wording > distinguishes completed from the other ending reason 1`] = `"48か月の運営期間を終えました。これまでの歩みを振り返りましょう。"`;
+
+exports[`ending wording > distinguishes failed from the other ending reason 1`] = `"危機のため国家運営を終了しました。変化の理由と直前の判断を振り返りましょう。"`;
+
+exports[`ending wording > explains saved decisions and causes without exposing IDs or changing the state 1`] = `"主な判断：政策金利"`;
+
+exports[`ending wording > explains saved decisions and causes without exposing IDs or changing the state 2`] = `"危機につながったこと：政策金利の政策。直前の判断は下の年表で確認できます。"`;

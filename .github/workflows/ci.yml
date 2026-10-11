@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -29,14 +31,73 @@ jobs:
       - name: Format, lint, typecheck, unit, architecture and production build
         run: npm run verify
 
-      - name: GitHub Pages subdirectory build
-        env:
-          VITE_BASE_PATH: /macro-nation/
-          VITE_AI_ENABLED: "false"
-        run: npm run build:pages
-
       - name: Install Playwright Chromium
+        id: playwright
         run: npx playwright install --with-deps chromium
+
+      - name: GitHub Pages subdirectory build and portrait E2E
+        run: npm run test:e2e:pages
 
       - name: PWA and accessibility E2E
         run: npm run test:e2e
+
+      - name: Capture mobile layout before and after
+        if: always() && github.event_name == 'pull_request' && steps.playwright.outcome == 'success'
+        env:
+          SCREENSHOT_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/capture-viewport-comparison.mjs
+
+      - name: Upload viewport comparison images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewport-checks
+          path: artifacts/issue-89/
+          if-no-files-found: ignore
+
+      - name: Capture nation motion before and after
+        if: always() && github.event_name == 'pull_request' && steps.playwright.outcome == 'success'
+        env:
+          SCREENSHOT_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/capture-nation-motion.mjs
+
+      - name: Upload nation motion comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nation-motion-comparison
+          path: artifacts/issue-92/
+          if-no-files-found: ignore
+
+      - name: Upload viewport failure screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewport-failures
+          path: |
+            test-results/**/test-failed-*.png
+            test-results/**/error-context.md
+            test-results-pages/**/test-failed-*.png
+            test-results-pages/**/error-context.md
+          if-no-files-found: ignore
+
+      - name: Upload expert portrait review images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expert-portrait-review
+          path: |
+            test-results/**/picker-*.png
+            test-results/**/advice-*.png
+            test-results/**/enlarged-*.png
+            test-results-pages/**/picker-*.png
+            test-results-pages/**/advice-*.png
+          if-no-files-found: ignore
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore

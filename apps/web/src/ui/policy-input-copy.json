@@ -1,0 +1,52 @@
+{
+  "interestRate": {
+    "label": "政策金利（年率・%）",
+    "meaning": "採用後に設定する政策金利の年率です。入力欄の数値は%単位です。",
+    "unit": "%",
+    "basis": "current",
+    "basisLabel": "現在の政策金利",
+    "positive": "引き上げ",
+    "negative": "引き下げ",
+    "equal": "現在の政策金利と同じ設定です。"
+  },
+  "taxPackage": {
+    "label": "税負担の変更幅（ポイント）",
+    "meaning": "個別の税率ではなく、税制パッケージ全体の調整幅です。入力欄の数値はポイント単位です。",
+    "unit": "ポイント",
+    "basis": "reference",
+    "basisLabel": "税負担の変更なしを表す基準",
+    "positive": "増税方向",
+    "negative": "減税方向",
+    "equal": "基準と同じ変更幅です。"
+  },
+  "publicWorks": {
+    "label": "公共事業の追加規模（年間GDP比・%）",
+    "meaning": "年間GDPに対する追加公共投資プログラムの規模です。入力欄の数値は%単位です。",
+    "unit": "%",
+    "basis": "reference",
+    "basisLabel": "追加投資なしを表す基準",
+    "positive": "追加投資を拡大",
+    "negative": "追加投資を縮小",
+    "equal": "基準と同じ追加規模です。"
+  },
+  "tariff": {
+    "label": "関税率（%）",
+    "meaning": "輸入品にかける関税率です。入力欄の数値は%単位です。",
+    "unit": "%",
+    "basis": "reference",
+    "basisLabel": "関税なしを表す基準",
+    "positive": "関税を引き上げ",
+    "negative": "関税を引き下げ",
+    "equal": "基準と同じ関税率です。"
+  },
+  "fxIntervention": {
+    "label": "為替介入の規模（年間GDP比・%）",
+    "meaning": "年間GDPに対する介入規模です。入力欄の数値は%単位です。",
+    "unit": "%",
+    "basis": "reference",
+    "basisLabel": "介入なしを表す基準",
+    "positive": "自国通貨買い・外貨準備を使用",
+    "negative": "自国通貨売り・外貨準備が増加",
+    "equal": "基準と同じ介入規模です。"
+  }
+}

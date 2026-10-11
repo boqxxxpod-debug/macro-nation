@@ -23,6 +23,20 @@ async function replaceCurrentWithCorrupt(factory: IDBFactory) {
 }
 
 describe("IndexedDbGameRepository generations", () => {
+  it("aborts a queued write when its selected game is no longer active", async () => {
+    const repository = new IndexedDbGameRepository(new IDBFactory());
+    const initial = await createGame(repository, "guarded-save");
+    await expect(repository.save(policyStateHash(initial), {
+      ...initial,
+      learningMode: "standard",
+    }, () => false)).rejects.toThrow(/切り替わり/);
+    expect(await repository.load(1)).toEqual(initial);
+    await repository.save(policyStateHash(initial), {
+      ...initial,
+      learningMode: "standard",
+    }, () => true);
+    expect((await repository.load(1))?.learningMode).toBe("standard");
+  });
   it("keeps start commands idempotent and recovers a corrupt current generation", async () => {
     const factory = new IDBFactory();
     const repository = new IndexedDbGameRepository(factory);
@@ -50,7 +64,8 @@ describe("IndexedDbGameRepository generations", () => {
     await replaceCurrentWithCorrupt(factory);
     const recovered = await repository.loadSlot(1);
     expect(recovered.recovered).toBe(true);
-    expect(recovered.reason).toMatch(/破損.*直前/);
+    expect(recovered.reason).toMatch(/読み込めなかった.*直前/);
+    expect(recovered.reason).toContain("進んだ月や政策を確認しましょう");
     expect(recovered.state?.durationMode).toBe("long");
     expect(recovered.state?.difficulty).toBe("standard");
   });

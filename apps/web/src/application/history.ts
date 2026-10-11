@@ -4,6 +4,10 @@ import type {
   HistoryEntry,
   ReviewSnapshot,
 } from "@macro-nation/domain";
+import {
+  causalSourceDisplayName,
+  policyDisplayName,
+} from "@macro-nation/advisor-core";
 
 const categoryOrder: readonly HistoryCategory[] = [
   "policy",
@@ -163,11 +167,73 @@ export function endingHistorySummary(state: GameState): EndingHistorySummary {
 export const HISTORY_CATEGORY_LABELS: Readonly<
   Record<HistoryCategory, string>
 > = {
-  policy: "政策転換",
+  policy: "政策の決定",
   event: "イベント",
   crisis: "危機",
-  review: "5年レビュー",
-  structure: "10年構造更新",
-  social: "強い社会反応",
-  ending: "終幕",
+  review: "5年ごとの振り返り",
+  structure: "10年ごとの国の変化",
+  social: "社会の大きな反応",
+  ending: "運営の終了",
 };
+
+export function policyTypeDisplayName(type: string): string {
+  return policyDisplayName(type);
+}
+
+function eventTitle(id: string, state: GameState): string | undefined {
+  const content = state.configSnapshot?.normalizedConfig.content as
+    { events?: readonly { eventId: string; title: string }[] } | undefined;
+  return content?.events?.find(
+    (event) => id === event.eventId || id.startsWith(`${event.eventId}:`),
+  )?.title;
+}
+
+/** Display labels are rebuilt without replacing the durable history references. */
+export function historyReferenceDisplay(id: string, state: GameState): string {
+  const decision = [
+    ...(state.policies.active ?? []),
+    ...(state.policies.reserved ?? []),
+    ...(state.policies.completed ?? []),
+    ...(state.policies.cancelled ?? []),
+  ].find((policy) => policy.policyId === id || policy.sourceCommandId === id);
+  if (decision) return policyTypeDisplayName(decision.type);
+  const policyName = policyDisplayName(id);
+  if (policyName !== "政策") return policyName;
+  const event = eventTitle(id, state);
+  if (event) return event;
+  if (id === "protect-households") return "家計を支える対応";
+  if (id === "protect-businesses") return "企業を支える対応";
+  if (id === "balanced") return "家計と企業を支える対応";
+  if (/^review:\d+$/.test(id)) return "5年ごとの振り返り";
+  if (/:structure:\d+$/.test(id)) return "10年ごとの国の変化";
+  if (/^crisis:\d+$/.test(id)) return "危機への対応";
+  if (id === "ending:failed") return "危機による運営の終了";
+  if (id === "ending:completed") return "予定の期間を終えた運営";
+  if (/^reaction:\d+:citizens/.test(id)) return "国民の反応";
+  if (/^reaction:\d+:business/.test(id)) return "企業の反応";
+  if (/^reaction:\d+:market/.test(id)) return "市場の反応";
+  return "過去の記録";
+}
+
+/** A causal reference may contain a source-type prefix; its ID stays untouched. */
+export function historyCauseDisplay(ref: string, state: GameState): string {
+  const match = /^(policy|combo|event|external|inertia|random):(.+)$/.exec(ref);
+  const id = match?.[2] ?? ref;
+  const recordedSource = state.history?.reports
+    ?.flatMap((report) => report.topCauses)
+    .find((cause) => cause.sourceId === id);
+  const type = match?.[1] ?? recordedSource?.sourceType;
+  const name = historyReferenceDisplay(id, state);
+  if (type === "policy")
+    return name === "過去の記録" || name === "政策"
+      ? "過去の政策"
+      : `${name}の政策`;
+  if (type === "combo") return "政策の組み合わせ";
+  if (type === "event") {
+    if (name === "過去の記録") return "イベントの影響";
+    return id.endsWith(":preparedness") ? `${name}への備え` : name;
+  }
+  if (type === "external" || type === "random" || type === "inertia")
+    return causalSourceDisplayName(type, id);
+  return name === "過去の記録" ? "経済の変化につながった要因" : name;
+}
