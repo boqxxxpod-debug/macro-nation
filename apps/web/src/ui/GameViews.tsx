@@ -32,6 +32,7 @@ import { PageDeck } from "./PageDeck";
 import { policyConfirmationContent } from "./PolicyConfirmation";
 import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { ExpertPortrait } from "./ExpertPortrait";
+import { TermHelp } from "./TermHelp";
 import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
 import {
@@ -311,7 +312,9 @@ export function Home({
               className={`indicator home-indicator indicator-${assessment}`}
               key={id}
             >
-              <h4>{label(id)}</h4>
+              <h4>
+                <TermHelp termId={id} name={label(id)} />
+              </h4>
               <strong>{display(id, current)}</strong>
               <small>
                 {previous === undefined
@@ -1122,8 +1125,12 @@ export function Preview({
           。新しい政策を加えない場合と比べた中心値です。
         </p>
         <p>
-          <strong>費用：</strong>政治資本 {output.costs.politicalCapital}
-          、実施能力 {output.costs.implementationCapacity}、外貨準備{" "}
+          <strong>費用：</strong>
+          <TermHelp termId="politicalCapital" name="政治資本" />{" "}
+          {output.costs.politicalCapital}、
+          <TermHelp termId="implementationCapacity" name="実施能力" />{" "}
+          {output.costs.implementationCapacity}、
+          <TermHelp termId="foreignReserves" name="外貨準備" />{" "}
           {output.costs.foreignReserves.toFixed(1)}、開始予算{" "}
           {output.costs.immediateBudget}。
         </p>

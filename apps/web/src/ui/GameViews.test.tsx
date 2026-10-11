@@ -28,6 +28,7 @@ import {
   type PolicyFormDraftState,
 } from "./GameViews";
 import { display, label } from "./game-format";
+import termHelpCopy from "./term-help-copy.json";
 
 // Copy projections are tested in full; App and PageDeck tests cover pagination.
 vi.mock("./PageDeck", () => ({
@@ -339,6 +340,94 @@ describe("game screen wording", () => {
     expect(onPreview).not.toHaveBeenCalled();
   });
 
+  it("links all five home values to explanations of their actual units and assessment", () => {
+    const before = structuredClone(initial);
+    render(
+      <Home state={initial} onOpenReport={vi.fn()} onOpenPolicies={vi.fn()} />,
+    );
+    for (const id of [
+      "realHouseholdIncome",
+      "realGdp",
+      "inflation",
+      "unemployment",
+      "policyTrust",
+    ] as const) {
+      const trigger = screen.getByRole("button", {
+        name: `${label(id)}の説明`,
+      });
+      const explanation = document.getElementById(
+        trigger.getAttribute("popovertarget")!,
+      )!;
+      expect(explanation).toHaveAttribute("popover", "auto");
+      expect(explanation).toHaveAccessibleName(label(id));
+      expect(explanation.querySelector("p")).toHaveTextContent(
+        termHelpCopy[id],
+      );
+      expect(
+        trigger.closest("article")?.querySelector("strong"),
+      ).not.toBeNull();
+    }
+    expect(termHelpCopy.realGdp).toContain("成長率そのものではなく");
+    expect(termHelpCopy.inflation).toContain("年率%");
+    expect(termHelpCopy.inflation).toContain("2%への近づき方");
+    expect(initial).toEqual(before);
+  });
+
+  it("links each policy resource cost to its scale without approving or changing the preview", () => {
+    const before = structuredClone(output);
+    const onConfirm = vi.fn();
+    render(
+      <Preview
+        configSnapshot={initial.configSnapshot}
+        output={output}
+        counterfactuals={[]}
+        expertIds={["macro"]}
+        contentVersion={initial.versions.contentVersion}
+        busy={false}
+        onConfirm={onConfirm}
+      />,
+    );
+    const costs = screen.getByText("費用：").closest("p")!;
+    for (const [id, name] of [
+      ["politicalCapital", "政治資本"],
+      ["implementationCapacity", "実施能力"],
+      ["foreignReserves", "外貨準備"],
+    ] as const) {
+      const trigger = within(costs).getByRole("button", {
+        name: `${name}の説明`,
+      });
+      const explanation = document.getElementById(
+        trigger.getAttribute("popovertarget")!,
+      )!;
+      expect(explanation.querySelector("p")).toHaveTextContent(
+        termHelpCopy[id],
+      );
+      fireEvent.click(trigger);
+      fireEvent.click(
+        within(explanation).getByRole("button", { name: "閉じる" }),
+      );
+    }
+    expect(costs).toHaveTextContent(
+      `政治資本 ${output.costs.politicalCapital}`,
+    );
+    expect(costs).toHaveTextContent(
+      `実施能力 ${output.costs.implementationCapacity}`,
+    );
+    expect(costs).toHaveTextContent(
+      `外貨準備 ${output.costs.foreignReserves.toFixed(1)}`,
+    );
+    expect(
+      screen.getByRole("button", { name: "政策を確定する" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    ).not.toBeChecked();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(output).toEqual(before);
+  });
+
   it.each(["paused", "awaitingEvent", "crisisStopped"] as const)(
     "explains the next step for %s on Home",
     (runState) => {
@@ -426,7 +515,9 @@ describe("game screen wording", () => {
       /private-overlap-policy|growth-investment-package|trade-demand-cancellation|snapshot|fixed-shock/,
     );
     expect(
-      screen.getAllByRole("heading").map((element) => element.textContent),
+      within(container)
+        .getAllByRole("heading")
+        .map((element) => element.textContent),
     ).toMatchSnapshot();
     const inflation = preview.indicators.find(
       (indicator) => indicator.indicatorId === "inflation",
