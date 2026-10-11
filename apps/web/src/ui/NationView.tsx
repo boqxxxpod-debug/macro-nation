@@ -646,12 +646,7 @@ export function NationView({
               key={detailPage + (detailPage === "region" ? selected : "")}
               label={detailLabels[detailPage]}
               actions={
-                detailPage === "settings" ? (
-                  <div
-                    className="nation-settings-motion"
-                    ref={setControlsTarget}
-                  />
-                ) : detailPage === "region" || detailPage === "news" ? (
+                detailPage === "region" || detailPage === "news" ? (
                   <button type="button" onClick={onReport}>
                     {detailPage === "region"
                       ? "経済レポートで理由を見る"
@@ -732,6 +727,10 @@ export function NationView({
               {detailPage === "settings" && (
                 <section className="panel nation-settings">
                   <h3>景観の表示</h3>
+                  <div
+                    className="nation-settings-motion"
+                    ref={setControlsTarget}
+                  />
                   <p>
                     画質は自動・高画質・標準・軽量から選べます。自動では端末に合わせて調整します。
                   </p>
