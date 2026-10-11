@@ -96,7 +96,7 @@ describe("saved policy confirmation", () => {
   });
 
   it.each([
-    ["awaitingEvent", "まずホームでイベントへの対応を選んでください"],
+    ["awaitingEvent", "まずイベント対応画面で対応を選んでください"],
     ["crisisStopped", "まず緊急会議で危機への対応を確認してください"],
     ["completed", "運営は終了しています"],
     ["failed", "運営は終了しています"],

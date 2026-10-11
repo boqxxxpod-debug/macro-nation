@@ -77,7 +77,17 @@ function memoryRepository() {
 
 async function click(name: string) {
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name }));
+    const labels: Record<string, string[]> = {
+      政策会議: ["政策会議", "政策を考える"],
+      レポート: ["レポート", "理由を見る"],
+      経済指標: ["経済指標", "経済指標を見る"],
+      国家ビュー: ["国家ビューに戻る"],
+    };
+    const button = (labels[name] ?? [name])
+      .map((label) => screen.queryByRole("button", { name: label }))
+      .find(Boolean);
+    if (!button) throw new Error(`Button not found: ${name}`);
+    fireEvent.click(button);
   });
 }
 async function autoMode() {
@@ -128,10 +138,11 @@ describe("game clock UI", () => {
     await act(async () => {
       render(<App repository={memory.repository} nowMs={() => now} />);
     });
-    expect(screen.getByRole("combobox", { name: "ホームの詳細" })).toHaveValue(
-      "policy",
-    );
-    const policy = screen.getByLabelText("確定した政策の内容");
+    expect(
+      screen.getByRole("dialog", { name: "運営の案内" }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/game/1/nation");
+    const policy = screen.getByRole("dialog", { name: "運営の案内" });
     expect(policy).toHaveTextContent("政策金利（年率・%）：5%");
     expect(policy).toHaveTextContent("開始予定：1月目");
     expect(policy).toHaveTextContent("状態：開始待ち（予約中）");
@@ -154,13 +165,13 @@ describe("game clock UI", () => {
     );
     expect(memory.slots.get(1)?.monthIndex).toBe(confirmed.monthIndex);
     expect(memory.slots.get(1)?.policies).toEqual(confirmed.policies);
-    await click("ホーム");
+    await click("国家ビュー");
     await click("1か月進める");
     expect(memory.slots.get(1)?.monthIndex).toBe(1);
     expect(memory.slots.get(1)?.policies.reserved).toHaveLength(0);
     expect(memory.slots.get(1)?.policies.active).toHaveLength(1);
     expect(memory.slots.get(1)?.policyAdministration?.receipts).toHaveLength(1);
-    const activePolicy = screen.getByLabelText("確定した政策の内容");
+    const activePolicy = screen.getByRole("dialog", { name: "運営の案内" });
     expect(activePolicy).toHaveTextContent("政策金利（年率・%）：5%");
     expect(activePolicy).toHaveTextContent("開始月：1月目。状態：実施中");
     expect(activePolicy).toHaveTextContent(
@@ -182,7 +193,7 @@ describe("game clock UI", () => {
     await act(async () => {
       view = render(<App repository={memory.repository} nowMs={() => now} />);
     });
-    const policy = screen.getByLabelText("確定した政策の内容");
+    const policy = screen.getByRole("dialog", { name: "運営の案内" });
     expect(policy).toHaveTextContent("状態：開始待ち（予約中）");
     expect(policy).toHaveTextContent("時間の進行で「再開」");
     expect(policy).toHaveTextContent("政策の確定や再読込だけでは進みません");
@@ -196,7 +207,7 @@ describe("game clock UI", () => {
     expect(document.querySelector(".game-view > .eyebrow")).toHaveTextContent(
       "自動・停止中 · 政策会議で停止",
     );
-    await click("ホーム");
+    await click("国家ビュー");
     view.unmount();
     now += 900_000;
     await act(async () => {
@@ -236,9 +247,9 @@ describe("game clock UI", () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
     expect(memory.slots.get(1)).toEqual(ticked);
-    expect(screen.getByLabelText("確定した政策の内容")).toHaveTextContent(
-      "状態：実施中",
-    );
+    expect(
+      screen.getByRole("dialog", { name: "運営の案内" }),
+    ).toHaveTextContent("状態：実施中");
   });
 
   it("gives manual-mode recovery guidance when the automatic calculator is unavailable", async () => {
@@ -318,7 +329,7 @@ describe("game clock UI", () => {
     expect(screen.getByLabelText("次の月までの残り時間")).toHaveTextContent(
       "あと 3:00",
     );
-    await click("国家ビュー");
+    await click("経済指標");
     const pause = screen.getByRole("button", { name: "一時停止" });
     pause.focus();
     now += 180_000;
@@ -371,7 +382,7 @@ describe("game clock UI", () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
     expect(memory.attempts).toBe(warningWrites);
-    await click("国家ビュー");
+    await click("経済指標");
     expect(screen.getByText("時刻の調整待ち")).toBeVisible();
     now = anchor;
     await act(async () => {
@@ -405,7 +416,7 @@ describe("game clock UI", () => {
     const release = memory.holdSave();
     await click("政策会議");
     expect(
-      screen.getByRole("heading", { name: "国家ホーム" }),
+      screen.getByRole("heading", { name: "国家ビュー" }),
     ).toBeInTheDocument();
     expect(memory.slots.get(1)?.runState).toBe("running");
     await act(async () => {
@@ -418,7 +429,7 @@ describe("game clock UI", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    await click("ホーム");
+    await click("国家ビュー");
     expect(memory.slots.get(1)?.monthIndex).toBe(0);
     expect(screen.getByRole("button", { name: "再開" })).toBeEnabled();
     await click("再開");
@@ -514,7 +525,7 @@ describe("game clock UI", () => {
     }
   });
 
-  it("returns a direct policy reload to home when its pause cannot be saved", async () => {
+  it("returns a direct policy reload to nation when its pause cannot be saved", async () => {
     const memory = memoryRepository();
     const saved = await createGame(
       memory.repository,
@@ -537,14 +548,14 @@ describe("game clock UI", () => {
       render(<App repository={memory.repository} nowMs={() => 600_000} />);
     });
     expect(
-      screen.getByRole("heading", { name: "国家ホーム" }),
+      screen.getByRole("heading", { name: "国家ビュー" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "見通しを確認" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("保存");
     expect(memory.slots.get(1)?.monthIndex).toBe(0);
-    expect(window.location.pathname).toBe("/game/1");
+    expect(window.location.pathname).toBe("/game/1/nation");
   });
 
   it("stops after a failed save and leaves later timer calls idle", async () => {

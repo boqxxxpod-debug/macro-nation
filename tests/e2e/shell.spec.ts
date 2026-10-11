@@ -90,8 +90,9 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeFocused();
+  await expect(page).toHaveURL(/\/game\/1\/nation$/);
+  await page.getByRole("button", { name: "政策を考える", exact: true }).click();
   await reveal(
     page,
     page.getByRole("spinbutton", { name: "政策金利（年率・%）" }),
@@ -114,13 +115,15 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
     page.getByText("政策を確定し、端末に保存しました。"),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+  await expect(page).toHaveURL(/\/game\/1\/nation$/);
+  await page.getByRole("button", { name: "政策を考える", exact: true }).click();
   // One of the three quarterly slots was consumed; the duplicate was ignored.
   await expect(page.getByText(/残り 2 \/ 3枠/)).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await page.getByRole("button", { name: "1か月進める" }).click();
+  await page.getByRole("button", { name: "経済指標を見る" }).click();
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
     .selectOption({ label: "今月の報告" });
@@ -128,7 +131,10 @@ test("mobile policy journey rejects a duplicate confirmation and persists throug
     page,
     page.getByRole("heading", { name: "今月の3行報告" }).first(),
   );
-  await page.getByRole("button", { name: "レポート", exact: true }).click();
+  await page
+    .getByRole("button", { name: "国家ビューに戻る", exact: true })
+    .click();
+  await page.getByRole("button", { name: "理由を見る", exact: true }).click();
   await reveal(page, page.getByRole("heading", { name: "変化の理由" }).first());
   const hasOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,
@@ -167,10 +173,10 @@ test("keyboard, enlarged text, and reduced motion retain primary actions", async
     page.getByRole("button", { name: "はじめる", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeFocused();
   await expect(page.getByRole("button", { name: "1か月進める" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "政策会議", exact: true }),
+    page.getByRole("button", { name: "政策を考える", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -205,14 +211,22 @@ test("duration, difficulty, learning mode, seed, and slot survive reload", async
     page.getByText("ゲームを開始し、端末に保存しました。"),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
-  await page.getByRole("button", { name: "メニュー", exact: true }).click();
-  await reveal(page, page.getByRole("button", { name: "はじめる・続きから" }));
-  await page.getByRole("button", { name: "はじめる・続きから" }).click();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+  await expect(page).toHaveURL(/\/game\/2\/nation$/);
+  await page.getByRole("button", { name: "保存スロット", exact: true }).click();
   await reveal(page, page.getByText(/20年・240か月・専門・カジュアル/));
   await reveal(page, page.getByRole("button", { name: "保存先2の続きから" }));
   await page.getByRole("button", { name: "保存先2の続きから" }).click();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeFocused();
+  await expect(page).toHaveURL(/\/game\/2\/nation$/);
+  await page.getByRole("button", { name: "経済指標を見る" }).click();
+  await expect(page).toHaveURL(/\/game\/2\/indicators$/);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "経済指標" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "国家ビューに戻る", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/game\/2\/nation$/);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
@@ -233,6 +247,7 @@ test("first playable reaches the 48-month ending without a policy", async ({
     .getByRole("textbox", { name: "再現用コード（任意）" })
     .fill("first-playable-48");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
+  await page.getByRole("button", { name: "経済指標を見る" }).click();
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
     .selectOption({ label: "はじめの案内" });
@@ -240,6 +255,9 @@ test("first playable reaches the 48-month ending without a policy", async ({
     page,
     page.getByRole("heading", { name: "はじめの4四半期・第1回" }).first(),
   );
+  await page
+    .getByRole("button", { name: "国家ビューに戻る", exact: true })
+    .click();
   for (let month = 0; month < 48; month += 1) {
     await page.getByRole("button", { name: "1か月進める" }).click();
     if (month < 47) {
@@ -276,9 +294,11 @@ test("a saved game can advance and reload while offline", async ({
     await navigator.serviceWorker.ready;
   });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await context.setOffline(true);
   await page.getByRole("button", { name: "1か月進める" }).click();
+  await expect(page.getByText(/まで進み、保存しました/)).toBeVisible();
+  await page.getByRole("button", { name: "経済指標を見る" }).click();
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
     .selectOption({ label: "今月の報告" });
@@ -287,7 +307,7 @@ test("a saved game can advance and reload while offline", async ({
     page.getByRole("heading", { name: "今月の3行報告" }).first(),
   );
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "経済指標" })).toBeVisible();
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
     .selectOption({ label: "今月の報告" });
@@ -303,7 +323,6 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
-  await page.getByRole("button", { name: "国家ビュー" }).click();
   await expect(page).toHaveURL(/\/game\/1\/nation$/);
   await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expect(page.locator("img.nation-landscape")).toHaveJSProperty(
@@ -342,7 +361,7 @@ test("nation regions remain accessible with reduced motion and after direct relo
   await expect(
     page.getByRole("button", { name: "地域一覧", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "レポート", exact: true }).click();
+  await page.getByRole("button", { name: "理由を見る", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "経済レポート" }),
   ).toBeVisible();

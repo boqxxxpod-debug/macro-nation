@@ -35,6 +35,9 @@ import {
 import { PageDeck } from "./PageDeck";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
+import { NationMenu } from "./NationMenu";
+import { policyConfirmationContent } from "./PolicyConfirmation";
+import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { migrateFirstPlayableSave } from "../application/save-migration";
 import { display, eventDisplayName, label, period } from "./game-format";
 import { GameClockController } from "../application/game-clock";
@@ -42,7 +45,15 @@ import { selectHomeIndicators } from "../application/home-view";
 import { TimeControls } from "./TimeControls";
 import { clockStatus } from "./time-status";
 
-type Route = "home" | "policies" | "preview" | "report" | "ending" | "nation";
+type Route =
+  | "home"
+  | "policies"
+  | "preview"
+  | "report"
+  | "ending"
+  | "nation"
+  | "events"
+  | "crisis";
 const DIFFICULTY_LABELS = {
   intro: "入門",
   standard: "標準",
@@ -54,7 +65,7 @@ const LEARNING_MODE_LABELS = {
   learning: "学習",
 } as const;
 const NAV_LABELS = {
-  home: "ホーム",
+  home: "経済指標",
   policies: "政策会議",
   report: "レポート",
   nation: "国家ビュー",
@@ -157,19 +168,19 @@ function errorMessage(cause: unknown, context: ErrorContext): string {
   )
     return "保存したゲームが見つかりませんでした。「はじめる・続きから」で保存先を確認してください。";
   if (/終了または危機停止中|運営の終了時や危機への対応中/.test(message))
-    return "運営が終了しているか、危機のため一時停止しています。ホームで状態を確認してください。";
+    return "運営が終了しているか、危機のため一時停止しています。国家ビューで状態を確認してください。";
   if (
     /再開できる危機がありません|いまは危機への対応待ちではありません/.test(
       message,
     )
   )
-    return "いまは危機への対応待ちではありません。ホームで現在の状況を確認しましょう。";
+    return "いまは危機への対応待ちではありません。国家ビューで現在の状況を確認しましょう。";
   if (
     /選択待ちのイベントがありません|いまは対応を選ぶイベントがありません/.test(
       message,
     )
   )
-    return "対応待ちの出来事はありません。ホームで現在の状況を確認しましょう。";
+    return "対応待ちの出来事はありません。国家ビューで現在の状況を確認しましょう。";
   if (
     /イベント記録が見つかりません|対応するイベントの記録を確認できません/.test(
       message,
@@ -217,8 +228,10 @@ function routeFromLocation(): Route {
   if (path.endsWith("/policies")) return "policies";
   if (path.endsWith("/report")) return "report";
   if (path.endsWith("/ending")) return "ending";
-  if (path.endsWith("/nation")) return "nation";
-  return "home";
+  if (path.endsWith("/indicators")) return "home";
+  if (path.endsWith("/events")) return "events";
+  if (path.endsWith("/crisis")) return "crisis";
+  return "nation";
 }
 
 function slotFromLocation(): GameState["slotId"] | null {
@@ -455,18 +468,13 @@ export function App({
         return;
       const base = import.meta.env.BASE_URL;
       const selectedSlot = gameClock?.snapshot.state?.slotId ?? slotId;
-      const suffix =
+      const suffix = `game/${selectedSlot}/${
         next === "home"
-          ? `game/${selectedSlot}`
-          : next === "policies"
-            ? `game/${selectedSlot}/policies`
-            : next === "preview"
-              ? `game/${selectedSlot}/policies/preview`
-              : next === "report"
-                ? `game/${selectedSlot}/report`
-                : next === "nation"
-                  ? `game/${selectedSlot}/nation`
-                  : `game/${selectedSlot}/ending`;
+          ? "indicators"
+          : next === "preview"
+            ? "policies/preview"
+            : next
+      }`;
       window.history[replace ? "replaceState" : "pushState"](
         {},
         "",
@@ -533,6 +541,13 @@ export function App({
             ? (loaded.find((item) => item.id === requestedSlot)?.saved ?? null)
             : (loaded.find((item) => item.saved)?.saved ?? null);
           selectGame(first);
+          if (requestedSlot) setSlotId(requestedSlot);
+          if (first && routeFromLocation() === "nation")
+            window.history.replaceState(
+              {},
+              "",
+              `${import.meta.env.BASE_URL}game/${first.slotId}/nation`,
+            );
           if (
             first &&
             (routeFromLocation() === "policies" ||
@@ -541,11 +556,11 @@ export function App({
             try {
               await gameClock?.pause("policy");
             } catch (cause) {
-              setRoute("home");
+              setRoute("nation");
               window.history.replaceState(
                 {},
                 "",
-                `${import.meta.env.BASE_URL}game/${first.slotId}`,
+                `${import.meta.env.BASE_URL}game/${first.slotId}/nation`,
               );
               throw cause;
             }
@@ -579,11 +594,26 @@ export function App({
       setMenuOpen(false);
       setMessageOpen(false);
       previewClient.current?.cancel();
+      const requestedSlot = slotFromLocation();
+      if (!requestedSlot) {
+        selectGame(null);
+        setRoute("nation");
+        return;
+      }
+      if (gameClock?.snapshot.state?.slotId !== requestedSlot) {
+        const saved = slots.get(requestedSlot) ?? null;
+        selectGame(saved);
+        setSlotId(requestedSlot);
+        if (!saved) {
+          setRoute(routeFromLocation());
+          return;
+        }
+      }
       void navigate(routeFromLocation(), true);
     };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
-  }, [navigate]);
+  }, [navigate, gameClock, selectGame, slots]);
   const activeGameId = state?.gameId;
   useEffect(() => {
     if (!loading && activeGameId)
@@ -703,6 +733,12 @@ export function App({
       }
     }
   }
+  function openSlots() {
+    window.history.pushState({}, "", import.meta.env.BASE_URL);
+    selectGame(null);
+    setMenuOpen(false);
+    setRoute("nation");
+  }
   async function start() {
     if (!repository)
       throw new Error(
@@ -722,7 +758,7 @@ export function App({
     if (selectedSession !== session.current) return;
     selectGame(created);
     setSlots((current) => new Map(current).set(requestedSlot, created));
-    navigate("home");
+    navigate("nation");
     setNotice("ゲームを開始し、端末に保存しました。");
   }
   async function previewDraft(
@@ -856,7 +892,7 @@ export function App({
     confirmationId.current = null;
     setNotice("政策を確定し、端末に保存しました。");
     setPolicyDraft(undefined);
-    navigate("home", true);
+    navigate("nation", true);
   }
 
   const timeControls = state && (
@@ -1055,7 +1091,7 @@ export function App({
                       <button
                         onClick={() => {
                           selectGame(saved);
-                          void navigate("home");
+                          void navigate("nation");
                           void reconcileOffline();
                         }}
                       >
@@ -1160,23 +1196,27 @@ export function App({
         </section>
       ) : (
         <>
-          <nav className="nav" aria-label="ゲーム画面">
-            {(["home", "policies", "report", "nation"] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                aria-label={NAV_LABELS[id]}
-                aria-current={
-                  route === id || (id === "policies" && route === "preview")
-                    ? "page"
-                    : undefined
-                }
-                onClick={() => navigate(id)}
-              >
-                {NAV_LABELS[id]}
-              </button>
-            ))}
-          </nav>
+          {route !== "nation" && (
+            <nav className="nav" aria-label="ゲーム画面">
+              {(["nation", "policies", "home", "report"] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-label={
+                    id === "nation" ? "国家ビューに戻る" : NAV_LABELS[id]
+                  }
+                  aria-current={
+                    route === id || (id === "policies" && route === "preview")
+                      ? "page"
+                      : undefined
+                  }
+                  onClick={() => navigate(id)}
+                >
+                  {NAV_LABELS[id]}
+                </button>
+              ))}
+            </nav>
+          )}
           <div className="game-view">
             {(menuOpen || (route !== "home" && route !== "nation")) && (
               <p
@@ -1213,9 +1253,7 @@ export function App({
                 <h2 tabIndex={-1}>画面メニュー</h2>
                 <button
                   onClick={() => {
-                    selectGame(null);
-                    setPolicyDraft(undefined);
-                    setMenuOpen(false);
+                    openSlots();
                   }}
                 >
                   はじめる・続きから
@@ -1231,120 +1269,143 @@ export function App({
               <>
                 {route === "home" && (
                   <>
-                    <h2 tabIndex={-1}>国家ホーム</h2>
+                    <h2 tabIndex={-1}>経済指標</h2>
                     <Home
                       state={state}
                       timeControls={timeControls}
                       onOpenReport={() => navigate("report")}
                       onOpenPolicies={() => navigate("policies")}
                       response={
-                        state.runState === "crisisStopped" ||
-                        state.runState === "awaitingEvent" ||
-                        state.runState === "completed" ||
-                        state.runState === "failed" ? (
-                          <>
-                            {state.runState === "crisisStopped" && (
-                              <section className="panel crisis">
-                                <h3>緊急会議</h3>
-                                <p>
-                                  危機のため、一時停止しています。政策会議で対策を考え、「危機対応を確認して再開」を選んでください。次の月も危機が続くと、運営が終了します。
-                                </p>
-                                <button onClick={() => navigate("policies")}>
-                                  緊急政策を検討する
-                                </button>{" "}
-                                <button
-                                  disabled={busy}
-                                  onClick={() =>
-                                    void action(async () => {
-                                      const resumed = await gameClock?.mutate(
-                                        (activeRepository, activeSlot) =>
-                                          resumeCrisis(
-                                            activeRepository,
-                                            activeSlot,
-                                          ),
-                                      );
-                                      if (!resumed) return;
-                                      setNotice(
-                                        "危機対応を保存し、再開できる状態になりました。",
-                                      );
-                                    })
-                                  }
-                                >
-                                  危機対応を確認して再開
-                                </button>
-                              </section>
-                            )}
-                            {state.runState === "awaitingEvent" && (
-                              <section
-                                className="panel crisis"
-                                aria-labelledby="event-heading"
-                              >
-                                <h3 id="event-heading">
-                                  突発イベント：対応を選んでください
-                                </h3>
-                                <p>
-                                  出来事の内容：
-                                  {eventDisplayName(
-                                    state.events.pendingChoiceEventId ?? "",
-                                    state,
-                                  )}
-                                  。これまでの備えで軽減できた被害は、すでに反映しています。対応を選ぶと、次の月に進めます。
-                                </p>
-                                <div className="actions">
-                                  {(
-                                    [
-                                      ["protect-households", "家計を優先"],
-                                      ["protect-businesses", "企業を優先"],
-                                      ["balanced", "バランスを取る"],
-                                    ] as const
-                                  ).map(([choiceId, text]) => (
-                                    <button
-                                      key={choiceId}
-                                      disabled={busy}
-                                      onClick={() =>
-                                        void action(async () => {
-                                          const resolved =
-                                            await gameClock?.mutate(
-                                              (activeRepository, activeSlot) =>
-                                                resolveEvent(
-                                                  activeRepository,
-                                                  activeSlot,
-                                                  choiceId,
-                                                ),
-                                            );
-                                          if (!resolved) return;
-                                          setNotice(
-                                            "イベント対応を保存しました。",
-                                          );
-                                        })
-                                      }
-                                    >
-                                      {text}
-                                    </button>
-                                  ))}
-                                </div>
-                              </section>
-                            )}
-                            {(state.runState === "completed" ||
-                              state.runState === "failed") && (
-                              <section className="panel">
-                                <h3>
-                                  {state.runState === "completed"
-                                    ? "予定期間を終えました"
-                                    : "危機で運営が終了しました"}
-                                </h3>
-                                <button
-                                  className="primary"
-                                  onClick={() => navigate("ending")}
-                                >
-                                  終了評価を見る
-                                </button>
-                              </section>
-                            )}
-                          </>
+                        state.runState === "crisisStopped" ? (
+                          <section className="panel crisis">
+                            <h3>危機への対応</h3>
+                            <p>
+                              危機のため一時停止しています。緊急会議で対策と再開を確認してください。
+                            </p>
+                            <button onClick={() => navigate("crisis")}>
+                              緊急会議を開く
+                            </button>
+                          </section>
+                        ) : state.runState === "awaitingEvent" ? (
+                          <section className="panel crisis">
+                            <h3>出来事への対応</h3>
+                            <p>
+                              出来事が起きました。対応を選んでから先に進みましょう。
+                            </p>
+                            <button onClick={() => navigate("events")}>
+                              イベントの対応を選ぶ
+                            </button>
+                          </section>
+                        ) : state.runState === "completed" ||
+                          state.runState === "failed" ? (
+                          <section className="panel">
+                            <h3>
+                              {state.runState === "completed"
+                                ? "予定期間を終えました"
+                                : "危機で運営が終了しました"}
+                            </h3>
+                            <button onClick={() => navigate("ending")}>
+                              終了評価を見る
+                            </button>
+                          </section>
                         ) : undefined
                       }
                     />
+                  </>
+                )}
+                {route === "crisis" && (
+                  <>
+                    <h2 tabIndex={-1}>緊急会議</h2>
+                    <PageDeck label="緊急会議への対応">
+                      {state.runState === "crisisStopped" ? (
+                        <section className="panel crisis">
+                          <p>
+                            危機のため、一時停止しています。政策会議で対策を考え、「危機対応を確認して再開」を選んでください。次の月も危機が続くと、運営が終了します。
+                          </p>
+                          <button onClick={() => navigate("policies")}>
+                            緊急政策を検討する
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void action(async () => {
+                                const resumed = await gameClock?.mutate(
+                                  (activeRepository, activeSlot) =>
+                                    resumeCrisis(activeRepository, activeSlot),
+                                );
+                                if (!resumed) return;
+                                setNotice(
+                                  "危機対応を保存し、再開できる状態になりました。",
+                                );
+                                void navigate("nation");
+                              })
+                            }
+                          >
+                            危機対応を確認して再開
+                          </button>
+                        </section>
+                      ) : (
+                        <p>いまは緊急対応が必要な危機はありません。</p>
+                      )}
+                    </PageDeck>
+                  </>
+                )}
+                {route === "events" && (
+                  <>
+                    <h2 tabIndex={-1}>イベント対応</h2>
+                    <PageDeck label="イベントへの対応">
+                      {state.runState === "awaitingEvent" ? (
+                        <section
+                          className="panel crisis"
+                          aria-labelledby="event-heading"
+                        >
+                          <h3 id="event-heading">
+                            突発イベント：対応を選んでください
+                          </h3>
+                          <p>
+                            出来事の内容：
+                            {eventDisplayName(
+                              state.events.pendingChoiceEventId ?? "",
+                              state,
+                            )}
+                            。これまでの備えで軽減できた被害は、すでに反映しています。対応を選ぶと、次の月に進めます。
+                          </p>
+                          <div className="actions">
+                            {(
+                              [
+                                ["protect-households", "家計を優先"],
+                                ["protect-businesses", "企業を優先"],
+                                ["balanced", "バランスを取る"],
+                              ] as const
+                            ).map(([choiceId, text]) => (
+                              <button
+                                key={choiceId}
+                                disabled={busy}
+                                onClick={() =>
+                                  void action(async () => {
+                                    const resolved = await gameClock?.mutate(
+                                      (activeRepository, activeSlot) =>
+                                        resolveEvent(
+                                          activeRepository,
+                                          activeSlot,
+                                          choiceId,
+                                        ),
+                                    );
+                                    if (!resolved) return;
+                                    setNotice("イベント対応を保存しました。");
+                                    void navigate("nation");
+                                  })
+                                }
+                              >
+                                {text}
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      ) : (
+                        <p>いまは対応を選ぶ必要のあるイベントはありません。</p>
+                      )}
+                    </PageDeck>
                   </>
                 )}
                 {route === "policies" && (
@@ -1443,10 +1504,30 @@ export function App({
                       国家ビュー
                     </h2>
                     <NationView
+                      key={state.gameId}
                       state={state}
                       timeControls={timeControls}
                       onReport={() => navigate("report")}
-                    />
+                      guidanceKey={selectLatestConfirmedPolicy(state)?.policyId}
+                      navigation={
+                        <NationMenu
+                          state={state}
+                          busy={busy}
+                          onPolicies={() => navigate("policies")}
+                          onIndicators={() => navigate("home")}
+                          onReport={() => navigate("report")}
+                          onSlots={openSlots}
+                          onCrisis={() => navigate("crisis")}
+                          onEvents={() => navigate("events")}
+                          onEnding={() => navigate("ending")}
+                        />
+                      }
+                    >
+                      {policyConfirmationContent({
+                        state,
+                        onOpenReport: () => void navigate("report"),
+                      })}
+                    </NationView>
                   </>
                 )}
                 {route === "ending" && (

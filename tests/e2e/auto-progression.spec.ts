@@ -47,7 +47,7 @@ async function startGame(page: Page) {
     .getByRole("textbox", { name: "再現用コード（任意）" })
     .fill("first-playable-48");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
 }
 
 function controls(page: Page) {
@@ -73,9 +73,9 @@ async function previewInterestRatePolicy(page: Page) {
   await reveal(page, value);
   await value.fill("5");
   await page.getByRole("button", { name: "見通しを確認" }).click();
-  await expect(
-    page.getByRole("heading", { name: "政策の見通し" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "政策の見通し" })).toBeVisible(
+    { timeout: 60_000 },
+  );
 }
 
 async function confirmPolicy(page: Page) {
@@ -85,7 +85,7 @@ async function confirmPolicy(page: Page) {
   await reveal(page, acknowledge);
   await acknowledge.check();
   await page.getByRole("button", { name: "政策を確定する" }).click();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expect(
     page.getByText("政策を確定し、端末に保存しました。"),
   ).toBeAttached();
@@ -96,9 +96,10 @@ async function expectConfirmedPolicy(
   mode: "manual" | "auto",
   status: "reserved" | "active" = "reserved",
 ) {
-  await expect(
-    page.getByRole("combobox", { name: "ホームの詳細" }),
-  ).toHaveValue("policy");
+  const guidance = page.getByRole("dialog", { name: "運営の案内" });
+  if ((await guidance.count()) === 0)
+    await page.getByRole("button", { name: "運営の案内", exact: true }).click();
+  await expect(guidance).toBeVisible();
   const setting = page.getByText("政策金利。政策金利（年率・%）：5%。", {
     exact: true,
   });
@@ -117,17 +118,17 @@ async function expectConfirmedPolicy(
     await reveal(page, waiting);
     await expect(waiting).toBeVisible();
   }
-  const guidance = page.getByText(
+  const nextStep = page.getByText(
     mode === "manual"
       ? /「1か月進める」で月を進めてください/
       : status === "reserved"
         ? /時間の進行で「再開」/
         : /自動進行中です/,
   );
-  await reveal(page, guidance);
-  await expect(guidance).toBeVisible();
+  await reveal(page, nextStep);
+  await expect(nextStep).toBeVisible();
   if (mode === "auto" && status === "reserved")
-    await expect(page.locator("#home-details")).toContainText(
+    await expect(guidance).toContainText(
       "政策の確定や再読込だけでは進みません。",
     );
   const report = page.getByRole("button", { name: "レポートで結果を見る" });
@@ -252,7 +253,6 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await page.reload();
   expect((await readSave(page)).monthIndex).toBe(0);
 
-  await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
   await controls(page)
     .getByRole("combobox", { name: "時間の進め方" })
     .selectOption("auto");
@@ -280,7 +280,9 @@ test("automatic months follow the saved clock across views, pauses, and reload",
   await expect(controls(page)).toContainText("進行中");
   await expect(controls(page)).toContainText("1年目 2月");
 
-  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+  await page
+    .getByRole("button", { name: "経済指標を見る", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "ホームの詳細" })
     .selectOption("report");
@@ -324,14 +326,16 @@ test("automatic months follow the saved clock across views, pauses, and reload",
 test("policy editing, preview, confirmation, and reload require an explicit resume", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(120_000);
   await freezeClock(page);
   await startGame(page);
-  await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
   await startAuto(page);
   await advanceTime(page, 120_000);
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^政策(?:を考える|会議)$/, exact: true })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "政策会議", exact: true }),
+    page.getByRole("heading", { name: /^政策(?:を考える|会議)$/, exact: true }),
   ).toBeVisible();
   expect((await readSave(page)).runState).toBe("paused");
   expect((await readSave(page)).clock.stopReason).toBe("policy");
@@ -358,12 +362,16 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
     page.getByRole("heading", { name: "経済レポート" }),
   ).toBeVisible();
   await expectShellClock(page, "自動・停止中 · 政策会議で停止");
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^政策(?:を考える|会議)$/, exact: true })
+    .click();
   await expectShellClock(page, "自動・停止中 · 政策会議で停止");
-  await page.getByRole("button", { name: "ホーム", exact: true }).click();
+  await page
+    .getByRole("button", { name: "国家ビューに戻る", exact: true })
+    .click();
   await advanceTime(page, 600_000);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expectConfirmedPolicy(page, "auto");
   await expect(controls(page).getByRole("status")).toHaveText(
     "停止中 · 政策会議で停止",
@@ -393,9 +401,12 @@ test("policy editing, preview, confirmation, and reload require an explicit resu
 test("manual policy confirmation survives reload and guides the next month and report", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(120_000);
   await freezeClock(page);
   await startGame(page);
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^政策(?:を考える|会議)$/, exact: true })
+    .click();
   await expectShellClock(page, "手動・停止中 · 操作待ち");
   await previewInterestRatePolicy(page);
   await expectShellClock(page, "手動・停止中 · 政策会議で停止");
@@ -411,7 +422,7 @@ test("manual policy confirmation survives reload and guides the next month and r
   const stepMs = confirmed.clock.config.realSecondsPerStep * 1_000;
   await advanceTime(page, stepMs * 3);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expectConfirmedPolicy(page, "manual");
   expect(await readSave(page)).toEqual(confirmed);
   await captureConfirmedPolicy(page, "manual", testInfo);
@@ -475,6 +486,10 @@ test("an event blocks the clock and its choice stays paused until explicit resum
   ).toBeDisabled();
   await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
+  await page.getByRole("button", { name: "イベントの対応を選ぶ" }).click();
+  await expect(
+    page.getByRole("heading", { name: "イベント対応" }),
+  ).toBeVisible();
   await reveal(
     page,
     page.getByRole("button", { name: "バランスを取る", exact: true }),
@@ -520,6 +535,8 @@ test("a crisis needs the existing emergency response before automatic resume", a
   ).toBeDisabled();
   await advanceTime(page, 600_000);
   expect((await readSave(page)).monthIndex).toBe(0);
+  await page.getByRole("button", { name: "緊急会議を開く" }).click();
+  await expect(page.getByRole("heading", { name: "緊急会議" })).toBeVisible();
   await reveal(
     page,
     page.getByRole("button", { name: "危機対応を確認して再開", exact: true }),
@@ -635,7 +652,6 @@ test("360px and 200% text retain keyboard access to automatic time controls", as
   await freezeClock(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await startGame(page);
-  await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });

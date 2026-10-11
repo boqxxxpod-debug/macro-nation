@@ -43,7 +43,7 @@ async function reveal(page: Page, target: Locator) {
 async function openPreview(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await page.getByRole("button", { name: "政策を考える", exact: true }).click();
   await setRateAndPreview(page, "5");
 }
 
@@ -323,9 +323,11 @@ for (const viewport of VIEWPORTS) {
         page.getByText("政策を確定し、端末に保存しました。"),
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "国家ホーム" }),
+        page.getByRole("heading", { name: "国家ビュー" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "政策会議", exact: true }).click();
+      await page
+        .getByRole("button", { name: "政策を考える", exact: true })
+        .click();
       await expect(page.getByText(/残り 2 \/ 3枠/)).toBeVisible();
     });
   });

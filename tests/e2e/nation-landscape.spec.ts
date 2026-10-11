@@ -156,9 +156,8 @@ test("four confirmed landscapes share terrain and stable plots", async ({
     await seedLandscape(page, original, [1, ...Array(9).fill(fixture.ratio)]);
     await page.goto(homeUrl);
     await expect(
-      page.getByRole("heading", { name: "国家ホーム" }),
+      page.getByRole("heading", { name: "国家ビュー" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
     await expect(page.locator(".nation-structures")).toBeVisible();
     const scene = page.locator(".nation-scene");
     const screenshot = testInfo.outputPath(`nation-${fixture.name}.png`);
@@ -270,7 +269,6 @@ test("a short slump changes operation before buildings and recovery uses the sam
   for (const example of cases) {
     await seedLandscape(page, original, example.ratios);
     await page.goto(homeUrl);
-    await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
     const city = page.locator("[data-structure^='city-']");
     await expect(city).toHaveCount(example.count);
     await expect(city.first()).toHaveAttribute("data-status", example.status);

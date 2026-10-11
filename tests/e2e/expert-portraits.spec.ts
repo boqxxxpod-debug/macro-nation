@@ -91,8 +91,8 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
 async function openMeeting(page: Page, baseURL: string | undefined) {
   await page.goto(baseURL ?? "/");
   await page.getByRole("button", { name: "はじめる", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
-  await page.getByRole("button", { name: "政策会議", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeFocused();
+  await page.getByRole("button", { name: "政策を考える", exact: true }).click();
   await expect(page.getByRole("heading", { name: "政策会議" })).toBeFocused();
   await waitForPageLayout(page);
 }
@@ -531,7 +531,7 @@ test("360px and 200% text retain keyboard selection, identity and confirmation",
   await expectLayout(page, confirm, true);
   await confirm.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "国家ホーム" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeFocused();
 });
 
 test("production precache serves every 1x and 2x portrait offline without repeated transfers", async ({

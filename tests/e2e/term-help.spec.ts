@@ -132,7 +132,11 @@ for (const viewport of VIEWPORTS) {
       await page.goto("/");
       await page.getByRole("button", { name: "はじめる", exact: true }).click();
       await expect(
-        page.getByRole("heading", { name: "国家ホーム" }),
+        page.getByRole("heading", { name: "国家ビュー" }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "経済指標を見る" }).click();
+      await expect(
+        page.getByRole("heading", { name: "経済指標", exact: true }),
       ).toBeVisible();
       await waitForPageLayout(page);
       const values = await page
@@ -212,7 +216,9 @@ for (const viewport of VIEWPORTS) {
     }, testInfo) => {
       await page.goto("/");
       await page.getByRole("button", { name: "はじめる", exact: true }).click();
-      await page.getByRole("button", { name: "政策会議", exact: true }).click();
+      await page
+        .getByRole("button", { name: "政策を考える", exact: true })
+        .click();
       const rate = page.getByRole("spinbutton", {
         name: "政策金利（年率・%）",
       });

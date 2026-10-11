@@ -266,15 +266,34 @@ async function journey(variant, project) {
     await seed.fill("issue-89-viewport-comparison");
     await page.getByRole("button", { name: copy.start, exact: true }).click();
     await page
-      .getByRole("heading", { name: "国家ホーム", exact: true })
+      .getByRole("heading", { name: /^(国家ホーム|国家ビュー)$/, exact: true })
       .waitFor();
+    if (
+      await page
+        .getByRole("heading", { name: "国家ビュー", exact: true })
+        .isVisible()
+    ) {
+      await page
+        .getByRole("button", { name: "経済指標を見る", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "経済指標", exact: true })
+        .waitFor();
+    }
     await capture(page, variant, "home");
-    await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
+    await page
+      .getByRole("button", {
+        name: /^(国家ビュー|国家ビューに戻る)$/,
+        exact: true,
+      })
+      .click();
     await page
       .getByRole("heading", { name: "国家ビュー", exact: true })
       .waitFor();
     await capture(page, variant, "nation");
-    await page.getByRole("button", { name: "政策会議", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^(政策会議|政策を考える)$/, exact: true })
+      .click();
     const value = page.getByRole("spinbutton", {
       name: copy.policyRate,
       exact: true,

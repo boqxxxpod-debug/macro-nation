@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<PolicyDecision["status"], string> = {
 
 function nextStep(state: GameState): string {
   if (state.runState === "awaitingEvent")
-    return "まずホームでイベントへの対応を選んでください。対応後に、時間の進行を操作できます。";
+    return "まずイベント対応画面で対応を選んでください。対応後に、時間の進行を操作できます。";
   if (state.runState === "crisisStopped")
     return "まず緊急会議で危機への対応を確認してください。対応後に、時間の進行を操作できます。";
   if (state.runState === "completed" || state.runState === "failed")

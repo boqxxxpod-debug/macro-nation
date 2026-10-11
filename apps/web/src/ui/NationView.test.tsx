@@ -36,6 +36,27 @@ async function game() {
 }
 
 describe("NationView detail navigation", () => {
+  it("closes policy guidance when switching to a game without a confirmed policy", async () => {
+    const state = await game();
+    const onReport = vi.fn();
+    const view = render(
+      <NationView
+        state={state}
+        onReport={onReport}
+        guidanceKey="confirmed-policy"
+      >
+        <p>確定した政策の案内</p>
+      </NationView>,
+    );
+    expect(screen.getByRole("dialog", { name: "運営の案内" })).toBeVisible();
+    view.rerender(<NationView state={state} onReport={onReport} />);
+    expect(
+      screen.queryByRole("dialog", { name: "運営の案内" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /港湾の様子を見る/ }),
+    ).toBeVisible();
+  });
   it("keeps five primary indicators visible and returns focus to the selected region", async () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
       window.setTimeout(() => callback(0), 0),

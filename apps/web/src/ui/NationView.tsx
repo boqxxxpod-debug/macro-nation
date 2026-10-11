@@ -392,18 +392,31 @@ function regionDetails({
 export function NationView({
   state,
   timeControls,
+  navigation,
+  guidanceKey,
   onReport,
+  children,
 }: {
   state: GameState;
   timeControls?: ReactNode;
+  navigation?: ReactNode;
+  guidanceKey?: string | undefined;
   onReport(): void;
+  children?: ReactNode;
 }) {
   const model = useMemo(() => selectNationView(state), [state]);
   const [selected, setSelected] = useState<RegionId>("city");
   const [artFailed, setArtFailed] = useState(false);
   const [artLoaded, setArtLoaded] = useState(false);
-  type DetailPage = "region" | "regions" | "news" | "voices" | "settings";
-  const [detailPage, setDetailPage] = useState<DetailPage | null>(null);
+  type DetailPage =
+    "region" | "regions" | "news" | "voices" | "settings" | "guidance";
+  const [detailPage, setDetailPage] = useState<DetailPage | null>(
+    guidanceKey ? "guidance" : null,
+  );
+  useEffect(() => {
+    if (guidanceKey) setDetailPage("guidance");
+    else setDetailPage((current) => (current === "guidance" ? null : current));
+  }, [guidanceKey]);
   const detailsOpen = detailPage !== null;
   const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(
     null,
@@ -449,7 +462,7 @@ export function NationView({
       : null;
   const scenario = state.configSnapshot.normalizedConfig.scenario as
     { durationMonths?: number } | undefined;
-  const duration = scenario?.durationMonths ?? 48;
+  const duration = state.clock.endMonth ?? scenario?.durationMonths ?? 48;
   const progress = Math.min(100, Math.round((model.month / duration) * 100));
   const cards = selectHomeIndicators(state);
   const detailLabels: Record<DetailPage, string> = {
@@ -458,6 +471,7 @@ export function NationView({
     news: "今月のニュース",
     voices: "この国の声",
     settings: "表示設定",
+    guidance: "運営の案内",
   };
   const stages = Object.fromEntries(
     REGION_IDS.map((id) => [id, model.regions[id].stage]),
@@ -465,7 +479,7 @@ export function NationView({
   const structures = REGION_IDS.flatMap((id) => model.regions[id].structures);
 
   return (
-    <div className="nation-view">
+    <div className="nation-view" data-details-open={detailsOpen}>
       {timeControls}
       <header className="nation-masthead">
         <div className="nation-brand">
@@ -635,11 +649,13 @@ export function NationView({
                   setDetailPage(event.target.value as DetailPage)
                 }
               >
-                {Object.entries(detailLabels).map(([page, name]) => (
-                  <option key={page} value={page}>
-                    {name}
-                  </option>
-                ))}
+                {Object.entries(detailLabels)
+                  .filter(([page]) => page !== "guidance" || children)
+                  .map(([page, name]) => (
+                    <option key={page} value={page}>
+                      {name}
+                    </option>
+                  ))}
               </select>
             </label>
             <PageDeck
@@ -655,6 +671,7 @@ export function NationView({
                 ) : undefined
               }
             >
+              {detailPage === "guidance" && children}
               {detailPage === "region" &&
                 regionDetails({ region: model.regions[selected], state })}
               {detailPage === "regions" && (
@@ -752,8 +769,19 @@ export function NationView({
       <div
         className="nation-overview-actions"
         aria-label="国家ビューの詳細"
+        data-guidance={Boolean(children)}
         hidden={detailsOpen}
       >
+        {children && (
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="nation-detail-screen"
+            onClick={(event) => openDetails("guidance", event.currentTarget)}
+          >
+            運営の案内
+          </button>
+        )}
         <button
           ref={overviewRef}
           type="button"
@@ -788,6 +816,7 @@ export function NationView({
           表示設定
         </button>
       </div>
+      {navigation}
     </div>
   );
 }

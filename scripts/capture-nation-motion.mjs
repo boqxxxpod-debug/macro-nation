@@ -104,6 +104,9 @@ async function openNation(page, url) {
   await page
     .getByRole("button", { name: /^(はじめる|ゲームを始める)$/ })
     .click();
+  await page
+    .getByRole("heading", { name: /^(国家ホーム|国家ビュー)$/, exact: true })
+    .waitFor();
   const heading = page.getByRole("heading", {
     name: "国家ビュー",
     exact: true,
