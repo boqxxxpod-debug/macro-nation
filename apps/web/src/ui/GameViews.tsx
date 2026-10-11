@@ -29,6 +29,8 @@ import {
 import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
 import { PageDeck } from "./PageDeck";
+import { policyConfirmationContent } from "./PolicyConfirmation";
+import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { ExpertPortrait } from "./ExpertPortrait";
 import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
@@ -127,13 +129,25 @@ export function Home({
             ? `気になる兆候が${state.events.warnings!.length}件あります。`
             : "今のところ、大きな危機の兆候はありません。";
   const hasResponse = !!response;
-  const [detail, setDetail] = useState(hasResponse ? "response" : "cause");
+  const latestPolicy = selectLatestConfirmedPolicy(state);
+  const latestPolicyId = latestPolicy?.policyId;
+  const [detail, setDetail] = useState(
+    hasResponse ? "response" : latestPolicy ? "policy" : "cause",
+  );
   useEffect(() => {
-    setDetail(hasResponse ? "response" : "cause");
-  }, [hasResponse]);
+    setDetail(hasResponse ? "response" : latestPolicyId ? "policy" : "cause");
+  }, [hasResponse, latestPolicyId]);
   const details: Record<string, { title: string; content: ReactNode }> = {
     ...(hasResponse
       ? { response: { title: "危機や出来事への対応", content: response } }
+      : {}),
+    ...(latestPolicy
+      ? {
+          policy: {
+            title: "確定した政策",
+            content: policyConfirmationContent({ state, onOpenReport }),
+          },
+        }
       : {}),
     report: {
       title: "今月の報告",

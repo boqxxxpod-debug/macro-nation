@@ -1188,17 +1188,8 @@ export function App({
               >
                 {period(state)}・第{Math.floor(state.monthIndex / 3) + 1}
                 四半期・
-                {state.runState === "crisisStopped"
-                  ? "危機対応で一時停止"
-                  : state.runState === "awaitingEvent"
-                    ? "イベント対応待ち"
-                    : state.runState === "completed"
-                      ? "予定期間を終了"
-                      : state.runState === "failed"
-                        ? "危機で終了"
-                        : busy
-                          ? "計算中"
-                          : "運営中"}
+                {state.clock.progressionMode === "auto" ? "自動" : "手動"}・
+                {clockStatus(state, busy)}
               </p>
             )}
             {menuOpen ? (

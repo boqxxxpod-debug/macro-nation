@@ -49,7 +49,7 @@ export function TimeControls({
       <div className="time-controls-summary">
         <strong>{period(state)}</strong>
         <span>{mode === "auto" ? "自動" : "手動"}</span>
-        <p role="status">{busy ? "計算・保存中" : clockStatus(state)}</p>
+        <p role="status">{clockStatus(state, busy)}</p>
         <p aria-label="次の月までの残り時間" aria-live="off">
           次の月まで あと {remainingTime(remainingMs)}
           {mode === "manual" && <small>手動操作で進みます</small>}

@@ -1,8 +1,9 @@
-import type { GameState } from "@macro-nation/domain";
+import type { ClockStopReason, GameState } from "@macro-nation/domain";
+import { isAutomaticRunning } from "../application/clock-adapter";
 
-const STOP_LABELS: Record<string, string> = {
+const STOP_LABELS: Record<ClockStopReason, string> = {
   manual: "操作待ち",
-  policy: "政策を検討中",
+  policy: "政策会議で停止",
   event: "イベントの選択待ち",
   crisis: "危機への対応待ち",
   error: "計算・保存エラー",
@@ -12,8 +13,9 @@ const STOP_LABELS: Record<string, string> = {
   tutorial: "説明を確認中",
 };
 
-export function clockStatus(state: GameState): string {
-  if (state.runState === "running")
+export function clockStatus(state: GameState, busy = false): string {
+  if (busy || state.runState === "calculating") return "計算・保存中";
+  if (isAutomaticRunning(state))
     return state.clock.warning === "CLOCK_MOVED_BACKWARD"
       ? "時刻の調整待ち"
       : "進行中";
