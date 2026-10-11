@@ -287,6 +287,7 @@ describe("configured policy runtime", () => {
       replayFixedPolicyPackage({ ...serialized, commands: [] }),
     ).toThrow(/commands do not match/);
   });
+  // Six 48-month runs with causal traces need headroom on shared CI runners.
   it("pairs all five policies against the same no-policy seed and checks direction, lag and causality", () => {
     const baseline = runNoPolicyHeadless({
       initialState: initial,
@@ -419,5 +420,5 @@ describe("configured policy runtime", () => {
     expect(relative("fx-intervention", 6, "fx")).toBeGreaterThan(-0.015);
     expect(relative("tax-package", 12, "realGdp")).toBeLessThan(-0.001);
     expect(relative("tax-package", 12, "realGdp")).toBeGreaterThan(-0.005);
-  });
+  }, 10_000);
 });

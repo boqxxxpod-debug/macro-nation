@@ -1606,7 +1606,7 @@ label select {
   flex-direction: column;
   min-height: 0;
   flex: 1 1 0;
-  gap: 4px;
+  gap: 2px;
 }
 .home-warning {
   margin: 0;
@@ -1620,14 +1620,15 @@ label select {
 }
 .home-indicators {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
 }
 .home-indicator {
   display: grid;
-  grid-template-columns: minmax(4.5rem, 1fr) minmax(4.5rem, 1fr) 1.2fr;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name value" "name change";
   align-items: center;
-  padding: 2px 6px;
+  padding: 0 6px;
   border-width: 1px 1px 1px 4px;
   border-radius: 0.4rem;
   min-height: 26px;
@@ -1639,15 +1640,64 @@ label select {
   margin: 0;
 }
 .home-indicator h4 {
+  grid-area: name;
   font-size: 0.875rem;
 }
 .home-indicator strong {
+  grid-area: value;
+  align-self: end;
   font-size: 1rem;
   line-height: 1.2;
 }
 .home-indicator small {
+  grid-area: change;
+  align-self: start;
   font-size: 0.75rem;
   line-height: 1.2;
+}
+.term-help-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.term-help-button::after {
+  content: "?";
+  display: inline-block;
+  margin-left: 3px;
+  color: #3b5a60;
+}
+.term-help-popover {
+  inset: auto 0 max(8px, env(safe-area-inset-bottom));
+  width: min(30rem, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 12px;
+  border: 2px solid #3b5a60;
+  border-radius: 0.85rem;
+  color: #172a33;
+  background: #fffefb;
+  box-shadow: 0 4px 24px rgb(21 49 48 / 20%);
+}
+.term-help-popover h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.term-help-popover p {
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
+.term-help-popover button {
+  display: block;
+  margin-left: auto;
 }
 .detail-selector,
 .nation-detail-selector {
@@ -1931,6 +1981,7 @@ label select {
 }
 .viewport-shell.enlarged-text .home-indicator {
   grid-template-columns: 1fr;
+  grid-template-areas: "name" "value" "change";
 }
 .viewport-shell.enlarged-text .home-actions {
   grid-template-columns: 1fr;

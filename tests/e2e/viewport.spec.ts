@@ -622,7 +622,19 @@ for (const viewport of VIEWPORTS) {
       // Preserve the focus a player has while switching detail screens.
       await details.focus();
       await details.selectOption({ label });
+      const quality =
+        label === "表示設定"
+          ? page.getByRole("combobox", { name: "景観の画質" })
+          : null;
+      if (quality) {
+        await expect(quality).toBeVisible();
+        await quality.selectOption("low");
+      }
       await inspectPages(page);
+      if (quality) {
+        await reach(page, quality);
+        await expect(quality).toHaveValue("low");
+      }
     }
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
