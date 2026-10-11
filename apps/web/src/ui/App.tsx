@@ -1430,6 +1430,7 @@ export function App({
                     <h2 tabIndex={-1}>政策の見通し</h2>
                     <Preview
                       output={preview}
+                      configSnapshot={state.configSnapshot}
                       counterfactuals={counterfactuals}
                       expertIds={previewExpertIds}
                       contentVersion={state.versions.contentVersion}

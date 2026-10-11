@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { GameState } from "@macro-nation/domain";
+import type { ConfigSnapshot, GameState } from "@macro-nation/domain";
 import { percentRate, scorePoint, stockLevel } from "@macro-nation/domain";
 import {
   expertPortraitManifest,
@@ -19,7 +19,7 @@ import { PreviewClient } from "../infrastructure/preview-client";
 import type { PreviewOutput } from "../application/policy-view";
 import { createGame } from "../application/game-service";
 import { learningEntriesForReport } from "../application/learning";
-import { createReservedPolicy } from "../application/policy-view";
+import { createReservedPolicy, policyRules } from "../application/policy-view";
 import {
   Home,
   PolicyForm,
@@ -27,7 +27,7 @@ import {
   Report,
   type PolicyFormDraftState,
 } from "./GameViews";
-import { display } from "./game-format";
+import { display, label } from "./game-format";
 
 // Copy projections are tested in full; App and PageDeck tests cover pagination.
 vi.mock("./PageDeck", () => ({
@@ -413,6 +413,7 @@ describe("game screen wording", () => {
     const before = structuredClone(preview);
     const { container, rerender } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -448,6 +449,7 @@ describe("game screen wording", () => {
     expect(onConfirm).toHaveBeenCalledOnce();
     rerender(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -459,12 +461,309 @@ describe("game screen wording", () => {
     expect(
       screen.getByRole("button", { name: "政策を保存しています…" }),
     ).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "政策を保存しています…" }),
+    );
+    expect(onConfirm).toHaveBeenCalledOnce();
     expect(preview).toEqual(before);
   });
+
+  it("places the decision summary and combination warnings before acknowledgement while preserving the detailed views", () => {
+    const preview: PreviewOutput = {
+      ...output,
+      activationMonth: 3,
+      primaryEffects: [
+        { ...output.primaryEffects[0]!, startMonth: 9 },
+        {
+          ...output.primaryEffects[0]!,
+          effectId: "earlier-effect",
+          startMonth: 5,
+        },
+      ],
+      sideEffects: [{ ...output.sideEffects[0]!, startMonth: 8 }],
+      indicators: output.indicators.map((indicator) => ({
+        ...indicator,
+        month12: {
+          ...indicator.month12,
+          deltaBase:
+            indicator.indicatorId === "realGdp"
+              ? 1.27
+              : indicator.indicatorId === "inflation"
+                ? 0.003
+                : indicator.indicatorId === "unemployment"
+                  ? -0.007
+                  : indicator.month12.deltaBase,
+        },
+      })),
+      summaries: output.summaries.map((summary) =>
+        summary.indicatorId === "realGdp" && summary.horizonMonths === 12
+          ? { ...summary, peakMonth: 7, endDelta: 98 }
+          : summary,
+      ),
+      costs: {
+        politicalCapital: 17,
+        implementationCapacity: 23,
+        foreignReserves: 4.5,
+        immediateBudget: 31,
+      },
+      interactions: ["overlapping-policy-1", "overlapping-policy-2"],
+      comboResults: [
+        {
+          ...output.comboResults[0]!,
+          activated: false,
+          reason: "insufficient-additional-cost",
+          additionalCosts: {
+            politicalCapital: 19,
+            implementationCapacity: 11,
+            foreignReserves: 3,
+            immediateBudget: 7,
+          },
+        },
+      ],
+      uncertainty: {
+        ...output.uncertainty,
+        note: "外部需要の変化によって効果の幅が変わります。",
+      },
+    };
+    const before = structuredClone(preview);
+    render(
+      <Preview
+        configSnapshot={initial.configSnapshot}
+        output={preview}
+        counterfactuals={[]}
+        expertIds={["macro"]}
+        contentVersion={initial.versions.contentVersion}
+        busy={false}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const summary = screen.getByRole("region", { name: "判断の要点" });
+    expect(
+      screen.getByRole("heading", { name: "判断の要点" }),
+    ).toBeInTheDocument();
+    const timing = within(summary).getByText("時期：").closest("p")!;
+    expect(timing).toHaveTextContent("4月目");
+    expect(timing).toHaveTextContent("6月目");
+    expect(timing).toHaveTextContent("7か月後");
+    const differences = within(summary)
+      .getByText("現状維持との差（1年後）：")
+      .closest("p")!;
+    expect(differences).toHaveTextContent(`${label("realGdp")} +1.3`);
+    expect(differences).toHaveTextContent(`${label("inflation")} +0.3%`);
+    expect(differences).toHaveTextContent(`${label("unemployment")} -0.7%`);
+    const costs = within(summary).getByText("費用：").closest("p")!;
+    expect(costs).toHaveTextContent("政治資本 17");
+    expect(costs).toHaveTextContent("実施能力 23");
+    expect(costs).toHaveTextContent("外貨準備 4.5");
+    expect(costs).toHaveTextContent("開始予算 31");
+    expect(
+      within(summary).getByText("副作用：").closest("p"),
+    ).toHaveTextContent(label(preview.sideEffects[0]!.targetPath));
+    const uncertainty = within(summary).getByText("不確実性：").closest("p")!;
+    for (const driver of preview.uncertainty.majorDrivers) {
+      expect(uncertainty).toHaveTextContent(label(driver));
+    }
+    expect(
+      within(summary).getByText(preview.uncertainty.note),
+    ).toBeInTheDocument();
+    expect(
+      within(summary).getByText(/同じ種類の政策が2件あります/),
+    ).toBeInTheDocument();
+    const combination = screen.getByRole("region", {
+      name: "政策の組み合わせ",
+    });
+    expect(combination).toHaveTextContent(
+      "組み合わせの追加費用が足りません（政策自体は確定できます）",
+    );
+    expect(combination).toHaveTextContent(
+      "追加費用：政治資本 19、実施能力 11、外貨準備 3、予算 7",
+    );
+    const acknowledgement = screen.getByRole("checkbox", {
+      name: "費用・副作用・警告を確認しました",
+    });
+    const details = screen.getByRole("heading", {
+      name: "新しい政策を加えない場合との12か月比較",
+    });
+    const forecast = screen.getByRole("region", { name: "1年・5年の見通し" });
+    const alternatives = screen.getByRole("region", {
+      name: "別の政策を選んだら",
+    });
+    const advice = screen.getByRole("region", { name: "選択した専門家の解説" });
+    for (const [earlier, later] of [
+      [summary, combination],
+      [combination, acknowledgement],
+      [acknowledgement, details],
+      [details, forecast],
+      [forecast, alternatives],
+      [alternatives, advice],
+    ]) {
+      expect(
+        earlier!.compareDocumentPosition(later!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    expect(preview).toEqual(before);
+  });
+
+  it.each([
+    ["interest-rate", 0.05, "政策金利（年率・%）", "5%"],
+    ["tax-package", -0.03, "税負担の変更幅（ポイント）", "-3ポイント"],
+    ["public-works", 0.04, "公共事業の追加規模（年間GDP比・%）", "4%"],
+    ["tariff", 0.25, "関税率（%）", "25%"],
+    ["fx-intervention", -0.02, "為替介入の規模（年間GDP比・%）", "-2%"],
+  ] as const)(
+    "shows the %s draft in its input units in the decision summary",
+    (ruleId, value, settingLabel, settingValue) => {
+      const preview: PreviewOutput = {
+        ...output,
+        previewedDraft: { ...output.previewedDraft!, ruleId, value },
+      };
+      const before = structuredClone(preview);
+      render(
+        <Preview
+          configSnapshot={initial.configSnapshot}
+          output={preview}
+          counterfactuals={[]}
+          expertIds={["macro"]}
+          contentVersion={initial.versions.contentVersion}
+          busy={false}
+          onConfirm={vi.fn()}
+        />,
+      );
+      const summary = screen.getByRole("region", { name: "判断の要点" });
+      const policy = within(summary).getByText("政策案：").closest("p")!;
+      expect(policy).toHaveTextContent(label(ruleId));
+      expect(policy).toHaveTextContent(settingLabel);
+      expect(policy).toHaveTextContent(settingValue);
+      expect(preview).toEqual(before);
+    },
+  );
+
+  it.each([
+    ["interest-rate", 0.05, "政策金利（年率・%）", "5%"],
+    ["tax-package", -0.03, "税負担の変更幅（ポイント）", "-3ポイント"],
+    ["public-works", 0.04, "公共事業の追加規模（年間GDP比・%）", "4%"],
+    ["tariff", 0.25, "関税率（%）", "25%"],
+    ["fx-intervention", -0.02, "為替介入の規模（年間GDP比・%）", "-2%"],
+  ] as const)(
+    "uses the configured policy type for %s when policy rule IDs are customized",
+    (ruleId, value, settingLabel, settingValue) => {
+      const customRuleId = `custom-${ruleId}`;
+      const configSnapshot: ConfigSnapshot = {
+        ...initial.configSnapshot,
+        normalizedConfig: {
+          ...initial.configSnapshot.normalizedConfig,
+          policyRules: policyRules(initial.configSnapshot).map((rule) => ({
+            ...rule,
+            policyId: `custom-${rule.policyId}`,
+          })),
+        },
+      };
+      const rule = policyRules(configSnapshot).find(
+        (candidate) => candidate.policyId === customRuleId,
+      )!;
+      const preview: PreviewOutput = {
+        ...output,
+        previewedDraft: {
+          ...output.previewedDraft!,
+          ruleId: customRuleId,
+          value,
+        },
+      };
+      const previewBefore = structuredClone(preview);
+      const configBefore = structuredClone(configSnapshot);
+      render(
+        <Preview
+          configSnapshot={configSnapshot}
+          output={preview}
+          counterfactuals={[]}
+          expertIds={["macro"]}
+          contentVersion={initial.versions.contentVersion}
+          busy={false}
+          onConfirm={vi.fn()}
+        />,
+      );
+      const summary = screen.getByRole("region", { name: "判断の要点" });
+      const policy = within(summary).getByText("政策案：").closest("p")!;
+      expect(policy).toHaveTextContent(label(rule.policyType));
+      expect(policy).toHaveTextContent(`${settingLabel}：${settingValue}`);
+      expect(policy).not.toHaveTextContent(customRuleId);
+      expect(preview).toEqual(previewBefore);
+      expect(configSnapshot).toEqual(configBefore);
+    },
+  );
+
+  it.each(["stateHash", "draftHash"] as const)(
+    "requires acknowledgement again when the preview's %s changes",
+    (key) => {
+      const onConfirm = vi.fn();
+      const onBack = vi.fn();
+      const props = {
+        configSnapshot: initial.configSnapshot,
+        counterfactuals: [],
+        expertIds: ["macro"],
+        contentVersion: initial.versions.contentVersion,
+        busy: false,
+        onConfirm,
+        onBack,
+      };
+      const { rerender } = render(<Preview {...props} output={output} />);
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: "費用・副作用・警告を確認しました",
+        }),
+      );
+      expect(
+        screen.getByRole("button", { name: "政策を確定する" }),
+      ).toBeEnabled();
+      rerender(<Preview {...props} output={{ ...output }} />);
+      expect(
+        screen.getByRole("checkbox", {
+          name: "費用・副作用・警告を確認しました",
+        }),
+      ).toBeChecked();
+      rerender(
+        <Preview {...props} output={{ ...output, [key]: "changed-preview" }} />,
+      );
+      const acknowledgement = screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      });
+      expect(acknowledgement).not.toBeChecked();
+      const confirm = screen.getByRole("button", { name: "政策を確定する" });
+      expect(confirm).toBeDisabled();
+      fireEvent.click(confirm);
+      expect(onConfirm).not.toHaveBeenCalled();
+      fireEvent.click(acknowledgement);
+      expect(confirm).toBeEnabled();
+      rerender(
+        <Preview
+          {...props}
+          output={{ ...output, [key]: "changed-preview" }}
+          busy
+        />,
+      );
+      expect(
+        screen.getByRole("checkbox", {
+          name: "費用・副作用・警告を確認しました",
+        }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "案を修正する" }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "案を修正する" }));
+      expect(onBack).not.toHaveBeenCalled();
+    },
+  );
 
   it("guides the player when no preview exists", () => {
     render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={null}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -483,6 +782,7 @@ describe("game screen wording", () => {
   it("keeps legacy expert profiles while translating indicator IDs in their explanations", () => {
     const { container } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
         expertIds={["macro"]}
@@ -728,6 +1028,7 @@ describe("expert identity in policy meeting and preview", () => {
     const before = structuredClone(output);
     const { container } = render(
       <Preview
+        configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
         expertIds={["fiscal", "labor"]}
