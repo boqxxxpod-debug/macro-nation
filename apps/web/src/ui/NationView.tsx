@@ -1,14 +1,28 @@
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
 import type { GameState } from "@macro-nation/domain";
 import {
   REGION_IDS,
   selectNationView,
   type RegionId,
   type RegionVisualState,
+  type StructureKind,
 } from "../application/nation-view";
-import { describeCause, label } from "./game-format";
+import { selectHomeIndicators } from "../application/home-view";
+import { describeCause, display, label } from "./game-format";
 import { NationMotion } from "./NationMotion";
-import { NationVoice } from "./NationVoice";
+import { NationStructures } from "./NationStructures";
+import { nationVoiceContent } from "./NationVoice";
+import { PageDeck } from "./PageDeck";
+import { FirstPlayGuide } from "./FirstPlayGuide";
+import firstPlayCopy from "./first-play-copy.json";
 
 const STAGE_NAMES = ["低調", "安定", "活発", "非常に活発"] as const;
 const REGION_ICONS: Record<RegionId, string> = {
@@ -18,7 +32,7 @@ const REGION_ICONS: Record<RegionId, string> = {
   harbor: "⚓",
   airport: "✈",
   transport: "▰",
-  energy: "☘",
+  energy: "⚡",
 };
 const REGION_BADGES: Record<RegionId, string> = {
   city: "都市・暮らし",
@@ -27,7 +41,29 @@ const REGION_BADGES: Record<RegionId, string> = {
   harbor: "港湾",
   airport: "空港",
   transport: "鉄道・交通",
-  energy: "再生可能エネルギー",
+  energy: "エネルギー設備",
+};
+const STRUCTURE_NAMES: Record<StructureKind, string> = {
+  house: "住宅",
+  apartment: "集合住宅",
+  office: "オフィス",
+  tower: "高層ビル",
+  workshop: "作業場",
+  factory: "工場",
+  plant: "製造施設",
+  depot: "物流倉庫",
+  warehouse: "港湾倉庫",
+  quay: "荷役施設",
+  crane: "荷役クレーン",
+  terminal: "貨物施設",
+  field: "農地区画",
+  greenhouse: "温室",
+  hangar: "格納庫",
+  station: "交通拠点",
+  solar: "太陽光設備",
+  turbine: "風力設備",
+  substation: "変電設備",
+  pylon: "送電設備",
 };
 
 function CityBlock({
@@ -72,7 +108,7 @@ function Landscape({
       className="nation-landscape"
       viewBox="0 0 1000 540"
       role="img"
-      aria-label="都市、農村、工業、港湾、空港、交通、発電設備を見渡す国家景観"
+      aria-label="都市、農村、工業、港湾、空港、交通、送電設備を見渡す国家景観"
     >
       <defs>
         <linearGradient id="nation-sky" x2="0" y2="1">
@@ -155,15 +191,12 @@ function Landscape({
         />
         <path d="M803 430 l40 -24 45 18 -40 23 Z" fill="#c4d2a0" />
         <path
-          d="M833 390 h18 v44 h-18 Z M869 396 h20 v36 h-20Z"
-          fill="#d9e2d1"
+          d="M833 432 845 378l12 54m-20-29h16m-13 17h11M866 432l12-48 12 48m-20-29h16m-14 18h12"
+          fill="none"
+          stroke="#d9e2d1"
+          strokeWidth="5"
         />
-        <path
-          d="M842 390 v-28 M879 396 v-26"
-          stroke="#e8e8d8"
-          strokeWidth="7"
-        />
-        <path d="M832 420 h70" stroke="#426e61" strokeWidth="7" />
+        <path d="M817 432h85" stroke="#426e61" strokeWidth="7" />
         <path
           d="M612 426 l98 -17 74 17 -90 26 Z M750 447 l58 -14 35 15 -57 15 Z"
           fill="#bbd4c1"
@@ -312,14 +345,12 @@ function Landscape({
   );
 }
 
-function RegionDetails({
+function regionDetails({
   region,
   state,
-  onReport,
 }: {
   region: RegionVisualState;
   state: GameState;
-  onReport(): void;
 }) {
   const change =
     region.previous === undefined ? null : region.value - region.previous;
@@ -327,16 +358,28 @@ function RegionDetails({
     <section
       className="panel nation-details"
       aria-live="polite"
-      aria-label={`${region.label}の地域詳細`}
+      aria-label={`${region.label}の様子`}
     >
       <p className="eyebrow">地域のいま · {STAGE_NAMES[region.stage]}</p>
       <h3>{region.label}</h3>
+      <p>
+        建物・施設の段階：{STAGE_NAMES[region.structureStage]}（景観上の
+        {region.structures.length}区画） · 今月の稼働：
+        {STAGE_NAMES[region.stage]}
+      </p>
+      <p>
+        景観上の施設：
+        {Array.from(
+          new Set(region.structures.map((item) => STRUCTURE_NAMES[item.kind])),
+        ).join("・")}
+      </p>
+      <p>{region.structureReason}</p>
       <p className="nation-metric">
         <strong>{region.value.toFixed(1)}</strong> {region.metricLabel}
       </p>
       <p>
         {change === null
-          ? "前月比較は記録がありません。"
+          ? "前月の記録がまだないため、変化は次の月から確認できます。"
           : `前月差 ${change >= 0 ? "+" : ""}${change.toFixed(2)}（${region.previous!.toFixed(1)} → ${region.value.toFixed(1)}）`}
       </p>
       {region.related.length > 0 && (
@@ -348,24 +391,88 @@ function RegionDetails({
       )}
       <p>
         {region.topCause
-          ? `主な要因：${label(region.topCause.indicatorId)}に対して${describeCause(region.topCause, state)}（寄与 ${region.topCause.delta >= 0 ? "+" : ""}${region.topCause.delta.toFixed(2)}）`
-          : "今月、この地域に関連する因果記録はありません。"}
+          ? `主な理由：${label(region.topCause.indicatorId)}に${describeCause(region.topCause, state)}が影響しています（寄与 ${region.topCause.delta >= 0 ? "+" : ""}${region.topCause.delta.toFixed(2)}）。`
+          : "今月、この地域の変化の理由はまだ記録されていません。"}
       </p>
-      <button onClick={onReport}>経済レポートで理由を見る</button>
     </section>
   );
 }
 
 export function NationView({
   state,
+  timeControls,
+  navigation,
+  guidanceKey,
+  firstPlay,
   onReport,
+  children,
 }: {
   state: GameState;
+  timeControls?: ReactNode;
+  navigation?: ReactNode;
+  guidanceKey?: string | undefined;
+  firstPlay?: { onPolicies(): void; onHelp(): void } | undefined;
   onReport(): void;
+  children?: ReactNode;
 }) {
   const model = useMemo(() => selectNationView(state), [state]);
+  const guideId = useId();
+  const [guideOpen, setGuideOpen] = useState(Boolean(firstPlay));
+  const showGuide = Boolean(firstPlay) && guideOpen;
+  const guideTrigger = useRef<HTMLButtonElement>(null);
+  const closeGuide = () => {
+    setGuideOpen(false);
+    requestAnimationFrame(() => guideTrigger.current?.focus());
+  };
   const [selected, setSelected] = useState<RegionId>("city");
   const [artFailed, setArtFailed] = useState(false);
+  const [artLoaded, setArtLoaded] = useState(false);
+  type DetailPage =
+    "region" | "regions" | "news" | "voices" | "settings" | "guidance";
+  const [detailPage, setDetailPage] = useState<DetailPage | null>(
+    guidanceKey ? "guidance" : null,
+  );
+  useEffect(() => {
+    if (guidanceKey) setDetailPage("guidance");
+    else setDetailPage((current) => (current === "guidance" ? null : current));
+  }, [guidanceKey]);
+  const detailsOpen = detailPage !== null;
+  const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const overviewRef = useRef<HTMLButtonElement>(null);
+  const openDetails = (page: DetailPage, trigger: HTMLElement) => {
+    returnFocus.current = trigger;
+    setDetailPage(page);
+  };
+  const closeDetails = useCallback(() => {
+    setDetailPage(null);
+    // The scene is revealed in the same commit before the next frame.
+    window.requestAnimationFrame(() => {
+      const target = returnFocus.current;
+      if (target?.isConnected) target.focus();
+      else overviewRef.current?.focus();
+    });
+  }, []);
+  useEffect(() => {
+    if (!detailsOpen) return;
+    closeRef.current?.focus();
+    // A native listener also receives Escape from the portaled motion controls.
+    const escape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        detailRef.current?.contains(event.target as Node)
+      ) {
+        event.preventDefault();
+        closeDetails();
+      }
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [detailsOpen, closeDetails]);
   const economy = state.economy;
   const previousGdp = state.history.reports?.at(-2)?.values.realGdp;
   const growth =
@@ -374,45 +481,25 @@ export function NationView({
       : null;
   const scenario = state.configSnapshot.normalizedConfig.scenario as
     { durationMonths?: number } | undefined;
-  const duration = scenario?.durationMonths ?? 48;
+  const duration = state.clock.endMonth ?? scenario?.durationMonths ?? 48;
   const progress = Math.min(100, Math.round((model.month / duration) * 100));
-  const cards = [
-    {
-      icon: "▥",
-      name: "GDP成長",
-      value:
-        growth === null ? "—" : (Number(growth) >= 0 ? "+" : "") + growth + "%",
-      caption: growth === null ? "前月データなし" : "前月比",
-      mood: growth === null ? "neutral" : Number(growth) >= 0 ? "good" : "bad",
-    },
-    {
-      icon: "◉",
-      name: "物価",
-      value: (economy.rates.inflationAnnual * 100).toFixed(1) + "%",
-      caption: "前年比",
-      mood: economy.rates.inflationAnnual >= 0.04 ? "bad" : "neutral",
-    },
-    {
-      icon: "♟",
-      name: "支持",
-      value: economy.sentiment.support.toFixed(0) + "%",
-      caption: "現在の支持",
-      mood: economy.sentiment.support >= 50 ? "good" : "bad",
-    },
-    {
-      icon: "▣",
-      name: "失業率",
-      value: (economy.rates.unemployment * 100).toFixed(1) + "%",
-      caption: "現在の雇用",
-      mood: economy.rates.unemployment >= 0.07 ? "bad" : "neutral",
-    },
-  ] as const;
+  const cards = selectHomeIndicators(state);
+  const detailLabels: Record<DetailPage, string> = {
+    region: "地域の様子",
+    regions: "地域一覧",
+    news: "今月のニュース",
+    voices: "この国の声",
+    settings: "表示設定",
+    guidance: "運営の案内",
+  };
   const stages = Object.fromEntries(
     REGION_IDS.map((id) => [id, model.regions[id].stage]),
   ) as Record<RegionId, number>;
+  const structures = REGION_IDS.flatMap((id) => model.regions[id].structures);
 
   return (
-    <div className="nation-view">
+    <div className="nation-view" data-details-open={detailsOpen}>
+      {timeControls}
       <header className="nation-masthead">
         <div className="nation-brand">
           <span className="nation-emblem" aria-hidden="true">
@@ -420,11 +507,11 @@ export function NationView({
           </span>
           <span>
             <strong aria-hidden="true">国家ビュー</strong>
-            <small>Living Nation</small>
+            <small>この国のいま</small>
           </span>
         </div>
         <p>
-          つながる人、ひろがる未来<small>今日も、この国は動いている</small>
+          つながる人、ひろがる未来<small>今日も、この国は動いています</small>
         </p>
         <div className="nation-date">
           <span>
@@ -440,148 +527,336 @@ export function NationView({
         aria-label="国家の主要指標"
       >
         {cards.map((card) => (
-          <div className="nation-score" data-mood={card.mood} key={card.name}>
-            <span className="nation-score-icon" aria-hidden="true">
-              {card.icon}
-            </span>
+          <div
+            className="nation-score"
+            data-mood={
+              card.assessment === "improved"
+                ? "good"
+                : card.assessment === "worsened"
+                  ? "bad"
+                  : "neutral"
+            }
+            key={card.id}
+          >
             <span className="nation-score-copy">
-              <span>{card.name}</span>
-              <strong>{card.value}</strong>
-              <small>{card.caption}</small>
+              <span>{label(card.id)}</span>
+              <strong>{display(card.id, card.current)}</strong>
+              <small>
+                {card.previous === undefined
+                  ? "開始時点"
+                  : `前月比 ${card.direction === "up" ? "↑ 上昇" : card.direction === "down" ? "↓ 低下" : "→ 安定"}・${card.assessment === "improved" ? "良化" : card.assessment === "worsened" ? "悪化" : "安定"}`}
+              </small>
             </span>
           </div>
         ))}
       </div>
 
-      <div
-        className="nation-scene"
-        data-time={model.timeOfDay}
-        data-weather={model.weatherKey}
-      >
-        {artFailed ? (
-          <Landscape stages={stages} crisis={model.overlays.length > 0} />
-        ) : (
-          <img
-            className="nation-landscape"
-            src={import.meta.env.BASE_URL + "nation-coast.webp"}
-            alt="山と農村、再生可能エネルギー、都市、工業、鉄道、港湾、空港が海でつながる国家の景観"
-            width="941"
-            height="1672"
-            onError={() => setArtFailed(true)}
-          />
-        )}
-        <div className="nation-scene-heading">
-          <div className="nation-ambition">
-            <span aria-hidden="true">♛</span>
-            <strong>暮らしと成長を、ともに</strong>
-          </div>
-          <div className="nation-goal">
-            <small>この国の歩み</small>
-            <strong>
-              {model.month} / {duration}か月
-            </strong>
-            <div
-              role="progressbar"
-              aria-label="プレイ期間の進行"
-              aria-valuenow={progress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <span style={{ width: progress + "%" }} />
+      <div className="nation-content">
+        <div
+          className="nation-scene"
+          data-time={model.timeOfDay}
+          data-weather={model.weatherKey}
+          hidden={detailsOpen || showGuide}
+        >
+          {artFailed ? (
+            <Landscape stages={stages} crisis={model.overlays.length > 0} />
+          ) : (
+            <img
+              className="nation-landscape"
+              src={import.meta.env.BASE_URL + "nation-terrain.webp"}
+              alt="山、農地、道路、鉄道、港と空港の区画が海でつながる国家の景観"
+              width="941"
+              height="1672"
+              onLoad={() => setArtLoaded(true)}
+              onError={() => {
+                setArtLoaded(false);
+                setArtFailed(true);
+              }}
+            />
+          )}
+          {artLoaded && !artFailed && (
+            <NationStructures structures={structures} />
+          )}
+          <div className="nation-scene-heading">
+            <div className="nation-ambition">
+              <span aria-hidden="true">♛</span>
+              <strong>暮らしと成長を、ともに</strong>
+            </div>
+            <div className="nation-goal">
+              <small>この国の歩み</small>
+              <strong>
+                {model.month} / {duration}か月
+              </strong>
+              <div
+                role="progressbar"
+                aria-label="プレイ期間の進行"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <span style={{ width: progress + "%" }} />
+              </div>
             </div>
           </div>
+          <NationMotion
+            model={model}
+            controlsTarget={controlsTarget}
+            sceneAvailable={artLoaded && !artFailed}
+          />
+          {REGION_IDS.map((id) => (
+            <button
+              className={"nation-hotspot nation-hotspot-" + id}
+              key={id}
+              aria-label={
+                model.regions[id].label +
+                "の様子を見る：" +
+                STAGE_NAMES[model.regions[id].stage]
+              }
+              aria-pressed={selected === id}
+              aria-haspopup="dialog"
+              aria-controls="nation-detail-screen"
+              onClick={(event) => {
+                setSelected(id);
+                openDetails("region", event.currentTarget);
+              }}
+              type="button"
+            >
+              <span aria-hidden="true">{REGION_ICONS[id]}</span>{" "}
+              {REGION_BADGES[id]}
+            </button>
+          ))}
+          <div className="nation-scene-verse" aria-hidden="true">
+            人が暮らし、
+            <br />
+            産業がめぐり、
+            <br />
+            明日をつくる。
+          </div>
+          {model.eventMarkers.length > 0 && (
+            <button
+              className="nation-event-marker"
+              type="button"
+              aria-haspopup="dialog"
+              aria-controls="nation-detail-screen"
+              onClick={(event) => openDetails("news", event.currentTarget)}
+              aria-label={`出来事の詳細：${model.eventMarkers.join("・")}`}
+            >
+              ⚠ 出来事 {model.eventMarkers.length}件
+            </button>
+          )}
         </div>
-        <NationMotion model={model} />
-        {REGION_IDS.map((id) => (
-          <button
-            className={"nation-hotspot nation-hotspot-" + id}
-            key={id}
-            aria-label={
-              model.regions[id].label +
-              "を選択：" +
-              STAGE_NAMES[model.regions[id].stage]
-            }
-            aria-pressed={selected === id}
-            onClick={() => setSelected(id)}
-            type="button"
-          >
-            <span aria-hidden="true">{REGION_ICONS[id]}</span>{" "}
-            {REGION_BADGES[id]}
-          </button>
-        ))}
-        <div className="nation-scene-verse" aria-hidden="true">
-          人が暮らし、
-          <br />
-          産業がめぐり、
-          <br />
-          明日をつくる。
-        </div>
-      </div>
 
-      <section className="nation-news" aria-label="今月のニュース">
-        <span className="nation-news-flash">速報</span>
-        <div>
-          <small>この国のニュース · {model.month + 1}月目</small>
-          <strong>{model.news.headline}</strong>
-          <p>{model.news.explanation}</p>
-        </div>
+        {showGuide && !detailsOpen && firstPlay && (
+          <FirstPlayGuide
+            id={guideId}
+            state={state}
+            onPolicies={firstPlay.onPolicies}
+            onHelp={firstPlay.onHelp}
+            onClose={closeGuide}
+          />
+        )}
+        {detailPage !== null && (
+          <section
+            ref={detailRef}
+            id="nation-detail-screen"
+            className="nation-detail-screen"
+            role="dialog"
+            aria-labelledby="nation-detail-heading"
+          >
+            <header className="nation-detail-header">
+              <h3 id="nation-detail-heading">{detailLabels[detailPage]}</h3>
+              <button ref={closeRef} type="button" onClick={closeDetails}>
+                詳細を閉じる
+              </button>
+            </header>
+            <label className="nation-detail-selector">
+              見たい内容
+              <select
+                value={detailPage}
+                onChange={(event) =>
+                  setDetailPage(event.target.value as DetailPage)
+                }
+              >
+                {Object.entries(detailLabels)
+                  .filter(([page]) => page !== "guidance" || children)
+                  .map(([page, name]) => (
+                    <option key={page} value={page}>
+                      {name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <PageDeck
+              key={detailPage + (detailPage === "region" ? selected : "")}
+              label={detailLabels[detailPage]}
+              actions={
+                detailPage === "region" || detailPage === "news" ? (
+                  <button type="button" onClick={onReport}>
+                    {detailPage === "region"
+                      ? "経済レポートで理由を見る"
+                      : "ニュースの理由を見る"}
+                  </button>
+                ) : undefined
+              }
+            >
+              {detailPage === "guidance" && children}
+              {detailPage === "region" &&
+                regionDetails({ region: model.regions[selected], state })}
+              {detailPage === "regions" && (
+                <section className="panel nation-list" aria-label="地域一覧">
+                  <h3>地域の様子を見てみましょう</h3>
+                  <p>
+                    気になる地域を選ぶと、今の状態と変化の理由を確認できます。
+                  </p>
+                  <ul className="nation-region-list">
+                    {REGION_IDS.map((id) => (
+                      <li key={id}>
+                        <button
+                          type="button"
+                          aria-pressed={selected === id}
+                          onClick={() => {
+                            setSelected(id);
+                            setDetailPage("region");
+                            closeRef.current?.focus();
+                          }}
+                        >
+                          <strong>{model.regions[id].label}</strong>{" "}
+                          <small>
+                            {STAGE_NAMES[model.regions[id].stage]} ·{" "}
+                            {model.regions[id].value.toFixed(1)}
+                          </small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {detailPage === "news" && (
+                <>
+                  <section className="panel nation-news-detail">
+                    <small>この国のニュース · {model.month + 1}月目</small>
+                    <h3>{model.news.headline}</h3>
+                    <p>{model.news.explanation}</p>
+                  </section>
+                  <section className="panel" aria-label="経済のいま">
+                    <h3>経済のいま</h3>
+                    <p>
+                      実質GDP {economy.indices.realGdp.toFixed(1)} · GDP成長{" "}
+                      {growth === null
+                        ? "前月の記録はまだありません"
+                        : `${Number(growth) >= 0 ? "+" : ""}${growth}%（前月比）`}
+                    </p>
+                    <p>輸出 {economy.flows.exports.toFixed(1)}（月間）</p>
+                    <p>消費 {economy.flows.consumption.toFixed(1)}（月間）</p>
+                    <p>支持 {economy.sentiment.support.toFixed(0)}%（現在）</p>
+                  </section>
+                  {model.eventMarkers.length > 0 && (
+                    <section className="panel crisis">
+                      <h3>出来事</h3>
+                      <ul>
+                        {model.eventMarkers.map((marker, index) => (
+                          <li key={`${index}:${marker}`}>{marker}</li>
+                        ))}
+                      </ul>
+                      <p>この画面を見るだけでは、時間は進みません。</p>
+                    </section>
+                  )}
+                </>
+              )}
+              {detailPage === "voices" &&
+                (nationVoiceContent({ state, onOpenCause: onReport }) ?? (
+                  <p>
+                    この国の声はまだ届いていません。月が進むと、反応を確認できます。
+                  </p>
+                ))}
+              {detailPage === "settings" && (
+                <section className="panel nation-settings">
+                  <h3>景観の表示</h3>
+                  <div
+                    className="nation-settings-motion"
+                    ref={setControlsTarget}
+                  />
+                  <p>
+                    画質は自動・高画質・標準・軽量から選べます。自動では端末に合わせて調整します。
+                  </p>
+                  <p>
+                    画面の「景観の動きを止める」または端末の「動きの軽減」で、人や乗り物を停止できます。静止中も地域名と指標を確認できます。
+                  </p>
+                  <p>
+                    景観はゲーム内の経済の様子を表しています。現実の経済を予測するものではありません。
+                  </p>
+                  <p>
+                    建物と施設の区画数は地域の状態を示す目安で、実際の住宅戸数や工場数ではありません。
+                  </p>
+                </section>
+              )}
+            </PageDeck>
+          </section>
+        )}
+      </div>
+      <div
+        className="nation-overview-actions"
+        aria-label="国家ビューの詳細"
+        data-guidance={Boolean(children || firstPlay)}
+        hidden={detailsOpen}
+      >
+        {(children || firstPlay) && (
+          <button
+            type="button"
+            aria-haspopup={firstPlay ? undefined : "dialog"}
+            aria-expanded={firstPlay ? showGuide : undefined}
+            aria-controls={firstPlay ? guideId : "nation-detail-screen"}
+            ref={guideTrigger}
+            onClick={(event) => {
+              if (firstPlay) {
+                setGuideOpen(true);
+                requestAnimationFrame(() =>
+                  document
+                    .getElementById(guideId)
+                    ?.querySelector<HTMLElement>("h3")
+                    ?.focus(),
+                );
+              } else openDetails("guidance", event.currentTarget);
+            }}
+          >
+            {firstPlay ? firstPlayCopy.reopen : "運営の案内"}
+          </button>
+        )}
+        <button
+          ref={overviewRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-controls="nation-detail-screen"
+          onClick={(event) => openDetails("regions", event.currentTarget)}
+        >
+          地域一覧
+        </button>
         <button
           type="button"
-          aria-label="ニュースの理由を見る"
-          onClick={onReport}
+          aria-haspopup="dialog"
+          aria-controls="nation-detail-screen"
+          onClick={(event) => openDetails("news", event.currentTarget)}
         >
-          ›
+          ニュース
         </button>
-      </section>
-      <div className="nation-ticker" role="group" aria-label="経済のいま">
-        <span>
-          <small>経済</small> 実質GDP {economy.indices.realGdp.toFixed(1)}
-        </span>
-        <span>
-          <small>貿易</small> 輸出 {economy.flows.exports.toFixed(1)}
-        </span>
-        <span>
-          <small>暮らし</small> 消費 {economy.flows.consumption.toFixed(1)}
-        </span>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-controls="nation-detail-screen"
+          onClick={(event) => openDetails("voices", event.currentTarget)}
+        >
+          この国の声
+        </button>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-controls="nation-detail-screen"
+          onClick={(event) => openDetails("settings", event.currentTarget)}
+        >
+          表示設定
+        </button>
       </div>
-      <NationVoice state={state} onOpenCause={onReport} />
-      {model.eventMarkers.length > 0 && (
-        <p className="crisis">
-          出来事：{model.eventMarkers.join("・")}
-          。この画面から時間は進みません。
-        </p>
-      )}
-      <div className="nation-columns">
-        <RegionDetails
-          region={model.regions[selected]}
-          state={state}
-          onReport={onReport}
-        />
-        <section className="panel nation-list" aria-label="地域一覧">
-          <h3>地域を選ぶ</h3>
-          <p>
-            景観が表示できないときも、こちらから同じ地域情報を確認できます。
-          </p>
-          <div className="nation-region-grid">
-            {REGION_IDS.map((id) => (
-              <button
-                key={id}
-                aria-pressed={selected === id}
-                onClick={() => setSelected(id)}
-              >
-                <strong>{model.regions[id].label}</strong>
-                <small>
-                  {STAGE_NAMES[model.regions[id].stage]} ·{" "}
-                  {model.regions[id].value.toFixed(1)}
-                </small>
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
-      <p className="nation-disclaimer">
-        景観はゲーム内モデルの目安です。現実の経済予測ではありません。
-      </p>
+      {navigation}
     </div>
   );
 }

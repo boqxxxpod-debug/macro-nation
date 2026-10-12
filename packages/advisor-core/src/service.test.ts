@@ -77,4 +77,18 @@ describe("optional AI boundary", () => {
     expect(summary.milestones).toHaveLength(18);
     expect(summary.milestones[0]?.summary).toHaveLength(120);
   });
+
+  it("explains fallback evidence with display names while retaining the facts", async () => {
+    const before = structuredClone(facts);
+    const [advice] = await new MockAIProvider().advisors(request);
+    expect(advice?.reason).toContain("物価上昇率");
+    expect(advice?.reason).toContain("政策金利の変更");
+    expect(advice?.reason).not.toMatch(/inflation|policy:interestRate/);
+    const noEvidence = await new MockAIProvider().advisors({
+      ...request,
+      facts: { ...facts, causes: [] },
+    });
+    expect(noEvidence[0]?.reason).toContain("根拠は、まだありません");
+    expect(facts).toEqual(before);
+  });
 });

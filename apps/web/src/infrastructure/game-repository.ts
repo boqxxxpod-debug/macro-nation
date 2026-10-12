@@ -88,13 +88,14 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
               state: structuredClone(record.previous),
               recovered: true,
               reason:
-                "現在の保存データが破損していたため、直前の正常な保存から復旧しました。",
+                "最新の保存データを読み込めなかったため、直前の保存から読み込みました。進んだ月や政策を確認しましょう。",
             };
           } else {
             found = {
               state: null,
               recovered: false,
-              reason: "現在と直前の保存データを検証できませんでした。",
+              reason:
+                "最新と直前の保存データを確認できませんでした。別の保存先から続けるか、新しく始めることができます。",
             };
           }
         };
@@ -107,7 +108,7 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
     }
   }
 
-  async save(expectedStateHash: string, next: GameState): Promise<void> {
+  async save(expectedStateHash: string, next: GameState, shouldCommit?: () => boolean): Promise<void> {
     const database = await this.open();
     try {
       await new Promise<void>((resolve, reject) => {
@@ -116,6 +117,11 @@ export class IndexedDbGameRepository implements PolicyStateRepository {
         const request = store.get(next.slotId);
         let reason: Error | null = null;
         request.onsuccess = () => {
+          if (shouldCommit?.() === false) {
+            reason = new Error("保存前にゲームが切り替わりました");
+            transaction.abort();
+            return;
+          }
           const record = asRecord(request.result, next.slotId);
           const current = isGameState(record?.current, next.slotId)
             ? record.current

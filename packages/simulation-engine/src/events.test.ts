@@ -22,7 +22,7 @@ beforeAll(async () => {
     configSchemaVersion: "1",
     modelVersion: "0.1.2",
     calibrationVersion: "advanced-small-open-v1.0.0",
-    contentVersion: "1.1.0",
+    contentVersion: "1.2.0",
     rngVersion: "xoshiro128ss-v1",
     configVersion: configSnapshot.snapshotVersion,
   };

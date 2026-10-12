@@ -1,0 +1,84 @@
+{
+  "legacy": {
+    "kindLabels": {
+      "term": "用語",
+      "theory": "経済のつながり",
+      "decision": "政策の判断",
+      "verification": "結果の振り返り"
+    },
+    "templates": {
+      "learning.term": "{indicator}",
+      "learning.theory": "{sourceCategory}が{indicator}に影響する仕組み",
+      "learning.decision.policy": "{decision}を選んだ判断",
+      "learning.decision.unresolvedPolicy": "この結果につながった政策判断を振り返る",
+      "learning.decision.otherCause": "{sourceCategory}の影響を踏まえた振り返り",
+      "learning.decision.legacyObservation": "政策を加えずに見守った判断",
+      "learning.verification": "{month}月目の結果を振り返る",
+      "learning.evidence.contribution": "{month}月目の{indicator}の変化に、{cause}が{contribution}影響しています。"
+    },
+    "sourceCategories": {
+      "policy": "政策",
+      "combo": "政策の組み合わせ",
+      "event": "イベント",
+      "external": "外部環境",
+      "inertia": "前月から続く動き",
+      "random": "偶発的な変動"
+    },
+    "unitSuffixes": {
+      "PercentPoint": "パーセントポイント",
+      "PercentRate": "パーセントポイント",
+      "Share01": "パーセントポイント",
+      "ScorePoint": "ポイント",
+      "IndexLevel": "指数ポイント",
+      "LogIndex": "対数指数ポイント",
+      "FlowPerMonth": "（ゲーム内金額・月間）",
+      "StockLevel": "（ゲーム内金額）",
+      "MonthCount": "か月",
+      "Scalar": ""
+    },
+    "unknownCauseCategory": "その他の要因",
+    "unknownConcept": "経済の変化についての記録",
+    "unknownEvidence": "{month}月目の結果をもとにした記録です。"
+  },
+  "1.3.0": {
+    "kindLabels": {
+      "term": "用語",
+      "theory": "経済のつながり",
+      "decision": "政策の判断",
+      "verification": "結果の振り返り"
+    },
+    "templates": {
+      "learning.term": "{indicator}",
+      "learning.theory": "{sourceCategory}が{indicator}に影響する仕組み",
+      "learning.decision.policy": "{decision}を選んだ判断",
+      "learning.decision.unresolvedPolicy": "この結果につながった政策判断を振り返る",
+      "learning.decision.otherCause": "{sourceCategory}の影響を踏まえた振り返り",
+      "learning.decision.legacyObservation": "この結果に関係する判断を振り返る",
+      "learning.verification": "{month}月目の結果を振り返る",
+      "learning.evidence.contribution": "{month}月目の{indicator}の変化に、{cause}が{contribution}影響しています。"
+    },
+    "sourceCategories": {
+      "policy": "政策",
+      "combo": "政策の組み合わせ",
+      "event": "イベント",
+      "external": "外部環境",
+      "inertia": "前月から続く動き",
+      "random": "偶発的な変動"
+    },
+    "unitSuffixes": {
+      "PercentPoint": "パーセントポイント",
+      "PercentRate": "パーセントポイント",
+      "Share01": "パーセントポイント",
+      "ScorePoint": "ポイント",
+      "IndexLevel": "指数ポイント",
+      "LogIndex": "対数指数ポイント",
+      "FlowPerMonth": "（ゲーム内金額・月間）",
+      "StockLevel": "（ゲーム内金額）",
+      "MonthCount": "か月",
+      "Scalar": ""
+    },
+    "unknownCauseCategory": "その他の要因",
+    "unknownConcept": "経済の変化についての記録",
+    "unknownEvidence": "{month}月目の結果をもとにした記録です。"
+  }
+}

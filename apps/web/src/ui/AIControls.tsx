@@ -10,10 +10,22 @@ import type {
 } from "@macro-nation/advisor-core";
 import { ordinaryNews } from "@macro-nation/advisor-core";
 
+const VIEWPOINT_LABELS: Record<
+  NewsStory["perspectives"][number]["viewpoint"],
+  string
+> = {
+  anchor: "解説",
+  newspaper: "新聞の視点",
+  citizen: "国民の視点",
+  business: "企業の視点",
+  social: "暮らしの視点",
+};
+
 /** Embed into UI04/UI08/UI11 when the corresponding game screens ship. */
 export function AIControls({
   service,
   facts,
+  contentVersion,
   experts,
   finished = false,
   milestones = [],
@@ -21,13 +33,16 @@ export function AIControls({
 }: {
   service: AIService;
   facts: NationFacts;
+  contentVersion?: string;
   experts: readonly ExpertProfile[];
   finished?: boolean;
   milestones?: readonly { month: number; summary: string }[];
   onCandidate?: (candidate: FreePolicyResult) => void;
 }) {
   const [advice, setAdvice] = useState<readonly Advice[]>([]);
-  const [story, setStory] = useState<NewsStory>(() => ordinaryNews(facts));
+  const [story, setStory] = useState<NewsStory>(() =>
+    ordinaryNews(facts, contentVersion),
+  );
   const [history, setHistory] = useState<NationHistory | null>(null);
   const [text, setText] = useState("");
   const [policy, setPolicy] = useState<FreePolicyResult | null>(null);
@@ -36,10 +51,10 @@ export function AIControls({
     () => (experts[0] ? [experts[0].id] : []),
   );
   useEffect(() => {
-    setStory(ordinaryNews(facts));
+    setStory(ordinaryNews(facts, contentVersion));
     setAdvice([]);
     setHistory(null);
-  }, [facts]);
+  }, [facts, contentVersion]);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     try {
@@ -51,14 +66,17 @@ export function AIControls({
   return (
     <section aria-label="経済解説">
       <p>
-        AI連携が有効な場合、選んだ機能に必要な指標・原因・入力文をAI提供元へ送信します。個人情報は入力しないでください。
+        AIは任意の機能です。AI連携が有効な場合、ボタンを押すと、選んだ機能に必要な指標・変化の理由・直近の出来事・専門家・国家史の節目を外部のAI提供元へ送ります。自由入力の政策は、入力文も送ります。個人情報は入力しないでください。
+      </p>
+      <p>
+        AIが使えないときも、ゲーム内の解説で遊び続けられます。AIの説明や政策の候補だけで、経済の計算結果は変わりません。
       </p>
       <h2>経済ニュース</h2>
       <h3>{story.headline}</h3>
       <p>{story.explanation}</p>
       {story.perspectives.map((item, index) => (
         <p key={`${item.viewpoint}-${index}`}>
-          {item.viewpoint}: {item.text}
+          {VIEWPOINT_LABELS[item.viewpoint]}：{item.text}
         </p>
       ))}
       <button
@@ -69,11 +87,11 @@ export function AIControls({
           )
         }
       >
-        なぜこうなった？
+        ニュースの理由を聞く
       </button>
       <h2>政策会議</h2>
       <fieldset>
-        <legend>専門家を選択（最大3人）</legend>
+        <legend>意見を聞きたい専門家を選ぶ（1〜3人）</legend>
         {experts.map((expert) => (
           <label key={expert.id}>
             <input
@@ -94,7 +112,9 @@ export function AIControls({
                 )
               }
             />
-            {expert.role}
+            {expert.displayName
+              ? `${expert.displayName}（${expert.role}）`
+              : expert.role}
           </label>
         ))}
       </fieldset>
@@ -118,7 +138,9 @@ export function AIControls({
       {advice.map((item) => (
         <article key={item.expertId}>
           <h3>
-            {experts.find((x) => x.id === item.expertId)?.role ?? item.expertId}
+            {experts.find((x) => x.id === item.expertId)?.displayName ??
+              experts.find((x) => x.id === item.expertId)?.role ??
+              "専門家の意見"}
           </h3>
           <p>{item.conclusion}</p>
           <p>{item.reason}</p>
@@ -126,7 +148,7 @@ export function AIControls({
         </article>
       ))}
       <label>
-        自由入力政策
+        政策のアイデアを入力する
         <input
           maxLength={300}
           value={text}
@@ -143,13 +165,13 @@ export function AIControls({
           })
         }
       >
-        政策案に変換
+        政策案を作る
       </button>
       {policy && (
         <p role="status">
           {policy.explanation}
           {policy.status === "supported"
-            ? " 内容を確認し、政策エンジンでプレビューしてください。"
+            ? " 内容を確認して、政策の見通しを確認しましょう。確定するまで政策は実行されません。"
             : ""}
         </p>
       )}
@@ -166,7 +188,7 @@ export function AIControls({
               )
             }
           >
-            国家史を生成
+            国の歩みを文章にする
           </button>
           {history && (
             <article>

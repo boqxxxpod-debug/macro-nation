@@ -234,7 +234,7 @@ tickSequenceは成功したtickごとに1増え、monthIndexと同じ増分を�
 active reserved completed cancelledの政策IDは重複しない。
 ScheduledEffectの月別weight合計は定義された総weightと許容誤差1e-10以内で一致する。
 同じindicatorIdの寄与度合計は丸め前totalDeltaと絶対誤差1e-9または相対誤差1e-8以内で一致する。
-runStateがrunningのときだけ壁時計経過をゲーム月へ変換する。
+自動モードかつrunStateがrunningのときだけ壁時計経過をゲーム月へ変換する。
 awaitingEvent crisisStopped completed failedではオフライン経過を加算しない。
 5 5 コマンドと冪等性
 interface GameCommand<TPayload> {
@@ -601,26 +601,45 @@ interface PreviewOutput {
 履歴が長い場合は表示解像度に応じて描画点を間引くが、元データは変更しない。
 11 オフライン進行とWorker設計
 11 1 壁時計の扱い
+保存する時計の追加項目は以下とする。型のoptionalは旧セーブとの読み取り互換のためであり、新規作成・schema 3移行後はモード・基準時刻・端数を補完する。停止理由は停止中だけ保持し、開始・再開時に除く。
+interface ClockProgression {
+  progressionMode?: 'manual' | 'auto';
+  lastProcessedWallClockMs?: number | null;
+  remainderMs?: number;
+  warning?: 'CLOCK_MOVED_BACKWARD';
+  stopReason?: 'manual' | 'policy' | 'event' | 'crisis' | 'error'
+    | 'completed' | 'failed' | 'offlineLimit' | 'tutorial';
+}
+これらはGameState.clockに保持し、停止時の基準時刻はnullとする。端数と既に加算したpendingOfflineStepsは停止・モード切替をまたいで保持する。
 elapsedMs = max(0, nowMs - lastProcessedWallClockMs)
-totalMs = remainderMs + min(elapsedMs, 8 hours)
-tickCount = min(floor(totalMs / 5 minutes), 96)
-nextRemainderMs = totalMs - tickCount * 5 minutes
-runStateがrunning以外ならtickCountを0とする。
-時計が過去へ戻った場合はelapsedMsを0とし、CLOCK_MOVED_BACKWARDを注意ログへ記録する。
-8時間超過分は破棄し、後で繰り越さない。
-policy編集または確認画面を開いた時点でpause commandを保存してから画面遷移する。
-visibilitychangeとpagehideでlastSeenAtを保存するが、正しさは次回起動時の保存値検証に依存する。
+stepMs = clock.config.realSecondsPerStep * 1000
+totalMs = remainderMs + elapsedMs
+newSteps = floor(totalMs / stepMs)
+nextRemainderMs = totalMs - newSteps * stepMs
+pendingOfflineSteps = pendingOfflineSteps + newSteps
+tickCount = min(pendingOfflineSteps, clock.config.offlineMaxSteps, 96)
+自動モードかつrunStateがrunningの場合だけ新しい経過を加算して未処理stepを実行する。手動または停止中はどちらも行わない。
+タイマーは経過の確認契機とし、呼出回数をゲーム月数として扱わない。閲覧画面の切替で時計を再生成しない。
+時計が過去へ戻った場合はelapsedMsを0とし、clock.warningへCLOCK_MOVED_BACKWARDを保存する。経済指標・国家ビューで時刻の調整待ちと注意を表示し、保存基準に時刻が追いつくか、明示的な停止・再開で基準を更新すると解除する。経済状態と保存済み端数は変えない。
+96tickを超える未処理stepは保持し、次回帰還または明示的な続行で処理する。旧8時間超過分破棄の仕様は適用しない。
+1回のオフライン処理上限へ到達して未処理stepが残る場合はpaused、stopReason: offlineLimitを保存する。通常タイマーが次のbatchを自動で処理せず、利用者の明示的な再開から続行する。
+停止時は端数を保存し、再開時に現在時刻を基準として停止中の経過を除外する。モード切替も停止状態を保存し、選択だけで自動開始しない。
+政策編集・プレビュー・確認を開く前にpause commandを保存してから画面遷移する。閉じる・確定・イベント選択だけでは再開しない。
+非表示中はオンラインタイマーを停止し、帰還時に同じ保存済み基準時刻からオフライン経過を反映する。visibilitychangeとpagehideは補助であり、正しさは保存済み時計と状態の検証に依存する。
+Application側で手動tick、自動tick、政策確定、オフライン処理、時計変更を直列化する。スロット切替・新規開始で要求世代を更新し、前のゲームの応答は新しいゲームへ適用しない。
+SCN-01のlearningでは、保存済みscenario.firstPlayable.tutorialQuartersとclock.config.policyCycleStepsの積までチュートリアル期間とする。この期間は手動で進め、自動開始を無効化する。進行中の自動セーブを読み込んだ場合も経過を加算する前にtutorial理由で停止する。casualとstandardにはこの案内期間を適用しない。
 11 2 オフライン実行
-1. main threadがslotId、expectedTickSequence、nowMsをWorkerへ送る。
-2. WorkerがIndexedDBからcurrent世代を読み、版とchecksumを検証する。
-3. tickCountを算出し、月次tickを1回ずつ順番に実行する。
-4. 各成功tick後にcurrentをpreviousへ移し、新currentとlastProcessedWallClockMsを同一transactionで保存する。
+1. main threadのClock AdapterがRepositoryからcurrent世代を読み、版とchecksumを検証する。保存済み時計から経過を加算し、基準時刻・端数・未処理stepを先に保存する。
+2. 各月の保存済みstateとrequest ID、state hashをWorker clientへ渡し、Workerで次の1tickを計算する。main threadでは離席分のSimulation Engineを実行しない。
+3. Workerからの候補を受け取った後、main thread側Repositoryが期待state hashと現在のslot・game・要求世代を検証する。各成功tick後にcurrentをpreviousへ移し、新current、時計基準・端数、減算したpendingOfflineStepsを同一transactionで保存する。
+4. 保存成功後にのみ次のtickをWorkerへ依頼する。スロット切替・新規開始・破棄では処理中Workerを終了し、古い応答も保存確定前の世代検証で拒否する。計算をWorker、保存許可をmain threadの直列キューに分け、選択変更が旧スロットを書き換える競合を防ぐ。
 5. 4tickごとまたは250msごとにPROGRESSを通知する。
-6. awaitingEvent crisisStopped failed completedに達したら残り時間を破棄して停止する。
+6. awaitingEvent crisisStopped failed completedに達したらその月で停止する。既に加算した未処理stepは保持するが、停止中は処理も経過時間の加算も行わない。
 7. 終了時に処理月数、停止理由、上位3指標、警告を返す。
 8. main threadは最新保存を再読込し、帰還報告を表示する。
 計算中もナビゲーションとヘルプ閲覧は可能にするが、ゲーム状態を変更する操作は無効化して進捗を表示する。Workerが異常終了しても、最後にcommit済みのtickから再開する。
 11 3 Worker通信
+現在の時間進行WorkerはCALCULATE_MONTH要求（requestId、engineVersion、expectedStateHash、expectedTick、state）に対して、RESULT（同じrequestIdとexpectedStateHash、次月state）またはERRORを返す。Workerは入力、clientは応答をZodとDomain invariantで検証し、異なるgame・slot・tick・要求への応答を採用しない。CANCELはclientによるWorker終了で即座に計算を中止する。以下は他のWorker用途も含む上位コマンドの設計例である。
 type WorkerRequest =
   | { id: string; type: 'RUN_OFFLINE'; slotId: number; nowMs: number; expectedTick: number }
   | { id: string; type: 'PREVIEW_POLICY'; state: PreviewState; draft: PolicyDraft }
@@ -674,29 +693,43 @@ Service Workerは新buildをwaitingに置き、全active saveが対応可能と�
 13 画面と状態遷移設計
 13 1 ルート
 13 2 ゲーム状態遷移
-paused <-> running -> calculating -> running
-running -> awaitingEvent -> paused or running
-running -> crisisStopped -> paused or running
+paused -> explicit auto start/resume -> running -> calculating -> running
+manual paused -> explicit tick -> calculating -> paused
+running -> awaitingEvent -> event choice -> paused
+running -> crisisStopped -> emergency response -> paused
 running -> completed
 running -> failed
 completed and failed are terminal for that gameId
-政策編集と最終確認を開く前にrunningからpausedへ保存する。閉じても自動再開せず、元の状態がrunningだった場合だけ再開確認を出す。
+新規ゲームとモード情報のない既存セーブは手動・pausedとするが、旧セーブのawaitingEvent、crisisStopped、completed、failedは維持する。自動モード選択だけではrunningへ遷移しない。
+政策編集・プレビュー・最終確認を開く前にrunningからpausedへ保存する。閉じる・政策確定・イベント選択後もpausedを維持し、明示的な再開を必要とする。
+計算・保存失敗時は最後にcommitした状態を維持して停止し、同じ月の自動無限再試行を行わない。
 calculating中は状態変更コマンドを拒否し、閲覧操作だけ許可する。
 awaitingEventではイベント選択、help、reportを許可し、通常政策確定と再開を禁止する。
 crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開まで進めない。
 ブラウザ戻るでは未確定draftだけ破棄確認し、保存済みコマンドを再実行しない。
-13 3 ホーム画面
+13 2 1 利用可能な画面高さとページ切替
+通常表示ではコンパクトな状態表示、可変の内容領域、画面固有の主要操作、共通ナビゲーションを利用可能な画面高さに配置する。動的viewport単位を使う場合も非対応環境の代替を用意し、セーフエリアとサイズ変更へ追従する。
+長文や履歴は内容の高さに応じてページを分け、すべての内容へ前後の切替で到達可能にする。単一ページの内容をoverflowで切り捨てたり、内容パネルのスクロールへ置き換えたりしない。計算中、エラー、複数の警告でも主要操作を画面外へ押し出さない。
+入力と専門家選択は未確定draftのUI状態としてページや画面の切替中も保持する。ページ切替は表示だけを変更し、政策確定、イベント選択、危機再開のcommandを実行しない。
+13 3 経済指標画面（従来のホーム、UI03）
+ゲームの入口はUI14国家ビューとする。本節の情報は国家ビューから開く経済指標画面に保持する。
+経済指標と国家ビューは同じ時計状態を表示し、年月、手動／自動、進行／停止と理由、次の月までの残り時間、開始・一時停止・再開操作を提供する。
+政策会議・プレビュー・レポートの時刻欄も同じ時計表示関数を使う。進行中は自動モードかつrunningの場合だけとし、政策操作による停止は確定・離脱後も成立する「政策会議で停止」と表示する。
+政策確定後と保存済みゲームの再読込後は、国家ビューから「確定した政策」の確認欄を開けるようにし、経済指標の詳細にも同じ確認欄を表示する。危機・イベント・終了時は対応案内を優先し、政策確認欄へも明示的な切替で到達可能にする。政策名、保存された設定値、開始予定月、現在の政策状態、進行モードに合った次の操作とレポートへの導線を一続きで示す。
+確認対象は全政策状態から既存のcommit/amend receipt順で選ぶ。receiptのない旧セーブは決定月から選び、未保存の設定値を現在値や既定値から補完しない。確認欄の表示・再読込は時計・政策・コマンドを変更しない。政策開始月は既存activationMonthを表示用に1始まりへ変換し、開始と効果の時間差を明示する。
 1. 危機警告を1行表示する。警告がなければ重大な警告なしと明記する。
 2. 国民生活 成長 物価 雇用 信頼の5カードを表示する。色に加え矢印、状態語、比較期間を付ける。
 3. 帰還時だけ3行報告を先頭付近に表示し、各行から根拠レポートへ遷移する。
 4. 政策発動 終了 選挙 シナリオ終了など次の節目を最大3件表示する。
 5. 入門では推奨操作を最大3件表示するが、確定ボタンを設けず政策会議へ誘導する。
+通常表示では時点・運営状態、最優先の危機警告、5カードと主要操作を同じ画面内に維持する。3行報告、変化要因、節目、提案は明示的な切替で表示し、すべてへ到達可能にする。
 13 4 政策会議とプレビュー
 上部に四半期枠の使用数、残数、次に枠が更新される月を常時表示する。
 実施中 予約中 終了予定を状態別に表示し、同一政策の重複を見分けられるIDと開始月を付ける。
 最大3案を比較し、効果開始、最大効果、12か月レンジ、副作用、全コスト、相互作用を同じ順序で並べる。
 不足時は確定ボタンをdisabledにするだけでなく、不足資源と必要量を文章で示す。
 最終確認はcommandIdを生成して一度だけ送信する。保存成功後に完了画面へ進む。
+政策入力、専門家選択、比較、助言、履歴はタブ・ページ・段階的な入力へ分ける。戻る、次へ、プレビュー、確定等の必要な操作は内容と重ならない位置に維持し、費用、重要な副作用、警告を確定前に確認できるようにする。
 13 5 予算 市場 レポート
 13 6 アクセシビリティ
 主要操作のタップ領域を44×44 CSS px以上にする。
@@ -705,6 +738,26 @@ crisisStoppedでは緊急政策、help、reportを許可し、明示的な再開
 良化 悪化は色だけでなく上昇 低下 安定などの語と形で示す。
 prefers reduced motionでは数値遷移、チャート描画、新聞演出を停止する。
 360px幅および200パーセント文字拡大で横スクロールを主要操作に要求しない。比較表はカード縦積みに切り替える。
+ページ切替後は表示した内容へfocusを移し、詳細を閉じた後は開いた操作へfocusを戻す。非表示ページの操作を読み上げ・キーボードの対象にしない。200パーセント文字拡大時は必要な縦スクロールを許容し、通常表示の画面高さ制限より情報と操作の保持を優先する。
+
+13 6 1 用語の一文説明
+経済指標の5指標名と政策プレビューの3資源費用名から、定義、単位・尺度、判断時の注意を含む一文説明を開ける。対象は次の8語とし、説明文はUIのJSONコンテンツで管理する。
+
+| 用語ID | 表示対象と単位・尺度 |
+| --- | --- |
+| realHouseholdIncome | 家計の実質所得。基準100の指数。 |
+| realGdp | 実質GDPの水準。基準100の指数。 |
+| inflation | 消費者物価の上昇ペース。年率%。 |
+| unemployment | 失業率。%。 |
+| policyTrust | 政策運営への信頼。0〜100点。 |
+| politicalCapital | 政策を進める政治資本。残量は0〜100点、費用欄は消費する点数。 |
+| implementationCapacity | 政策を実行する行政の余力。残量は0〜100点、費用欄は消費する点数。 |
+| foreignReserves | 外貨の蓄え。基準月次名目GDPを100とするmodel unitで、費用欄は消費額。 |
+
+用語名をbuttonとし、クリック・タップ・Enter・Spaceでnative popover（auto）を開く。同時に開く説明は1件とし、用語名を説明の見出しとアクセシブル名に使う。閉じるボタン、Escape、説明外のクリック・タップで閉じ、キーボードで閉じた後は開いた操作へfocusを戻す。用語ボタンと閉じるボタンは44×44 CSS px以上とし、360px幅でも説明と操作をviewport内で読める。説明はページ分割の外に表示し、開閉で指標・費用の数値、政策の入力・確定状態、時計・保存状態を変更しない。
+
+実装上の表示注記: 現行の経済指標画面の実質GDPは指数水準、物価は当月の上昇ペースを年率換算した値であり、要件書の主要表示にあるGDP成長率・物価の前年同月比とは区別する。経済指標画面の物価の良化・悪化は固定2%からの距離で判定するため、説明も経済指標画面に限定してその基準を示す。この用語説明では既存の表示値・比較期間・良否判定式を変更しない。
+
 14 PWA 非機能 セキュリティ設計
 14 0 Xserver配布
 Viteのbuild成果物をXserverへ静的配置する。Vite base pathは環境設定化し、ルート配下・サブディレクトリ配下の双方へ対応する。BrowserRouter採用時はdeploy/xserver/.htaccessでSPA fallbackを提供する。Service Worker更新でプレイ中を強制reloadしない。
@@ -936,7 +989,9 @@ toneKeyに対応する語尾 語彙 比喩テンプレートへ安全な値だ�
 選択変更時は300msのdebounce後に既存PreviewWorker requestを中止し、政策draft hashが同じなら予測値をキャッシュして助言の並べ替えだけを行う。選択専門家が結果を変更してはならない。
 23 国家ビュー設計
 23 1 ルートと責務
-UI14のrouteは /game/:slot/nation とする。下部ナビの国家またはホーム上の景観カードから開く。画面はNationViewSelectorが返す読み取り専用view modelだけを受け取り、engineやIndexedDBへ直接触れない。
+UI14のrouteは /game/:slot/nation とし、新規開始・再開・政策確定後のメイン画面とする。/game/:slot と保存済みゲームの起動もこの画面へ接続する。経済指標（UI03）は /game/:slot/indicators に配置し、既存の政策・レポート・終了評価への直リンクは維持する。URLに指定された保存スロットを読み込み、各遷移先でも同じスロットIDを使用する。
+国家ビューに政策会議、経済指標、レポート、保存スロットへの入口を設け、各詳細画面から国家ビューへ戻れるようにする。危機停止時は /game/:slot/crisis、イベント選択待ちでは /game/:slot/events へ誘導し、再開・イベント選択は対応画面でのみ行う。
+景観の描画はNationViewSelectorの読み取り専用view modelから行い、engineやIndexedDBへ直接触れない。時間進行はAppのGameClockControllerからApplication commandを通じて行い、計算・保存の成功後に景観を更新する。手動は「1か月進める」の明示操作だけで進み、自動は「自動進行を始める」または「再開」の明示操作後に保存済み時計の経過から進める。描画や画面遷移だけでは時間進行を開始せず、閲覧画面の切替は実行中の時計を維持する。
 interface NationViewModel {
   month: number; timeOfDay: 'day' | 'evening' | 'night'; weatherKey: string;
   regions: Record<RegionId, RegionVisualState>;
@@ -944,14 +999,24 @@ interface NationViewModel {
   overlays: OverlayState[]; eventMarkers: EventMarker[]; news: NationNewsItem[];
 }
 23 2 描画層
+背景画像の元寸法941×1672を景観座標とし、背景とCanvasの双方へ `object-fit: cover` と `object-position: 50% 15%` を適用する。経路・固定設備・速度・表示サイズ・密度上限は描画設定で管理し、道路、線路、航路、滑走路、歩道の位置を画像のランドマークに合わせる。接線方向へ移動物を回転し、遠景と前景で大きさ・速度・描画順を変える。画像失敗時の代替SVGには画像専用Canvasを重ねない。
+
+通常表示は建物を含まない共通地形 `nation-terrain.webp` と、同じ941×1672座標に置く読み取り専用の施設SVGを合成する。地形、地域の位置、基本経路、配置可能区画は月次更新で動かさない。施設は設定された固定IDの区画に追加し、画像内の旧建物を重ねて残さない。SVGは背景・Canvasと同じcover切り抜きを用い、施設の後から交通・設備の動きを描く。画像の読み込み失敗時は既存の静的SVGと地域詳細へ切り替える。
+
+描画順は空・遠景、設備・生活、道路と鉄道、港湾と空港、前景効果を基本とする。列車は同一路線を複数車両が時間差で進み、船は入港・停泊・出港を一周に含める。装飾は景観と同じ場所に限定し、新たな天候・災害・発電量・汚染の事実を表すデータとして扱わない。
 23 3 指標から景観への写像
 状態段階はenter thresholdとexit thresholdを別に持ち、境界付近の月次変動でオブジェクトが点滅しないようにする。景観から数値を推測させるだけにせず、地域タップで関連指標、前月差、上位因果を必ず表示する。
+施設の規模段階は地域ごとの確定済み月次レポートから3か月移動平均とヒステリシスで再構成し、上昇には連続2か月、縮小には連続6か月の確認を要する。現在の状態段階は稼働・照明などに用いる。区画ID、座標、施設種別、出現段階と閾値は `nation-view-rules.json` で管理する。施設段階は同じ保存状態から同じ結果になり、画面表示時間・描画品質・政策draftでは変えない。
+都市は実質GDPと雇用・信頼、工業は製造業、港湾は輸出、農村は農業と消費、空港は輸入、交通・エネルギーは対応インフラ指標を用いる。標準国家の電源構成は国内・輸入の比率だけで発電方式を特定しないため、エネルギー区画の段階差は送電・変電設備とし、景気だけで風力・太陽光への方式変更を示さない。地域詳細には施設段階・稼働段階・景観上の施設種別を表示し、景観上の件数は現実の施設統計として扱わない。
+交通はtransport、歩行者と夜間照明はcity、船と荷役はharbor、航空機はairport、建設はconstructionLevel、工業・農村・エネルギーの局所効果は各地域の確定済みstageに従う。stageと品質Tierの変化は表示量の目標値として描画側で徐々に反映し、既存移動物の位置をリセットしない。月次更新では数値と地域説明、危機表示を直ちに新しいモデルへ更新する。
 23 4 性能とアクセシビリティ
 requestAnimationFrameを使い 画面非表示時は停止する。目標30fps 最低20fpsとする。
 offscreen領域 object pooling sprite atlasでDOM node数とGCを抑える。
 低性能判定時は人 車 天候の順に密度を下げ 静止背景と指標は維持する。
 prefers-reduced-motionでは交通と粒子を停止し 状態変化をラベルと静止差分で示す。
+利用者の動き停止設定は描画側で管理し、OSの動き軽減を優先する。非表示・画面離脱では全演出とフレーム計測を止め、復帰時に経過時間をまとめて進めない。経路位相、描画用の値、品質Tier、停止設定をGameStateへ保存せず、経済RNGを消費しない。
 Canvasには代替の地域一覧と説明をDOMで併設し keyboard操作を提供する。
+通常表示ではヘッダー、指標、時間進行、画面への入口、必要な対応案内を除いた残りの高さに景観を収める。地域詳細、ニュース、地域一覧、表示設定、確定した政策はタブ・ページ・閉じられる詳細画面へ分け、地域選択や危機マーカーを縮小・トリミングで失わない。詳細の開閉で画面全体を縦に伸ばさず、画像なしでも関連指標と理由へ到達可能にする。
 24 反応 コンボ Voice イベント 国家史
 24 1 ReactionSnapshot
 interface ReactionSnapshot {
@@ -991,12 +1056,14 @@ interface SchoolLens {
 }
 自由主義 社会主義 新自由主義 マルクス主義 共産主義等は同じ政策結果を異なる目的と前提から読む比較レンズとして実装する。score 勝敗補正 正解フラグを持たせない。表示順は固定または利用者選択とし、特定思想を既定の正解として強調しない。
 26 画面状態とルーティング追補
-UI04を開く時点でrunningをpausedへ保存し 離脱時も明示操作なしに再開しない。
+UI04およびプレビュー・最終確認を開く前にrunningをpausedへ保存し、離脱・確定後も明示操作なしに再開しない。通常の閲覧画面の切替は時計を維持する。
 専門家選択はpolicy draftのUI状態だが 確定時にdecision logへ保存する。
-UI14は閲覧画面でありrunStateを変更しない。危機時も見られるが再開操作はUI10だけに置く。
+UI14の描画・閲覧遷移はrunStateを変更しない。経済指標と同じ時計操作を提供し、手動の月次進行と明示開始した自動進行はAppのGameClockControllerを通じて実行する。危機停止の解除はUI10の緊急会議（/game/:slot/crisis）だけに置き、イベント選択は /game/:slot/events で行う。対応を保存した後は国家ビューへ戻り、自動進行の再開には時計の明示操作を必要とする。
 戻る操作でworker結果を再commitしないようrequestId draftHash commandIdを分離する。
 27 保存 バージョン 移行
 saveSchemaVersionを上げるmigrationでは既存セーブにstandard duration 96か月を設定せず、scenarioIdがSCN-01なら48、それ以外の既存シナリオなら96をendMonthとして補完する。ExpertProfile本文や画像は保存せずexpertIdとtemplateVersionだけを保存する。
+Issue #91の保存schema 3は時計の進行モード・基準時刻・端数・停止理由を追加する。旧セーブは手動、基準時刻null、端数0へ補完し、通常のrunningはpausedへ移す。イベント待ち・危機・終了状態、既にあるendMonth・durationMode、pendingOfflineSteps、経済Config Snapshot、RNGを維持する。Engine・Modelの版を時間UI追加だけで変更しない。
+Issue #27の保存schema 4は学習履歴を明示する。schema 1・2・3のlearningEntries欠落は空配列へ補完し、既存の学習記録と時計・経済Config Snapshot・RNGは維持する。新しいノートにはconceptKey、evidenceKey、contentVersionと元の因果寄与を保存し、表示時に版付きコンテンツで日本語へ変換する。旧concept・evidence文字列も読み取り互換を保つ。政策原因はsourceIdを全政策記録（予約・実施中・完了・取消）で解決し、政策以外の原因にはdecisionIdを設定しない。新規ゲームのcontentVersionは1.3.0とし、既存ゲームの版は変えない。
 28 Workerと性能設計
 worker messageはZodで検証しrequestIdとengineVersion不一致を拒否する。
 30年実行は12tickごとに進捗を通知し96tickごとに取消可能checkpointを置く。
@@ -1296,8 +1363,8 @@ UI01 起動保存
 UI02 シナリオ
 /new
 シナリオ 難易度 slot seed
-UI03 ホーム
-/game slot home
+UI03 経済指標
+/game/:slot/indicators
 警告 5指標 3行報告 節目
 UI04 政策会議
 /game slot policies
@@ -1312,16 +1379,16 @@ UI07 市場
 /game slot market
 為替 金利 準備 経常収支 要因
 UI08 レポート
-/game slot reports
+/game/:slot/report
 系列 因果 政策 イベント
 UI09 イベント
-/game slot event id
+/game/:slot/events
 兆候 状況 選択 結果
 UI10 緊急会議
-/game slot crisis
+/game/:slot/crisis
 危機理由 緊急政策 再開
 UI11 終了評価
-/game slot result
+/game/:slot/ending
 5軸 総合点 判断 再挑戦
 UI12 ヘルプ設定
 /help および settings
@@ -1329,6 +1396,9 @@ UI12 ヘルプ設定
 UI13 開発者
 /dev
 開発build限定 診断 自動実行
+UI14 国家ビュー
+/game/:slot/nation（/game/:slot も接続）
+ゲームの入口 景観 時間進行 各画面への入口
 画面
 初期表示
 詳細
@@ -1486,7 +1556,7 @@ AT006
 48逐次と4時間offline一致
 integration offline equality 48
 AT007
-8時間超でも96tick上限
+1回96tick上限、超過step保持、手動・停止中は経過加算なし
 worker clock boundary
 AT008
 危機停止後に時間停止
@@ -1836,7 +1906,7 @@ UI02
 /new
 durationMode learningMode
 UI03
-/game/:slot/home
+/game/:slot/indicators
 nationSummary milestoneSummary assistantSuggestion
 UI04
 /game/:slot/policies
@@ -1845,10 +1915,16 @@ UI05
 /game/:slot/policies/preview
 baseline variant comboResults counterfactual horizon
 UI08
-/game/:slot/reports
+/game/:slot/report
 learningEntries historyEntries forecastRecords
+UI09
+/game/:slot/events
+既存eventsの選択待ち状態を参照
+UI10
+/game/:slot/crisis
+既存runStateの危機停止状態を参照
 UI11
-/game/:slot/result
+/game/:slot/ending
 historySummary reviewSnapshots comparison
 UI14
 /game/:slot/nation

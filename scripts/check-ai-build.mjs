@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const dist = new URL("../apps/web/dist/", import.meta.url).pathname;
+const dist = fileURLToPath(new URL("../apps/web/dist/", import.meta.url));
 function files(directory) {
   return readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry);

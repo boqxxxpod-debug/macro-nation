@@ -39,12 +39,13 @@ crisis threshold, or golden fixture is changed by this audit.
 
 - **Pass:** deterministic Config identity is recorded; all executed ticks satisfy
   state and causal-contribution invariants; no numeric or progress failure occurs.
-- **Blocked:** acceptable crisis frequency, debt tail, inflation tail, business
-  cycle length, and financial cycle length do not yet have machine-readable target
-  bands in `calibrationTargets.json`.
+- **Resolved by the follow-up tooling change:** business-cycle, financial-cycle,
+  longest crisis episode, debt P99, and absolute-inflation P99 bands are now
+  machine-readable in `calibrationTargets.json`. `npm run calibration:longterm`
+  runs the uninterrupted 100×360 diagnostic and fails when any band is missed.
 - **Fail on current candidate:** only 2% of no-policy ultra-long runs reach month
   360 before the game-mode crisis stop, so Issue #31-C and Issue #16 remain open.
 
-The next model-only calibration PR must add sourced target bands and report these
-five gates separately. It must not weaken Engine invariants or silently update an
-existing golden fixture.
+The next model-only calibration PR must tune the candidate against these five
+separately reported gates. It must not weaken Engine invariants or silently update
+an existing golden fixture.

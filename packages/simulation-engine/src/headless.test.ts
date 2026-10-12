@@ -109,23 +109,51 @@ beforeAll(async () => {
 });
 
 describe("SCN-01 no-policy headless runner", () => {
+  it("keeps the 96-month simulation identical when only notebook content changes", () => {
+    const current = runNoPolicyHeadless({ initialState: fixture, tickCount: 96 });
+    const legacy = runNoPolicyHeadless({
+      initialState: {
+        ...fixture,
+        versions: { ...fixture.versions, contentVersion: "1.2.0" },
+      },
+      tickCount: 96,
+    });
+    const normalizeState = (state: GameState): GameState => ({
+      ...state,
+      versions: { ...state.versions, contentVersion: "1.2.0" },
+    });
+    expect(current.failure).toBeNull();
+    expect(legacy.failure).toBeNull();
+    expect(normalizeState(current.finalState)).toEqual(legacy.finalState);
+    expect(
+      current.records.map((record) => ({
+        ...record,
+        state: normalizeState(record.state),
+      })),
+    ).toEqual(legacy.records);
+  });
+
   it.each([
     ["short", 48],
     ["standard", 96],
     ["long", 240],
     ["ultraLong", 360],
-  ] as const)("stops %s exactly at month %i", (mode, months) => {
-    const result = runNoPolicyHeadless({
-      initialState: makeState(`duration-${mode}`, mode),
-      tickCount: months + 1,
-      collectTrace: false,
-    });
-    expect(result.failure).toBeNull();
-    expect(result.ticksCompleted).toBe(months);
-    expect(result.finalState.runState).toBe("completed");
-    expect(result.finalState.clock.endMonth).toBe(months);
-    expect(result.finalState.clock.durationMode).toBe(mode);
-  });
+  ] as const)(
+    "stops %s exactly at month %i",
+    (mode, months) => {
+      const result = runNoPolicyHeadless({
+        initialState: makeState(`duration-${mode}`, mode),
+        tickCount: months + 1,
+        collectTrace: false,
+      });
+      expect(result.failure).toBeNull();
+      expect(result.ticksCompleted).toBe(months);
+      expect(result.finalState.runState).toBe("completed");
+      expect(result.finalState.clock.endMonth).toBe(months);
+      expect(result.finalState.clock.durationMode).toBe(mode);
+    },
+    10_000,
+  );
 
   it("keeps six reviews and three structural updates unique over 30 years", () => {
     const initialState = makeState("thirty-years", "ultraLong");

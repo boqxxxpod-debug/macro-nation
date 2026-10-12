@@ -40,14 +40,21 @@ function stableIndex(value: string, length: number): number {
   return (hash >>> 0) % length;
 }
 
-function messageFor(reaction: ReactionSnapshot): string {
+function messageFor(
+  reaction: ReactionSnapshot,
+  contentVersion: string,
+): string {
   const tone =
     reaction.direction > 0
       ? "positive"
       : reaction.direction < 0
         ? "negative"
         : "neutral";
-  const choices = templates[reaction.audience][tone];
+  const edition =
+    ["1.2.0", "1.3.0"].includes(contentVersion)
+      ? templates["1.2.0"]
+      : templates.legacy;
+  const choices = edition[reaction.audience][tone];
   return choices[
     stableIndex(
       `${reaction.audience}:${reaction.representativeTopicKey}`,
@@ -95,7 +102,7 @@ export function selectNationVoices(
         month: selected.month,
         lagMonths: selected.lagMonths,
         topicKey: selected.representativeTopicKey,
-        message: messageFor(selected),
+        message: messageFor(selected, state.versions.contentVersion),
         causeRef: selected.causeRefs[0]!,
       },
     ];

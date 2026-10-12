@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { NationViewModel } from "../application/nation-view";
 import {
   createSpriteAtlas,
   createSpritePool,
   drawMotionFrame,
+  drawStillFrame,
   frameRateStatus,
   initialQualityTier,
   nextQualityTier,
@@ -13,6 +15,12 @@ import {
 } from "./nation-motion";
 
 type QualitySetting = "auto" | QualityTier;
+const PAUSED_STORAGE_KEY = "macro-nation-motion-paused";
+const QUALITY_LABELS: Record<QualityTier, string> = {
+  high: "高画質",
+  medium: "標準",
+  low: "軽量",
+};
 
 function deviceTier(): QualityTier {
   const memory = (navigator as Navigator & { deviceMemory?: number })
@@ -26,7 +34,25 @@ function prefersReducedMotion() {
   );
 }
 
-export function NationMotion({ model }: { model: NationViewModel }) {
+function savedMotionPreference() {
+  try {
+    return window.localStorage.getItem(PAUSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function NationMotion({
+  model,
+  controlsTarget,
+  sceneAvailable = true,
+}: {
+  model: NationViewModel;
+  /** Keep drawing mounted while placing its controls in the settings screen. */
+  controlsTarget?: HTMLElement | null;
+  /** The image-specific paths must never be drawn over the SVG fallback. */
+  sceneAvailable?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const poolRef = useRef<ReturnType<typeof createSpritePool> | null>(null);
   const atlasRef = useRef<HTMLCanvasElement | null>(null);
@@ -35,14 +61,19 @@ export function NationMotion({ model }: { model: NationViewModel }) {
   const [setting, setSetting] = useState<QualitySetting>("auto");
   const [autoTier, setAutoTier] = useState(deviceTier);
   const [reduced, setReduced] = useState(prefersReducedMotion);
+  const [userPaused, setUserPaused] = useState(savedMotionPreference);
   const [fps, setFps] = useState<number | null>(null);
+  const stopped = reduced || userPaused || !sceneAvailable;
   const tier = setting === "auto" ? autoTier : setting;
   const performance = frameRateStatus(fps);
   const performanceLabel = {
-    measuring: "性能を計測中",
-    target: "目標30fpsを達成",
-    minimum: "最低20fpsを達成",
-    slow: "20fps未満・画質を調整中",
+    measuring: "動きのなめらかさを確認しています",
+    target: "30fps以上でなめらかに動いています",
+    minimum: "20fps以上で動いています",
+    slow:
+      setting === "auto"
+        ? "20fps未満のため画質を調整しています"
+        : "20fps未満です",
   }[performance];
 
   useEffect(() => {
@@ -54,8 +85,12 @@ export function NationMotion({ model }: { model: NationViewModel }) {
   }, []);
 
   useEffect(() => {
+    setFps(null);
+  }, [stopped]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (reduced || !canvas) return;
+    if (stopped || !canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     // Quality changes may restart the effect, while monthly model updates are
@@ -131,11 +166,77 @@ export function NationMotion({ model }: { model: NationViewModel }) {
       observer?.disconnect();
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
-  }, [reduced, tier, setting]);
+  }, [stopped, tier, setting]);
+
+  useEffect(() => {
+    if (!stopped || !sceneAvailable) return;
+    const context = canvasRef.current?.getContext("2d");
+    if (!context) return;
+    drawStillFrame(
+      context,
+      (poolRef.current ??= createSpritePool()),
+      model,
+      tier,
+    );
+  }, [stopped, sceneAvailable, model, tier]);
+
+  const controls = (
+    <div className="nation-motion-controls">
+      <label>
+        <input
+          type="checkbox"
+          checked={userPaused}
+          onChange={(event) => {
+            const paused = event.target.checked;
+            setUserPaused(paused);
+            try {
+              window.localStorage.setItem(PAUSED_STORAGE_KEY, String(paused));
+            } catch {
+              // Motion preference remains usable for this visit without storage.
+            }
+          }}
+        />
+        景観の動きを止める
+      </label>
+      <label>
+        景観の画質
+        <select
+          value={setting}
+          onChange={(event) => setSetting(event.target.value as QualitySetting)}
+        >
+          <option value="auto">自動</option>
+          <option value="high">高画質</option>
+          <option value="medium">標準</option>
+          <option value="low">軽量</option>
+        </select>
+      </label>
+      <output
+        className="nation-motion-diagnostics"
+        aria-live="off"
+        data-performance={
+          reduced
+            ? "reduced"
+            : userPaused
+              ? "paused"
+              : !sceneAvailable
+                ? "unavailable"
+                : performance
+        }
+      >
+        {reduced
+          ? "動きを減らす設定に合わせて、静止表示にしています"
+          : userPaused
+            ? "利用者の設定で景観の動きを止めています"
+            : !sceneAvailable
+              ? "背景画像を表示できないため、景観は静止表示です"
+              : `画質 ${QUALITY_LABELS[tier]} · ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
+      </output>
+    </div>
+  );
 
   return (
     <>
-      {!reduced && (
+      {sceneAvailable && (
         <canvas
           ref={canvasRef}
           className="nation-motion-canvas"
@@ -143,33 +244,14 @@ export function NationMotion({ model }: { model: NationViewModel }) {
           height={MOTION_HEIGHT}
           aria-hidden="true"
           data-quality={tier}
+          data-motion={stopped ? "still" : "animated"}
         />
       )}
-      <div className="nation-motion-controls">
-        <label>
-          景観の画質
-          <select
-            value={setting}
-            onChange={(event) =>
-              setSetting(event.target.value as QualitySetting)
-            }
-          >
-            <option value="auto">自動</option>
-            <option value="high">高</option>
-            <option value="medium">標準</option>
-            <option value="low">軽量</option>
-          </select>
-        </label>
-        <output
-          className="nation-motion-diagnostics"
-          aria-live="off"
-          data-performance={reduced ? "reduced" : performance}
-        >
-          {reduced
-            ? "動きの軽減: 静止表示"
-            : `画質 ${tier} · 描画 ${fps === null ? "計測中" : `${fps}fps`} · ${performanceLabel}`}
-        </output>
-      </div>
+      {controlsTarget
+        ? createPortal(controls, controlsTarget)
+        : controlsTarget === undefined
+          ? controls
+          : null}
     </>
   );
 }

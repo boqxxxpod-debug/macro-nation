@@ -72,7 +72,19 @@ export interface GameClock {
   /** Added in save schema 2; absent only on older saves awaiting migration. */
   readonly endMonth?: number;
   readonly durationMode?: DurationMode;
+  /** Added in save schema 3. Missing fields are migrated to manual and paused. */
+  readonly progressionMode?: "manual" | "auto";
+  /** Wall-clock checkpoint owned by the web Clock Adapter, never by Engine. */
+  readonly lastProcessedWallClockMs?: number | null;
+  readonly remainderMs?: number;
+  readonly stopReason?: ClockStopReason;
+  /** A recoverable wall-clock notice recorded by the web Clock Adapter. */
+  readonly warning?: "CLOCK_MOVED_BACKWARD";
 }
+
+export type ClockStopReason =
+  | "manual" | "policy" | "event" | "crisis" | "error"
+  | "completed" | "failed" | "offlineLimit" | "tutorial";
 
 export interface IndustryState {
   readonly productionIndex: IndexLevel;
@@ -320,6 +332,22 @@ export interface HistoryIndex {
   readonly reports?: readonly MonthlyReportSnapshot[];
   /** Explanation-only learning records derived outside the simulation Engine. */
   readonly learningEntries?: readonly LearningEntry[];
+  /** Read-only expert forecasts captured when a policy decision is committed. */
+  readonly forecastRecords?: readonly ForecastRecord[];
+  /** Sparse, reference-first national timeline. Monthly prose is reconstructed. */
+  readonly entries?: readonly HistoryEntry[];
+}
+
+export type HistoryCategory =
+  "policy" | "event" | "crisis" | "review" | "structure" | "social" | "ending";
+
+/** A compact index into existing decisions, events, reviews, reactions and causes. */
+export interface HistoryEntry {
+  readonly entryId: string;
+  readonly month: number;
+  readonly categories: readonly HistoryCategory[];
+  readonly referenceIds: readonly string[];
+  readonly causeRefs: readonly string[];
 }
 
 export type LearningEntryKind = "term" | "theory" | "decision" | "verification";
@@ -328,10 +356,36 @@ export interface LearningEntry {
   readonly entryId: string;
   readonly month: number;
   readonly kind: LearningEntryKind;
-  readonly concept: string;
-  readonly evidence: string;
+  /** Legacy notebook prose remains readable without rewriting an old save. */
+  readonly concept?: string;
+  readonly evidence?: string;
+  /** Display templates are pinned independently of the current app content. */
+  readonly contentVersion?: string;
+  readonly conceptKey?: string;
+  readonly evidenceKey?: string;
+  /** Unrounded report facts; display wording is reconstructed from content. */
+  readonly cause?: {
+    readonly indicatorId: string;
+    readonly sourceType: string;
+    readonly sourceId: string;
+    readonly labelKey: string;
+    readonly delta: number;
+  };
   readonly decisionId?: string;
   readonly mode: NonNullable<GameState["learningMode"]>;
+}
+
+export interface ForecastRecord {
+  readonly recordId: string;
+  readonly decisionId: string;
+  readonly recordedMonth: number;
+  readonly expertIds: readonly string[];
+  readonly confidence: "low" | "medium" | "high";
+  readonly uncertainty: string;
+  readonly horizons: readonly {
+    readonly months: 12 | 60;
+    readonly indicators: Readonly<Record<string, number>>;
+  }[];
 }
 
 export interface ReviewSnapshot {
