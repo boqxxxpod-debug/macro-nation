@@ -392,3 +392,113 @@ test("360×640 casual guide offers automatic progression without adding a policy
   expect(after.economy).toEqual(before.economy);
   expect(after.policies).toEqual(before.policies);
 });
+
+test("360×640 reduced-motion start pages remain stable when content becomes hidden", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  // Match the screenshot capture context without Desktop Chrome's UA override.
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 360, height: 640 },
+    deviceScaleFactor: 1,
+    reducedMotion: "reduce",
+  });
+  try {
+    const page = await context.newPage();
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto("/");
+    const start = page.getByRole("button", { name: "はじめる", exact: true });
+    await expect(start).toBeEnabled();
+    await waitForPageLayout(page);
+    const deck = page.locator('[data-page-deck][aria-label="開始設定"]');
+    const previous = deck.getByRole("button", { name: "開始設定の前のページ" });
+    const next = deck.getByRole("button", { name: "開始設定の次のページ" });
+    const reachedItems = new Set<number>();
+    const launchHeights: Record<"visible" | "hidden", number[]> = {
+      visible: [],
+      hidden: [],
+    };
+
+    async function inspectCurrentPage() {
+      await waitForPageLayout(page);
+      expect(pageErrors, "paging must not crash React").toEqual([]);
+      await expectInViewport(deck);
+      await expectDocumentFits(page);
+      await expectInViewport(start, true);
+      await expect(start).toBeEnabled();
+      const visibleItems = deck.locator(
+        ":scope > [data-page-current] > [data-page-item]:not([hidden])",
+      );
+      for (const item of await visibleItems.all()) await expectInViewport(item);
+      for (const index of await deck.evaluate((element) =>
+        Array.from(
+          element.querySelectorAll<HTMLElement>("[data-page-item]"),
+        ).flatMap((item, index) => (item.hidden ? [] : [index])),
+      ))
+        reachedItems.add(index);
+      const launchItem = await page
+        .locator(".launch-actions")
+        .first()
+        .evaluate((element) => {
+          const item = element.closest<HTMLElement>("[data-page-item]")!;
+          return {
+            hidden: item.hidden,
+            height: item.getBoundingClientRect().height,
+          };
+        });
+      launchHeights[launchItem.hidden ? "hidden" : "visible"].push(
+        launchItem.height,
+      );
+    }
+
+    await expect(previous).toBeDisabled();
+    await inspectCurrentPage();
+    for (let count = 0; count < 100 && (await next.isEnabled()); count++) {
+      await next.click();
+      await inspectCurrentPage();
+    }
+    await expect(next).toBeDisabled();
+    expect(
+      reachedItems.size,
+      "every start fragment must remain reachable",
+    ).toBe(await deck.locator("[data-page-item]").count());
+    for (let count = 0; count < 100 && (await previous.isEnabled()); count++) {
+      await previous.click();
+      await inspectCurrentPage();
+    }
+    await expect(previous).toBeDisabled();
+    expect(launchHeights.visible.length).toBeGreaterThan(0);
+    expect(launchHeights.hidden.length).toBeGreaterThan(0);
+    for (const height of [...launchHeights.visible, ...launchHeights.hidden])
+      expect(
+        Math.abs(height - launchHeights.visible[0]!),
+        "the same start-menu item must have the same measured height while hidden",
+      ).toBeLessThanOrEqual(0.5);
+
+    const seed = page.getByRole("textbox", { name: "再現用コード（任意）" });
+    await reveal(page, seed);
+    await seed.fill("issue-103-stable-start-pages");
+    await waitForPageLayout(page);
+    await expect(page.getByLabel("選択中の開始設定")).toContainText(
+      /再現用コード[：:\s]*入力あり/,
+    );
+    await expectInViewport(page.getByText(PURPOSE, { exact: true }));
+    await expectInViewport(page.getByText(CORE_LOOP, { exact: true }));
+    await expectInViewport(start, true);
+    expect(pageErrors).toEqual([]);
+    await start.click();
+    await expect(
+      page.getByRole("heading", { name: "国家ビュー" }),
+    ).toBeFocused();
+    const saved = await savedState(page);
+    expect(saved.monthIndex).toBe(0);
+    expect(saved.rng.rootSeed).toBe("issue-103-stable-start-pages");
+    expect(saved.policyAdministration?.receipts ?? []).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});

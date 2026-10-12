@@ -1478,6 +1478,9 @@ label select {
   min-width: 0;
 }
 .page-content > [data-page-item] {
+  /* Match hidden items' layout containment so child margins cannot collapse
+     only when visible and make pagination alternate between two page maps. */
+  display: flow-root;
   width: 100%;
   margin-bottom: 8px;
 }
