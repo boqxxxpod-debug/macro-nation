@@ -599,6 +599,9 @@ for (const viewport of VIEWPORTS) {
     await expect(
       page.getByRole("heading", { name: "国家ビュー" }),
     ).toBeFocused();
+    await page
+      .getByRole("button", { name: "案内を閉じる", exact: true })
+      .click();
     await expectNationArtworkAlignment(page);
     await inspectPages(page);
     await page.getByRole("button", { name: "経済指標を見る" }).click();

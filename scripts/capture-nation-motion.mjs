@@ -114,6 +114,11 @@ async function openNation(page, url) {
   if (!(await heading.isVisible()))
     await page.getByRole("button", { name: "国家ビュー", exact: true }).click();
   await heading.waitFor();
+  const closeGuide = page.getByRole("button", {
+    name: "案内を閉じる",
+    exact: true,
+  });
+  if (await closeGuide.isVisible()) await closeGuide.click();
   const image = page.locator(".nation-view img.nation-landscape");
   await image.evaluate((element) => element.decode());
   await page.locator(".nation-view canvas.nation-motion-canvas").waitFor();

@@ -35,6 +35,7 @@ import { ExpertPortrait } from "./ExpertPortrait";
 import { TermHelp } from "./TermHelp";
 import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
+import { tutorialContent } from "./tutorial-content";
 import {
   learningEntryDisplay,
   schoolLensesForContentVersion,
@@ -269,27 +270,7 @@ export function Home({
       ? {
           tutorial: {
             title: "はじめの案内",
-            content: (
-              <section
-                className="panel tutorial"
-                aria-label="4四半期チュートリアル"
-              >
-                <h3>
-                  はじめの4四半期・第{Math.floor(state.monthIndex / 3) + 1}回
-                </h3>
-                <p>
-                  {
-                    [
-                      "まず政策会議で案を比べ、採用するか今の政策を続けるか選びましょう。",
-                      "数か月進め、前月比と3行報告を確認しましょう。",
-                      "別の政策の見通しを確認し、12か月の副作用と費用を比べましょう。",
-                      "レポートでいちばん大きく影響したことを確認し、次の判断に備えましょう。",
-                    ][Math.floor(state.monthIndex / 3)]
-                  }
-                </p>
-                <p>この案内を見ながら、通常と同じルールで進められます。</p>
-              </section>
-            ),
+            content: tutorialContent(state),
           },
         }
       : {}),

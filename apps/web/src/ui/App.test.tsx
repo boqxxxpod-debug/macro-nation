@@ -120,6 +120,110 @@ function memoryRepository() {
 }
 
 describe("SCN-01 user journey", () => {
+  it("keeps the objective, play loop, and selected settings beside the start action", async () => {
+    const memory = memoryRepository();
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+
+    const objective = screen.getByText(
+      "暮らし・成長・安定・持続性・信頼のバランスを考え、国を育てましょう。",
+    );
+    const loop = screen.getByText(
+      "政策を比べる → 月を進める → 結果と理由を見る",
+    );
+    expect(objective).toBeVisible();
+    expect(loop).toBeVisible();
+    expect(objective.closest(".page-content")).toBeNull();
+    expect(loop.closest(".page-content")).toBeNull();
+    expect(screen.getByText(/架空国家を運営するゲームです/)).toBeVisible();
+    expect(
+      textOnPage(
+        "開始設定",
+        /終了時は「暮らし」「成長」「安定」「持続性」「信頼」/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      textOnPage("開始設定", /政策や専門家の視点を比べながら/),
+    ).toBeInTheDocument();
+
+    const summary = screen.getByLabelText("選択中の開始設定");
+    expect(summary).toBeVisible();
+    expect(summary).toHaveTextContent(
+      "難易度：入門・期間：4年・学習モード：学習・保存先：1・再現用コード：自動",
+    );
+    expect(summary.closest(".page-actions")).toContainElement(
+      screen.getByRole("button", { name: "はじめる" }),
+    );
+
+    fireEvent.change(roleOnPage("開始設定", "combobox", "難易度"), {
+      target: { value: "expert" },
+    });
+    fireEvent.click(roleOnPage("開始設定", "radio", /8年（96か月）/));
+    fireEvent.change(roleOnPage("開始設定", "combobox", "説明モード"), {
+      target: { value: "casual" },
+    });
+    fireEvent.click(roleOnPage("開始設定", "button", "保存先2ではじめる"));
+    fireEvent.change(
+      roleOnPage("開始設定", "textbox", "再現用コード（任意）"),
+      {
+        target: { value: "chosen-start-seed" },
+      },
+    );
+    expect(summary).toBeVisible();
+    expect(summary).toHaveTextContent(
+      "難易度：専門・期間：8年・学習モード：カジュアル・保存先：2・再現用コード：入力あり",
+    );
+    expect(memory.saved).toBeNull();
+  });
+
+  it("offers the full play guide before starting and through the game menu without changing the game", async () => {
+    const memory = memoryRepository();
+    const view = render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    fireEvent.click(roleOnPage("開始設定", "button", "遊び方・設定"));
+    for (const step of [
+      "1. 政策を比べる",
+      "2. 月を進める",
+      "3. 結果と理由を見る",
+    ])
+      expect(roleOnPage("開始設定", "heading", step)).toBeInTheDocument();
+    expect(
+      textOnPage(
+        "開始設定",
+        /開始後にシナリオ、難易度、期間、再現用コードは変更できません/,
+      ),
+    ).toBeInTheDocument();
+    view.unmount();
+
+    await createGame(memory.repository, "guide-read-only");
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    const before = structuredClone(memory.saved);
+    const save = vi.spyOn(memory.repository, "save");
+    const location = window.location.pathname;
+    fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
+    fireEvent.click(roleOnPage("画面メニュー", "button", "遊び方・設定"));
+    for (const step of [
+      "1. 政策を比べる",
+      "2. 月を進める",
+      "3. 結果と理由を見る",
+    ])
+      expect(roleOnPage("遊び方・設定", "heading", step)).toBeInTheDocument();
+    expect(
+      textOnPage("遊び方・設定", /ログインや通信を必要としません/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "画面メニューに戻る" }));
+    fireEvent.click(roleOnPage("画面メニュー", "button", "遊び方・設定"));
+    fireEvent.click(screen.getByRole("button", { name: "遊び方を閉じる" }));
+    expect(screen.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "メニュー" })).toHaveFocus(),
+    );
+    expect(window.location.pathname).toBe(location);
+    expect(save).not.toHaveBeenCalled();
+    expect(memory.saved).toEqual(before);
+  }, 15_000);
+
   it("keeps text reflow monitoring when stylesheet fonts change after Strict Mode remount", async () => {
     const originalResizeObserver = globalThis.ResizeObserver;
     const callbacks = new Set<ResizeObserverCallback>();
