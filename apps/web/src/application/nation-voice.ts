@@ -51,7 +51,9 @@ function messageFor(
         ? "negative"
         : "neutral";
   const edition =
-    contentVersion === "1.2.0" ? templates["1.2.0"] : templates.legacy;
+    ["1.2.0", "1.3.0"].includes(contentVersion)
+      ? templates["1.2.0"]
+      : templates.legacy;
   const choices = edition[reaction.audience][tone];
   return choices[
     stableIndex(

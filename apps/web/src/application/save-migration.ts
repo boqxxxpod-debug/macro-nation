@@ -10,20 +10,26 @@ import {
 } from "@macro-nation/simulation-engine";
 import type { GameRepository } from "./game-service";
 
-/** Economic snapshots stay unchanged when schema 3 adds web clock metadata. */
+/** Schema 4 adds learning history without changing the saved economic run. */
 export async function migrateFirstPlayableSave(
   repository: GameRepository,
   state: GameState,
 ): Promise<GameState> {
-  if (!["1", "2", "3"].includes(state.versions.saveSchemaVersion))
+  if (!["1", "2", "3", "4"].includes(state.versions.saveSchemaVersion))
     throw new Error("保存データの版に対応していません。元の版で再開してください");
+  if (
+    state.history.learningEntries !== undefined &&
+    !Array.isArray(state.history.learningEntries)
+  )
+    throw new Error("保存済みの学習履歴の形式を確認できません");
   if (
     state.versions.engineVersion === ENGINE_VERSION &&
     state.clock.endMonth !== undefined &&
-    state.versions.saveSchemaVersion === "3" &&
+    state.versions.saveSchemaVersion === "4" &&
     state.clock.progressionMode !== undefined &&
     state.clock.lastProcessedWallClockMs !== undefined &&
-    state.clock.remainderMs !== undefined
+    state.clock.remainderMs !== undefined &&
+    Array.isArray(state.history.learningEntries)
   )
     return state;
   if (
@@ -61,7 +67,7 @@ export async function migrateFirstPlayableSave(
       }
     : state.configSnapshot;
   const hasDuration = state.versions.engineVersion !== "0.1.7" && state.clock.endMonth !== undefined &&
-    ["2", "3"].includes(state.versions.saveSchemaVersion);
+    ["2", "3", "4"].includes(state.versions.saveSchemaVersion);
   const durationMode = hasDuration ? state.durationMode ?? "short" : "short";
   const needsClockDefaults = state.clock.progressionMode === undefined;
   const runState = needsClockDefaults &&
@@ -91,11 +97,12 @@ export async function migrateFirstPlayableSave(
       appliedMilestones: state.history.appliedMilestones ?? [],
       reviews: state.history.reviews ?? [],
       entries: state.history.entries ?? [],
+      learningEntries: state.history.learningEntries ?? [],
     },
     versions: {
       ...state.versions,
       engineVersion: ENGINE_VERSION,
-      saveSchemaVersion: "3",
+      saveSchemaVersion: "4",
       ...(needsPlayableRules ? { configVersion: "0.1.3" } : {}),
     },
     configSnapshot,

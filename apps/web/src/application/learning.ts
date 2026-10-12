@@ -5,10 +5,29 @@ import type {
   MonthlyReportSnapshot,
   NumericUnit,
 } from "@macro-nation/domain";
-import { indicatorDisplayName } from "@macro-nation/advisor-core";
-import { causeCategory } from "./home-view";
+import {
+  indicatorDisplayName,
+  renderContent,
+} from "@macro-nation/advisor-core";
 import { historyCauseDisplay, historyReferenceDisplay } from "./history";
+import learningContentData from "./learning-content.json";
 import schoolLensData from "./school-lenses.json";
+
+interface LearningContent {
+  readonly templates: Readonly<Record<string, string>>;
+  readonly kindLabels: Readonly<Record<LearningEntry["kind"], string>>;
+  readonly sourceCategories: Readonly<Record<string, string>>;
+  readonly unitSuffixes: Readonly<Record<NumericUnit, string>>;
+  readonly unknownConcept: string;
+  readonly unknownEvidence: string;
+  readonly unknownCauseCategory: string;
+}
+
+function learningContentForVersion(contentVersion: string): LearningContent {
+  return contentVersion === "1.3.0"
+    ? learningContentData["1.3.0"]
+    : learningContentData.legacy;
+}
 
 export interface SchoolLens {
   readonly schoolId: string;
@@ -25,7 +44,9 @@ export const schoolLenses: readonly SchoolLens[] = schoolLensData.legacy;
 export function schoolLensesForContentVersion(
   contentVersion: string,
 ): readonly SchoolLens[] {
-  return contentVersion === "1.2.0" ? schoolLensData["1.2.0"] : schoolLenses;
+  return contentVersion === "1.2.0" || contentVersion === "1.3.0"
+    ? schoolLensData["1.2.0"]
+    : schoolLenses;
 }
 
 export interface ForecastCapture {
@@ -79,14 +100,27 @@ export function learningEntriesForReport(
   if (state.learningMode !== "learning" || report.topCauses.length === 0)
     return [];
   const cause = report.topCauses[0]!;
-  const decision = [...state.policies.active, ...state.policies.reserved]
-    .filter((item) => item.decidedMonth <= report.monthIndex)
-    .sort((left, right) => right.decidedMonth - left.decidedMonth)[0];
+  // Completed/cancelled decisions can still explain a delayed report effect.
+  // A recent, unrelated policy is never evidence for a non-policy cause.
+  const decision =
+    cause.sourceType === "policy"
+      ? [
+          ...state.policies.active,
+          ...state.policies.reserved,
+          ...(state.policies.completed ?? []),
+          ...(state.policies.cancelled ?? []),
+        ].find(
+          (item) =>
+            item.policyId === cause.sourceId &&
+            item.decidedMonth <= report.monthIndex,
+        )
+      : undefined;
   const base = `learning:${report.monthIndex}:${cause.indicatorId}:${cause.sourceType}:${cause.sourceId}`;
-  const evidence = `${cause.indicatorId} / ${cause.sourceType}:${cause.sourceId} / ${cause.delta >= 0 ? "+" : ""}${cause.delta.toFixed(4)}`;
   const shared = {
     month: report.monthIndex,
-    evidence,
+    contentVersion: state.versions?.contentVersion ?? "1.3.0",
+    evidenceKey: "learning.evidence.contribution",
+    cause: { ...cause },
     mode: state.learningMode,
     ...(decision ? { decisionId: decision.policyId } : {}),
   } as const;
@@ -95,25 +129,29 @@ export function learningEntriesForReport(
       ...shared,
       entryId: `${base}:term`,
       kind: "term",
-      concept: cause.indicatorId,
+      conceptKey: "learning.term",
     },
     {
       ...shared,
       entryId: `${base}:theory`,
       kind: "theory",
-      concept: `${cause.sourceType}から${cause.indicatorId}への因果経路`,
+      conceptKey: "learning.theory",
     },
     {
       ...shared,
       entryId: `${base}:decision`,
       kind: "decision",
-      concept: decision ? `政策判断 ${decision.type}` : "無介入の判断",
+      conceptKey: decision
+        ? "learning.decision.policy"
+        : cause.sourceType === "policy"
+          ? "learning.decision.unresolvedPolicy"
+          : "learning.decision.otherCause",
     },
     {
       ...shared,
       entryId: `${base}:verification`,
       kind: "verification",
-      concept: `${report.monthIndex}月目の結果検証`,
+      conceptKey: "learning.verification",
     },
   ];
 }
@@ -179,10 +217,11 @@ const STOCK_INDICATORS = new Set([
 
 function contributionDisplay(
   indicatorId: string,
-  rawDelta: string,
+  delta: number,
   state: GameState,
+  content: LearningContent,
 ): string {
-  const content = state.configSnapshot?.normalizedConfig.content as
+  const snapshotContent = state.configSnapshot?.normalizedConfig.content as
     | {
         indicatorDefinitions?: readonly {
           indicatorId: string;
@@ -190,7 +229,7 @@ function contributionDisplay(
         }[];
       }
     | undefined;
-  const configuredUnit = content?.indicatorDefinitions?.find(
+  const configuredUnit = snapshotContent?.indicatorDefinitions?.find(
     (definition) => definition.indicatorId === indicatorId,
   )?.unit;
   const unit =
@@ -208,58 +247,89 @@ function contributionDisplay(
             : STOCK_INDICATORS.has(indicatorId)
               ? "StockLevel"
               : "Scalar");
-  const delta = Number(rawDelta);
-  if (unit === "PercentRate" || unit === "Share01")
-    return `${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(4)}パーセントポイント`;
-  const suffix: Readonly<Record<NumericUnit, string>> = {
-    PercentPoint: "パーセントポイント",
-    PercentRate: "パーセントポイント",
-    Share01: "パーセントポイント",
-    ScorePoint: "ポイント",
-    IndexLevel: "指数ポイント",
-    LogIndex: "対数指数ポイント",
-    FlowPerMonth: "（ゲーム内金額・月間）",
-    StockLevel: "（ゲーム内金額）",
-    MonthCount: "か月",
-    Scalar: "",
-  };
-  return `${rawDelta}${suffix[unit]}`;
+  const displayDelta =
+    unit === "PercentRate" || unit === "Share01" ? delta * 100 : delta;
+  return `${displayDelta >= 0 ? "+" : ""}${displayDelta.toFixed(4)}${content.unitSuffixes[unit]}`;
 }
 
-/** Translate notebook prose at display time; saved evidence, IDs and precision stay intact. */
+/** Read structured notebooks and legacy prose without mutating saved evidence. */
 export function learningEntryDisplay(
   entry: LearningEntry,
   state: GameState,
-): { readonly concept: string; readonly evidence: string } {
+): {
+  readonly concept: string;
+  readonly evidence: string;
+  readonly kindLabel: string;
+} {
+  const content = learningContentForVersion(
+    entry.contentVersion ?? state.versions?.contentVersion ?? "legacy",
+  );
   const match =
     /^([^ /]+) \/ (policy|combo|event|external|inertia|random):(.+) \/ ([+-]?\d+(?:\.\d+)?)$/.exec(
-      entry.evidence,
+      entry.evidence ?? "",
     );
-  if (!match) {
+  const cause =
+    entry.cause ??
+    (match
+      ? {
+          indicatorId: match[1]!,
+          sourceType: match[2]!,
+          sourceId: match[3]!,
+          delta: Number(match[4]),
+        }
+      : undefined);
+  if (!cause) {
     return {
-      concept: /[\u3040-\u30ff\u3400-\u9fff]/.test(entry.concept)
-        ? entry.concept
-        : "経済の変化についての記録",
-      evidence: /[\u3040-\u30ff\u3400-\u9fff]/.test(entry.evidence)
-        ? entry.evidence
-        : `${entry.month}月目の結果をもとにした記録です。`,
+      kindLabel: content.kindLabels[entry.kind],
+      concept:
+        entry.concept && /[\u3040-\u30ff\u3400-\u9fff]/.test(entry.concept)
+          ? entry.concept
+          : content.unknownConcept,
+      evidence:
+        entry.evidence && /[\u3040-\u30ff\u3400-\u9fff]/.test(entry.evidence)
+          ? entry.evidence
+          : renderContent(content.unknownEvidence, {
+              month: String(entry.month),
+            }),
     };
   }
-  const indicatorId = match[1]!;
-  const sourceType = match[2]!;
-  const sourceId = match[3]!;
-  const rawDelta = match[4]!;
-  const indicator = indicatorDisplayName(indicatorId);
-  const concepts = {
-    term: indicator,
-    theory: `${causeCategory(sourceType)}が${indicator}に影響する仕組み`,
+  const values = {
+    month: String(entry.month),
+    indicator: indicatorDisplayName(cause.indicatorId),
+    sourceCategory:
+      content.sourceCategories[cause.sourceType] ??
+      content.unknownCauseCategory,
+    cause: historyCauseDisplay(`${cause.sourceType}:${cause.sourceId}`, state),
     decision: entry.decisionId
-      ? `${historyReferenceDisplay(entry.decisionId, state)}を選んだ判断`
-      : "政策を加えずに見守った判断",
-    verification: `${entry.month}月目の結果を振り返る`,
+      ? historyReferenceDisplay(entry.decisionId, state)
+      : "",
+    contribution: contributionDisplay(
+      cause.indicatorId,
+      cause.delta,
+      state,
+      content,
+    ),
+  };
+  const legacyConceptKeys = {
+    term: "learning.term",
+    theory: "learning.theory",
+    decision: entry.decisionId
+      ? "learning.decision.policy"
+      : "learning.decision.legacyObservation",
+    verification: "learning.verification",
   };
   return {
-    concept: concepts[entry.kind],
-    evidence: `${entry.month}月目の${indicator}の変化に、${historyCauseDisplay(`${sourceType}:${sourceId}`, state)}が${contributionDisplay(indicatorId, rawDelta, state)}影響しています。`,
+    kindLabel: content.kindLabels[entry.kind],
+    concept: renderContent(
+      content.templates[entry.conceptKey ?? legacyConceptKeys[entry.kind]] ??
+        content.unknownConcept,
+      values,
+    ),
+    evidence: renderContent(
+      content.templates[
+        entry.evidenceKey ?? "learning.evidence.contribution"
+      ] ?? content.unknownEvidence,
+      values,
+    ),
   };
 }

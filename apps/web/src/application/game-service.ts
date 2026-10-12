@@ -112,7 +112,7 @@ export async function createGame(
     pack.scenario.parameterOverrides,
   );
   const versions: VersionTuple = {
-    saveSchemaVersion: "3",
+    saveSchemaVersion: "4",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -145,6 +145,7 @@ export async function createGame(
     history: {
       ...initial.history,
       reports: [reportSnapshot(initial)],
+      learningEntries: [],
     },
   };
   await repository.create(state, startCommandId);

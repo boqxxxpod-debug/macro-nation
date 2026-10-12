@@ -574,15 +574,7 @@ export function Report({ state }: { state: GameState }) {
                     <article key={entry.entryId}>
                       <h4>{entryDisplay.concept}</h4>
                       <p>
-                        {entry.month}月目・
-                        {
-                          {
-                            term: "用語",
-                            theory: "経済のつながり",
-                            decision: "政策の判断",
-                            verification: "結果の振り返り",
-                          }[entry.kind]
-                        }
+                        {entry.month}月目・{entryDisplay.kindLabel}
                       </p>
                       <p>根拠：{entryDisplay.evidence}</p>
                     </article>

@@ -356,8 +356,21 @@ export interface LearningEntry {
   readonly entryId: string;
   readonly month: number;
   readonly kind: LearningEntryKind;
-  readonly concept: string;
-  readonly evidence: string;
+  /** Legacy notebook prose remains readable without rewriting an old save. */
+  readonly concept?: string;
+  readonly evidence?: string;
+  /** Display templates are pinned independently of the current app content. */
+  readonly contentVersion?: string;
+  readonly conceptKey?: string;
+  readonly evidenceKey?: string;
+  /** Unrounded report facts; display wording is reconstructed from content. */
+  readonly cause?: {
+    readonly indicatorId: string;
+    readonly sourceType: string;
+    readonly sourceId: string;
+    readonly labelKey: string;
+    readonly delta: number;
+  };
   readonly decisionId?: string;
   readonly mode: NonNullable<GameState["learningMode"]>;
 }

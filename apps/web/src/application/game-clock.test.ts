@@ -210,7 +210,7 @@ describe("GameClockController wall-clock progression", () => {
 
   it("starts new games paused in manual mode and ignores elapsed time", async () => {
     const f = await fixture();
-    expect(f.initial.versions.saveSchemaVersion).toBe("3");
+    expect(f.initial.versions.saveSchemaVersion).toBe("4");
     expect(f.initial.runState).toBe("paused");
     expect(f.initial.clock.progressionMode).toBe("manual");
     expect(f.initial.clock.lastProcessedWallClockMs).toBeNull();

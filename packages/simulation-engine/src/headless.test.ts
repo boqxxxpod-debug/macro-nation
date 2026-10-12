@@ -109,6 +109,30 @@ beforeAll(async () => {
 });
 
 describe("SCN-01 no-policy headless runner", () => {
+  it("keeps the 96-month simulation identical when only notebook content changes", () => {
+    const current = runNoPolicyHeadless({ initialState: fixture, tickCount: 96 });
+    const legacy = runNoPolicyHeadless({
+      initialState: {
+        ...fixture,
+        versions: { ...fixture.versions, contentVersion: "1.2.0" },
+      },
+      tickCount: 96,
+    });
+    const normalizeState = (state: GameState): GameState => ({
+      ...state,
+      versions: { ...state.versions, contentVersion: "1.2.0" },
+    });
+    expect(current.failure).toBeNull();
+    expect(legacy.failure).toBeNull();
+    expect(normalizeState(current.finalState)).toEqual(legacy.finalState);
+    expect(
+      current.records.map((record) => ({
+        ...record,
+        state: normalizeState(record.state),
+      })),
+    ).toEqual(legacy.records);
+  });
+
   it.each([
     ["short", 48],
     ["standard", 96],

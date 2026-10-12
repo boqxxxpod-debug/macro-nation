@@ -34,7 +34,7 @@ describe("ConfigPack v1", () => {
         configSchemaVersion: "1",
         modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
-        contentVersion: "1.2.0",
+        contentVersion: "1.3.0",
         rngVersion: "xoshiro128ss-v1",
         configVersion: SCN01_CONFIG_PACK.manifest.configVersion,
       }),
@@ -69,7 +69,7 @@ describe("ConfigPack v1", () => {
         configSchemaVersion: "1",
         modelVersion: "0.1.2",
         calibrationVersion: "advanced-small-open-v1.0.0",
-        contentVersion: "1.2.0",
+        contentVersion: "1.3.0",
         rngVersion: "xoshiro128ss-v1",
         configVersion: "0.0.9",
       }),
@@ -431,7 +431,7 @@ describe("ConfigPack v1", () => {
   });
 
   it("revises only content while saved games retain their original snapshot text", async () => {
-    expect(SCN01_CONFIG_PACK.manifest.contentVersion).toBe("1.2.0");
+    expect(SCN01_CONFIG_PACK.manifest.contentVersion).toBe("1.3.0");
     expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.2");
     expect(SCN01_CONFIG_PACK.manifest.configSchemaVersion).toBe("1");
     expect(SCN01_CONFIG_PACK.manifest.configVersion).toBe("0.1.5");

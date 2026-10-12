@@ -122,6 +122,12 @@ describe("Nation Voice selector", () => {
     })[0]!;
     expect(legacy.message).toBe("暮らしへの良い変化を感じています");
     expect(current.message).toBe("暮らしに、よい変化を感じています。");
+    expect(
+      selectNationVoices({
+        ...state,
+        versions: { ...state.versions, contentVersion: "1.3.0" },
+      }),
+    ).toEqual([current]);
     expect({ ...current, message: legacy.message }).toEqual(legacy);
     expect(state).toEqual(before);
   });

@@ -1063,6 +1063,7 @@ UI14の描画・閲覧遷移はrunStateを変更しない。経済指標と同�
 27 保存 バージョン 移行
 saveSchemaVersionを上げるmigrationでは既存セーブにstandard duration 96か月を設定せず、scenarioIdがSCN-01なら48、それ以外の既存シナリオなら96をendMonthとして補完する。ExpertProfile本文や画像は保存せずexpertIdとtemplateVersionだけを保存する。
 Issue #91の保存schema 3は時計の進行モード・基準時刻・端数・停止理由を追加する。旧セーブは手動、基準時刻null、端数0へ補完し、通常のrunningはpausedへ移す。イベント待ち・危機・終了状態、既にあるendMonth・durationMode、pendingOfflineSteps、経済Config Snapshot、RNGを維持する。Engine・Modelの版を時間UI追加だけで変更しない。
+Issue #27の保存schema 4は学習履歴を明示する。schema 1・2・3のlearningEntries欠落は空配列へ補完し、既存の学習記録と時計・経済Config Snapshot・RNGは維持する。新しいノートにはconceptKey、evidenceKey、contentVersionと元の因果寄与を保存し、表示時に版付きコンテンツで日本語へ変換する。旧concept・evidence文字列も読み取り互換を保つ。政策原因はsourceIdを全政策記録（予約・実施中・完了・取消）で解決し、政策以外の原因にはdecisionIdを設定しない。新規ゲームのcontentVersionは1.3.0とし、既存ゲームの版は変えない。
 28 Workerと性能設計
 worker messageはZodで検証しrequestIdとengineVersion不一致を拒否する。
 30年実行は12tickごとに進捗を通知し96tickごとに取消可能checkpointを置く。
