@@ -354,8 +354,11 @@ test("200% text keeps category anchors and policy confirmation keyboard reachabl
       document.documentElement.scrollWidth <= innerWidth + 1,
     )).toBe(true);
   }
-  await expect(region.getByRole("button", { name: "政策の見通しの前のページ" })).toBeDisabled();
-  await expect(region.getByRole("button", { name: "政策の見通しの次のページ" })).toBeDisabled();
+  for (const name of ["政策の見通しの前のページ", "政策の見通しの次のページ"]) {
+    const control = region.getByRole("button", { name, includeHidden: true });
+    await expect(control).toBeHidden();
+    await expect(control).toBeDisabled();
+  }
   await captureCategory(page, testInfo, "policy-200-percent");
   const acknowledgement = region.getByRole("checkbox", { name: REVIEW_LABEL });
   await acknowledgement.focus();
