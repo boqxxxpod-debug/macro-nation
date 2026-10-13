@@ -187,26 +187,74 @@ function blocks(node: ReactNode, limit = 80, path = "root"): ReactNode[] {
   return [cloneElement(element, { key: path })];
 }
 
+export type PageDeckCategory = {
+  id: string;
+  label: string;
+  content: ReactNode;
+};
+
 export function PageDeck({
   label,
   children,
+  categories,
   actions,
 }: {
   label: string;
-  children: ReactNode;
+  children?: ReactNode;
+  categories?: readonly PageDeckCategory[];
   actions?: ReactNode;
 }) {
   const id = useId();
   const content = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
-  const [pages, setPages] = useState<number[][]>([]);
+  const [layout, setLayout] = useState<{
+    pages: number[][];
+    categoryIds: (string | undefined)[];
+    firstItemKeys: (string | number | undefined)[];
+  }>({ pages: [], categoryIds: [], firstItemKeys: [] });
+  const { pages } = layout;
   const [expanded, setExpanded] = useState(
     () => typeof ResizeObserver === "undefined",
   );
   const [textLimit, setTextLimit] = useState(80);
-  const items = blocks(children, textLimit);
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string>();
+  const categoryItems = categories
+    ?.map((category) => ({
+      ...category,
+      items: blocks(category.content, textLimit, `category.${category.id}`),
+    }))
+    .filter((category) => category.items.length > 0);
+  const items = categoryItems
+    ? categoryItems.flatMap((category) => category.items)
+    : blocks(children, textLimit);
+  const itemCategoryIds = categoryItems?.flatMap((category) =>
+    category.items.map(() => category.id),
+  );
+  const itemKeys = items.map((item, index) =>
+    isValidElement(item) ? (item.key ?? index) : index,
+  );
   const pageCount = Math.max(1, pages.length);
   const current = Math.min(page, pageCount - 1);
+  const pageCategoryId = layout.categoryIds[current] ?? itemCategoryIds?.[0];
+  const currentCategory =
+    categoryItems?.find(
+      (category) =>
+        category.id ===
+        (expanded ? (expandedCategoryId ?? pageCategoryId) : pageCategoryId),
+    ) ?? categoryItems?.[0];
+  const categoryPages = layout.categoryIds
+    .map((categoryId, index) => ({ index, categoryId }))
+    .filter((entry) => entry.categoryId === currentCategory?.id);
+  const categoryPage = Math.max(
+    0,
+    categoryPages.findIndex((entry) => entry.index === current),
+  );
+  const statusId = `${id}-status`;
+  const status = expanded
+    ? `${currentCategory ? `${currentCategory.label} · ` : ""}全文を表示しています`
+    : currentCategory
+      ? `${currentCategory.label} · ${categoryPage + 1} / ${Math.max(1, categoryPages.length)}ページ`
+      : `${current + 1} / ${pageCount}ページ`;
 
   useLayoutEffect(() => {
     const container = content.current;
@@ -244,16 +292,53 @@ export function PageDeck({
         const node = nodes[index]!;
         node.style.setProperty("--page-width", `${container.clientWidth}px`);
         const itemHeight = Math.ceil(node.getBoundingClientRect().height) + 8;
-        if (height + itemHeight > available && next.at(-1)!.length) {
+        const categoryBoundary =
+          index > 0 && itemCategoryIds?.[index] !== itemCategoryIds?.[index - 1];
+        if (
+          (categoryBoundary || height + itemHeight > available) &&
+          next.at(-1)!.length
+        ) {
           next.push([]);
           height = 0;
         }
         next.at(-1)!.push(index);
         height += itemHeight;
       }
-      setPages((previous) =>
-        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+      const nextLayout = {
+        pages: next,
+        categoryIds: next.map((indices) => itemCategoryIds?.[indices[0]!]),
+        firstItemKeys: next.map((indices) => itemKeys[indices[0]!]),
+      };
+      setLayout((previous) =>
+        JSON.stringify(previous) === JSON.stringify(nextLayout)
+          ? previous
+          : nextLayout,
       );
+      // Keep the same category and visible item when pages are remeasured.
+      // A global page number alone would drift into another category on resize.
+      const preferredCategory = expandedCategoryId ?? layout.categoryIds[current];
+      if (preferredCategory) {
+        const matchingPages = next
+          .map((indices, index) => ({ indices, index }))
+          .filter(
+            (entry) => itemCategoryIds?.[entry.indices[0]!] === preferredCategory,
+          );
+        const matchingItemPage = matchingPages.find((entry) =>
+          entry.indices.some(
+            (index) => itemKeys[index] === layout.firstItemKeys[current],
+          ),
+        );
+        const nextPage =
+          matchingItemPage ??
+          matchingPages[
+            expandedCategoryId
+              ? 0
+              : Math.min(categoryPage, matchingPages.length - 1)
+          ];
+        if (nextPage) setPage(nextPage.index);
+      }
+      // A full-text selection becomes the current page again after text shrinks.
+      if (expandedCategoryId) setExpandedCategoryId(undefined);
     };
     measure();
     const observer =
@@ -274,33 +359,90 @@ export function PageDeck({
   });
 
   function turn(next: number) {
+    setExpandedCategoryId(undefined);
     setPage(next);
     requestAnimationFrame(() =>
       content.current?.focus({ preventScroll: true }),
     );
   }
 
+  function jump(categoryId: string) {
+    const firstPage = layout.categoryIds.findIndex((id) => id === categoryId);
+    if (firstPage >= 0) setPage(firstPage);
+    if (expanded) setExpandedCategoryId(categoryId);
+    requestAnimationFrame(() => {
+      if (!expanded) {
+        content.current?.focus({ preventScroll: true });
+        return;
+      }
+      const anchor = [
+        ...(content.current?.querySelectorAll<HTMLElement>(
+          ":scope > [data-page-category-start]",
+        ) ?? []),
+      ].find((node) => node.dataset.pageCategoryStart === categoryId);
+      anchor?.focus({ preventScroll: true });
+      anchor?.scrollIntoView?.({ block: "start", behavior: "auto" });
+    });
+  }
+
   return (
     <section
-      className={`page-deck${expanded ? " page-deck-expanded" : ""}`}
+      className={`page-deck${categoryItems?.length ? " page-deck-categorized" : ""}${expanded ? " page-deck-expanded" : ""}`}
       aria-label={label}
       data-page-deck
     >
+      {!!categoryItems?.length && (
+        <label className="page-category-navigation">
+          <span>カテゴリ</span>
+          <select
+            aria-label={`${label}のカテゴリ`}
+            aria-controls={id}
+            aria-describedby={statusId}
+            value={currentCategory?.id ?? ""}
+            onChange={(event) => jump(event.target.value)}
+          >
+            {categoryItems.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div
         ref={content}
         id={id}
         className="page-content"
         tabIndex={-1}
         aria-label={`${label}の内容`}
+        aria-describedby={statusId}
         data-page-current={current + 1}
+        data-page-category={currentCategory?.id}
       >
         {items.map((item, index) => {
           const visible =
             expanded || (pages[current]?.includes(index) ?? index === 0);
+          const categoryId = itemCategoryIds?.[index];
+          const categoryStart =
+            categoryId &&
+            (index === 0 || itemCategoryIds?.[index - 1] !== categoryId)
+              ? categoryId
+              : undefined;
           return (
             <div
               key={isValidElement(item) ? (item.key ?? index) : index}
               data-page-item
+              data-page-category={categoryId}
+              data-page-category-start={categoryStart}
+              role={categoryStart ? "group" : undefined}
+              tabIndex={categoryStart ? -1 : undefined}
+              aria-label={
+                categoryStart
+                  ? categoryItems?.find(
+                      (category) => category.id === categoryStart,
+                    )?.label
+                  : undefined
+              }
               hidden={!visible}
               inert={!visible}
             >
@@ -323,10 +465,8 @@ export function PageDeck({
         >
           前へ
         </button>
-        <span role="status" aria-live="polite">
-          {expanded
-            ? "全文を表示しています"
-            : `${current + 1} / ${pageCount}ページ`}
+        <span id={statusId} role="status" aria-live="polite">
+          {status}
         </span>
         <button
           type="button"

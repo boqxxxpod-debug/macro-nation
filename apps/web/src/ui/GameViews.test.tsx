@@ -35,14 +35,20 @@ vi.mock("./PageDeck", () => ({
   PageDeck: ({
     label,
     children,
+    categories,
     actions,
   }: {
     label: string;
-    children: ReactNode;
+    children?: ReactNode;
+    categories?: readonly { id: string; content: ReactNode }[];
     actions?: ReactNode;
   }) => (
     <section aria-label={label}>
-      {children}
+      {categories
+        ? categories.map((category) => (
+            <div key={category.id}>{category.content}</div>
+          ))
+        : children}
       {actions}
     </section>
   ),
