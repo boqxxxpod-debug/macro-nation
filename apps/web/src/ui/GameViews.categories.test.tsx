@@ -96,7 +96,7 @@ describe("report category integration", () => {
     render(<Report state={state} />);
     expect(choices()).toEqual(["trend", "causes", "voices", "history", "learning", "news"]);
     for (const name of ["思想比較", "専門家の予測記録", "経済学ノート"]) {
-      for (const heading of screen.getAllByRole("heading", { name, exact: true })) {
+      for (const heading of screen.getAllByRole("heading", { name })) {
         expect(heading.closest("[data-page-item]")).toHaveAttribute("data-page-category", "learning");
       }
     }
