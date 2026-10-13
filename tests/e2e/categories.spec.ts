@@ -280,8 +280,10 @@ for (const viewport of VIEWPORTS) {
 
     test("policy categories preserve acknowledgement, projections and saved state", async ({ page }, testInfo) => {
       await startGame(page);
-      const initial = await savedState(page);
       await openPreview(page);
+      // Preview creation records the policy stop reason. Category navigation
+      // must preserve that durable state after the preview is ready.
+      const initial = await savedState(page);
       const region = deck(page, "政策の見通し");
       const confirm = region.getByRole("button", { name: "政策を確定する" });
       await expect(confirm).toBeDisabled();
@@ -331,8 +333,8 @@ for (const viewport of VIEWPORTS) {
 test("200% text keeps category anchors and policy confirmation keyboard reachable", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await startGame(page);
-  const initial = await savedState(page);
   await openPreview(page);
+  const initial = await savedState(page);
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
