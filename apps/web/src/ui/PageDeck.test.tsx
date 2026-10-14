@@ -582,3 +582,367 @@ describe("PageDeck category navigation", () => {
     expect(input).toHaveValue("拡大時も編集を保持");
   });
 });
+
+describe("PageDeck requested navigation", () => {
+  const categories = [
+    {
+      id: "overview",
+      label: "推移",
+      content: (
+        <>
+          <p>最初の指標</p>
+          <p>次の指標</p>
+        </>
+      ),
+    },
+    {
+      id: "causes",
+      label: "変化の理由",
+      content: (
+        <>
+          <p>最初の理由</p>
+          <button id="reason:income" type="button">
+            所得の理由を開く
+          </button>
+        </>
+      ),
+    },
+    { id: "news", label: "国の声", content: <p>最新の声</p> },
+  ];
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+
+  it("opens a requested category once and preserves subsequent paging, category selection and focus", () => {
+    const { rerender } = render(
+      <PageDeck
+        label="レポート"
+        categories={categories}
+        navigation={{ key: "income-1", categoryId: "causes" }}
+      />,
+    );
+    const content = screen.getByLabelText("レポートの内容");
+    const navigation = screen.getByRole("combobox");
+    expect(navigation).toHaveValue("causes");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 1 / 2ページ",
+    );
+    expect(screen.getByText("最初の理由")).toBeVisible();
+    expect(content).toHaveFocus();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "レポートの次のページ" }),
+    );
+    navigation.focus();
+    rerender(
+      <PageDeck
+        label="レポート"
+        categories={[
+          ...categories.slice(0, 2),
+          {
+            ...categories[2]!,
+            content: (
+              <>
+                <p>新しい国の声</p>
+                <p>別の声</p>
+              </>
+            ),
+          },
+        ]}
+        navigation={{ key: "income-1", categoryId: "causes" }}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "所得の理由を開く" }),
+    ).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 2 / 2ページ",
+    );
+    expect(navigation).toHaveFocus();
+
+    fireEvent.change(navigation, { target: { value: "overview" } });
+    navigation.focus();
+    rerender(
+      <PageDeck
+        label="レポート"
+        categories={categories}
+        navigation={{ key: "income-1", categoryId: "causes" }}
+      />,
+    );
+    expect(navigation).toHaveValue("overview");
+    expect(navigation).toHaveFocus();
+    availableHeight = 250;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(navigation).toHaveValue("overview");
+    expect(navigation).toHaveFocus();
+
+    rerender(
+      <PageDeck
+        label="レポート"
+        categories={categories}
+        navigation={{ key: "income-2", categoryId: "causes" }}
+      />,
+    );
+    expect(navigation).toHaveValue("causes");
+    expect(content).toHaveFocus();
+    fireEvent.change(navigation, { target: { value: "news" } });
+    navigation.focus();
+    rerender(
+      <PageDeck
+        label="レポート"
+        categories={categories}
+        navigation={{ key: "income-1", categoryId: "causes" }}
+      />,
+    );
+    expect(navigation).toHaveValue("news");
+    expect(navigation).toHaveFocus();
+  });
+
+  it("selects and focuses the page containing a source button, including after it is resized", () => {
+    availableHeight = 250;
+    const { rerender } = render(
+      <PageDeck
+        label="経済指標"
+        categories={categories}
+        navigation={{
+          key: "return-1",
+          categoryId: "overview",
+          elementId: "reason:income",
+        }}
+      />,
+    );
+    const source = screen.getByRole("button", { name: "所得の理由を開く" });
+    const content = screen.getByLabelText("経済指標の内容");
+    expect(screen.getByRole("combobox")).toHaveValue("causes");
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    expect(screen.getByText("最初の指標")).not.toBeVisible();
+
+    availableHeight = 90;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 2 / 2ページ",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "経済指標の次のページ" }),
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("news");
+    rerender(
+      <PageDeck
+        label="経済指標"
+        categories={categories}
+        navigation={{ key: "return-1", elementId: "reason:income" }}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("news");
+    expect(content).toHaveFocus();
+    rerender(
+      <PageDeck
+        label="経済指標"
+        categories={categories}
+        navigation={{ key: "return-2", elementId: "reason:income" }}
+      />,
+    );
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    for (const item of content.querySelectorAll<HTMLElement>(
+      "[data-page-item]",
+    )) {
+      if (item.hidden) expect(item).toHaveAttribute("inert");
+      else expect(item).not.toHaveAttribute("inert");
+    }
+    screen.getByRole("combobox").focus();
+    rerender(
+      <PageDeck
+        label="経済指標"
+        categories={categories}
+        navigation={{ key: "return-3", elementId: "reason:income" }}
+      />,
+    );
+    expect(source).toHaveFocus();
+  });
+
+  it("allows user paging before the animation-frame focus transfer from a returned source", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    render(
+      <PageDeck
+        label="帰還後"
+        categories={categories}
+        navigation={{ key: "returned", elementId: "reason:income" }}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "所得の理由を開く" }),
+    ).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "帰還後の前のページ" }));
+    expect(screen.getByText("最初の理由")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 1 / 2ページ",
+    );
+    act(() => callbacks.splice(0).forEach((callback) => callback(0)));
+    expect(screen.getByLabelText("帰還後の内容")).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "帰還後の次のページ" }));
+    expect(
+      screen.getByRole("button", { name: "所得の理由を開く" }),
+    ).toBeVisible();
+  });
+
+  it("waits for initial height and text splitting before restoring a source outside the first page", () => {
+    availableHeight = 0;
+    render(
+      <PageDeck
+        label="帰還"
+        navigation={{ key: "return", elementId: "source" }}
+      >
+        <p>{"長い帰還報告を確認します。".repeat(20)}</p>
+        <button id="source" type="button">
+          根拠を再確認
+        </button>
+      </PageDeck>,
+    );
+    const source = document.getElementById("source")!;
+    expect(source).not.toBeVisible();
+    expect(source).not.toHaveFocus();
+
+    availableHeight = 90;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    expect(
+      Number(screen.getByLabelText("帰還の内容").dataset.pageCurrent),
+    ).toBeGreaterThan(2);
+    expect(
+      screen.getByRole("button", { name: "帰還の次のページ" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps a request pending until its destination exists and falls back to the requested category", () => {
+    const { rerender } = render(
+      <PageDeck
+        label="遅延レポート"
+        categories={categories.slice(0, 1)}
+        navigation={{
+          key: "pending",
+          categoryId: "causes",
+          elementId: "unavailable",
+        }}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("overview");
+    expect(screen.getByLabelText("遅延レポートの内容")).not.toHaveFocus();
+    rerender(
+      <PageDeck
+        label="遅延レポート"
+        categories={categories}
+        navigation={{
+          key: "pending",
+          categoryId: "causes",
+          elementId: "unavailable",
+        }}
+      />,
+    );
+    expect(screen.getByText("最初の理由")).toBeVisible();
+    expect(screen.getByLabelText("遅延レポートの内容")).toHaveFocus();
+  });
+
+  it("focuses and scrolls to the requested category or source in expanded text without repeating the jump", () => {
+    document.documentElement.style.fontSize = "32px";
+    const { rerender } = render(
+      <PageDeck label="全文レポート" categories={categories} />,
+    );
+    const content = screen.getByLabelText("全文レポートの内容");
+    const anchor = content.querySelector<HTMLElement>(
+      '[data-page-category-start="causes"]',
+    )!;
+    const scrollCategory = vi.fn();
+    anchor.scrollIntoView = scrollCategory;
+    rerender(
+      <PageDeck
+        label="全文レポート"
+        categories={categories}
+        navigation={{ key: "expanded-category", categoryId: "causes" }}
+      />,
+    );
+    expect(anchor).toHaveFocus();
+    expect(scrollCategory).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "auto",
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 全文を表示しています",
+    );
+    const source = screen.getByRole("button", { name: "所得の理由を開く" });
+    const scrollSource = vi.fn();
+    source.scrollIntoView = scrollSource;
+    rerender(
+      <PageDeck
+        label="全文レポート"
+        categories={categories}
+        navigation={{ key: "expanded-source", elementId: "reason:income" }}
+      />,
+    );
+    expect(source).toHaveFocus();
+    expect(scrollSource).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "auto",
+    });
+    screen.getByRole("combobox").focus();
+    rerender(
+      <PageDeck
+        label="全文レポート"
+        categories={categories}
+        navigation={{ key: "expanded-source", elementId: "reason:income" }}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveFocus();
+    expect(scrollSource).toHaveBeenCalledTimes(1);
+
+    source.focus();
+    document.documentElement.style.fontSize = "16px";
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 2 / 2ページ",
+    );
+  });
+
+  it("navigates in full text when ResizeObserver is unavailable and uses window resize when height becomes measurable", () => {
+    vi.stubGlobal("ResizeObserver", undefined);
+    availableHeight = 0;
+    render(
+      <PageDeck
+        label="未対応環境"
+        categories={categories}
+        navigation={{ key: "fallback", categoryId: "causes" }}
+      />,
+    );
+    const anchor = screen
+      .getByLabelText("未対応環境の内容")
+      .querySelector<HTMLElement>('[data-page-category-start="causes"]')!;
+    expect(anchor).toHaveFocus();
+    expect(screen.getByRole("combobox")).toHaveValue("causes");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 全文を表示しています",
+    );
+    availableHeight = 90;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(screen.getByText("最初の理由")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "変化の理由 · 1 / 2ページ",
+    );
+  });
+});

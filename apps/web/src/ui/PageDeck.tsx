@@ -193,19 +193,35 @@ export type PageDeckCategory = {
   content: ReactNode;
 };
 
+export type PageDeckNavigation = {
+  key: string;
+  categoryId?: string;
+  elementId?: string;
+};
+
 export function PageDeck({
   label,
   children,
   categories,
   actions,
+  navigation,
 }: {
   label: string;
   children?: ReactNode;
   categories?: readonly PageDeckCategory[];
   actions?: ReactNode;
+  navigation?: PageDeckNavigation | undefined;
 }) {
   const id = useId();
   const content = useRef<HTMLDivElement>(null);
+  const appliedNavigationKeys = useRef(new Set<string>());
+  const [pendingNavigationFocus, setPendingNavigationFocus] = useState<{
+    key: string;
+    expanded: boolean;
+    page?: number | undefined;
+    categoryId?: string | undefined;
+    elementId?: string | undefined;
+  }>();
   const [page, setPage] = useState(0);
   const [layout, setLayout] = useState<{
     pages: number[][];
@@ -269,11 +285,56 @@ export function PageDeck({
       );
       const enlarge =
         fontSize >= 24 || (window.visualViewport?.scale ?? 1) >= 1.5;
+      const nextExpanded = enlarge || (available <= 0 ? expanded : false);
+      const applyNavigation = (nextPages?: number[][]) => {
+        if (!navigation || appliedNavigationKeys.current.has(navigation.key))
+          return false;
+        // IDs are compared directly so IDs containing CSS punctuation are safe,
+        // and an element in another deck cannot become this deck's destination.
+        const element = navigation.elementId
+          ? [...container.querySelectorAll<HTMLElement>("[id]")].find(
+              (node) =>
+                node.id === navigation.elementId &&
+                node.closest("[data-page-item]")?.parentElement === container,
+            )
+          : undefined;
+        const itemIndex = element
+          ? nodes.indexOf(element.closest<HTMLElement>("[data-page-item]")!)
+          : navigation.categoryId
+            ? (itemCategoryIds?.findIndex(
+                (categoryId) => categoryId === navigation.categoryId,
+              ) ?? -1)
+            : navigation.elementId
+              ? -1
+              : 0;
+        if (itemIndex < 0 || !nodes[itemIndex]) return false;
+        const nextPage = nextPages?.findIndex((indices) =>
+          indices.includes(itemIndex),
+        );
+        if (!nextExpanded && (nextPage === undefined || nextPage < 0))
+          return false;
+        const categoryId = itemCategoryIds?.[itemIndex];
+        appliedNavigationKeys.current.add(navigation.key);
+        setPendingNavigationFocus({
+          key: navigation.key,
+          expanded: nextExpanded,
+          page: nextPage,
+          categoryId,
+          elementId: element?.id,
+        });
+        setExpandedCategoryId(nextExpanded ? categoryId : undefined);
+        if (nextPage !== undefined) setPage(nextPage);
+        return true;
+      };
       // A zero-height measurement can be transient while a bounded screen
       // lays out its controls. Keep the previous layout until it is measurable;
       // expanding here would change its own height and oscillate every commit.
-      setExpanded((previous) => enlarge || (available <= 0 ? previous : false));
-      if (enlarge || available <= 0) return;
+      setExpanded(nextExpanded);
+      if (nextExpanded) {
+        applyNavigation();
+        return;
+      }
+      if (available <= 0) return;
       const charactersPerLine = Math.max(
         12,
         Math.floor(container.clientWidth / 18),
@@ -293,7 +354,8 @@ export function PageDeck({
         node.style.setProperty("--page-width", `${container.clientWidth}px`);
         const itemHeight = Math.ceil(node.getBoundingClientRect().height) + 8;
         const categoryBoundary =
-          index > 0 && itemCategoryIds?.[index] !== itemCategoryIds?.[index - 1];
+          index > 0 &&
+          itemCategoryIds?.[index] !== itemCategoryIds?.[index - 1];
         if (
           (categoryBoundary || height + itemHeight > available) &&
           next.at(-1)!.length
@@ -309,24 +371,41 @@ export function PageDeck({
         categoryIds: next.map((indices) => itemCategoryIds?.[indices[0]!]),
         firstItemKeys: next.map((indices) => itemKeys[indices[0]!]),
       };
+      const layoutChanged =
+        JSON.stringify(layout) !== JSON.stringify(nextLayout);
       setLayout((previous) =>
         JSON.stringify(previous) === JSON.stringify(nextLayout)
           ? previous
           : nextLayout,
       );
+      // A request is applied only after text splitting and measurement settle.
+      // Later news updates and user paging must not replay the same request.
+      if (applyNavigation(next)) return;
       // Keep the same category and visible item when pages are remeasured.
       // A global page number alone would drift into another category on resize.
-      const preferredCategory = expandedCategoryId ?? layout.categoryIds[current];
-      if (preferredCategory) {
+      const preferredCategory =
+        expandedCategoryId ?? layout.categoryIds[current];
+      const focusedItem =
+        appliedNavigationKeys.current.size > 0 &&
+        (layoutChanged || expanded) &&
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement.closest<HTMLElement>("[data-page-item]")
+          : null;
+      const focusedItemIndex = focusedItem ? nodes.indexOf(focusedItem) : -1;
+      const preferredItemKey =
+        focusedItemIndex >= 0
+          ? itemKeys[focusedItemIndex]
+          : layout.firstItemKeys[current];
+      if (preferredCategory || focusedItemIndex >= 0) {
         const matchingPages = next
           .map((indices, index) => ({ indices, index }))
           .filter(
-            (entry) => itemCategoryIds?.[entry.indices[0]!] === preferredCategory,
+            (entry) =>
+              !preferredCategory ||
+              itemCategoryIds?.[entry.indices[0]!] === preferredCategory,
           );
         const matchingItemPage = matchingPages.find((entry) =>
-          entry.indices.some(
-            (index) => itemKeys[index] === layout.firstItemKeys[current],
-          ),
+          entry.indices.some((index) => itemKeys[index] === preferredItemKey),
         );
         const nextPage =
           matchingItemPage ??
@@ -357,6 +436,51 @@ export function PageDeck({
       window.visualViewport?.removeEventListener("resize", measure);
     };
   });
+
+  useLayoutEffect(() => {
+    const request = pendingNavigationFocus;
+    const container = content.current;
+    if (!request || !container) return;
+    if (request.key !== navigation?.key) {
+      setPendingNavigationFocus((pending) =>
+        pending === request ? undefined : pending,
+      );
+      return;
+    }
+    // Wait until the selected page has committed and hidden/inert is removed.
+    if (
+      request.expanded !== expanded ||
+      (!expanded && request.page !== current) ||
+      (expanded && request.categoryId !== currentCategory?.id)
+    )
+      return;
+    const element = request.elementId
+      ? [...container.querySelectorAll<HTMLElement>("[id]")].find(
+          (node) => node.id === request.elementId,
+        )
+      : undefined;
+    const anchor = request.categoryId
+      ? [
+          ...container.querySelectorAll<HTMLElement>(
+            ":scope > [data-page-category-start]",
+          ),
+        ].find((node) => node.dataset.pageCategoryStart === request.categoryId)
+      : undefined;
+    const target = element ?? (expanded ? (anchor ?? container) : container);
+    if (target.tabIndex < 0 && !target.hasAttribute("tabindex"))
+      target.tabIndex = -1;
+    setPendingNavigationFocus((pending) =>
+      pending === request ? undefined : pending,
+    );
+    target.focus({ preventScroll: true });
+    if (expanded) target.scrollIntoView?.({ block: "start", behavior: "auto" });
+  }, [
+    pendingNavigationFocus,
+    navigation?.key,
+    expanded,
+    current,
+    currentCategory?.id,
+  ]);
 
   function turn(next: number) {
     setExpandedCategoryId(undefined);
