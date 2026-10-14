@@ -7,6 +7,7 @@ test-results/
 test-results-pages/
 artifacts/headless/
 artifacts/issue-92/
+artifacts/issue-107/
 .DS_Store
 .env
 .env.*

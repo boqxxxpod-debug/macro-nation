@@ -52,7 +52,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: viewport-checks
-          path: artifacts/issue-89/
+          path: |
+            artifacts/issue-89/
+            artifacts/issue-107/
           if-no-files-found: ignore
 
       - name: Capture nation motion before and after

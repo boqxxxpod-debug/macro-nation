@@ -42,6 +42,10 @@ import { migrateFirstPlayableSave } from "../application/save-migration";
 import { display, eventDisplayName, label, period } from "./game-format";
 import { GameClockController } from "../application/game-clock";
 import { selectHomeIndicators } from "../application/home-view";
+import {
+  monthlyEvidenceQuery,
+  parseMonthlyEvidence,
+} from "../application/monthly-evidence";
 import { TimeControls } from "./TimeControls";
 import { clockStatus } from "./time-status";
 import { tutorialContent } from "./tutorial-content";
@@ -271,6 +275,24 @@ export function App({
   if (!previewClient.current) previewClient.current = new PreviewClient();
   const [state, setState] = useState<GameState | null>(null);
   const [route, setRoute] = useState<Route>(routeFromLocation);
+  const [locationQuery, setLocationQuery] = useState(
+    () => window.location.search,
+  );
+  const evidenceTarget =
+    route === "report" ? parseMonthlyEvidence(locationQuery) : undefined;
+  const returnQuery = new URLSearchParams(locationQuery);
+  const reportMonth = Number(returnQuery.get("reportMonth"));
+  const reportRow = Number(returnQuery.get("reportRow"));
+  const evidenceReturn =
+    route === "home" &&
+    returnQuery.has("reportMonth") &&
+    returnQuery.has("reportRow") &&
+    Number.isSafeInteger(reportMonth) &&
+    reportMonth >= 0 &&
+    (reportRow === 0 || reportRow === 1 || reportRow === 2)
+      ? { monthIndex: reportMonth, row: reportRow as 0 | 1 | 2 }
+      : undefined;
+  const hasEvidenceNavigation = !!evidenceTarget || !!evidenceReturn;
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [largeText, setLargeText] = useState(false);
@@ -445,7 +467,7 @@ export function App({
   }, [gameClock]);
 
   const navigate = useCallback(
-    async (next: Route, replace = false) => {
+    async (next: Route, replace = false, query = "") => {
       setMenuOpen(false);
       setMessageOpen(false);
       previewClient.current?.cancel();
@@ -483,8 +505,9 @@ export function App({
       window.history[replace ? "replaceState" : "pushState"](
         {},
         "",
-        `${base}${suffix}`,
+        `${base}${suffix}${query ? `?${query.replace(/^\?/, "")}` : ""}`,
       );
+      setLocationQuery(query ? `?${query.replace(/^\?/, "")}` : "");
       setRoute(next);
       setError("");
     },
@@ -614,16 +637,16 @@ export function App({
           return;
         }
       }
-      void navigate(routeFromLocation(), true);
+      void navigate(routeFromLocation(), true, window.location.search);
     };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
   }, [navigate, gameClock, selectGame, slots]);
   const activeGameId = state?.gameId;
   useEffect(() => {
-    if (!loading && activeGameId)
+    if (!loading && activeGameId && !hasEvidenceNavigation)
       document.querySelector<HTMLElement>(".game-view h2")?.focus();
-  }, [route, loading, activeGameId]);
+  }, [route, loading, activeGameId, hasEvidenceNavigation]);
   useEffect(() => () => previewClient.current?.cancel(), []);
   useEffect(() => {
     if (!menuOpen) return;
@@ -1324,6 +1347,20 @@ export function App({
                       state={state}
                       timeControls={timeControls}
                       onOpenReport={() => navigate("report")}
+                      evidenceReturn={evidenceReturn}
+                      onOpenEvidence={(target) => {
+                        const origin = `reportMonth=${target.monthIndex}&reportRow=${target.row}`;
+                        window.history.replaceState(
+                          {},
+                          "",
+                          `${window.location.pathname}?${origin}`,
+                        );
+                        void navigate(
+                          "report",
+                          false,
+                          monthlyEvidenceQuery(target),
+                        );
+                      }}
                       onOpenPolicies={() => navigate("policies")}
                       response={
                         state.runState === "crisisStopped" ? (
@@ -1545,7 +1582,19 @@ export function App({
                 {route === "report" && (
                   <>
                     <h2 tabIndex={-1}>経済レポート</h2>
-                    <Report state={state} />
+                    <Report
+                      state={state}
+                      evidenceTarget={evidenceTarget}
+                      onReturnToReport={() =>
+                        evidenceTarget &&
+                        navigate(
+                          "home",
+                          false,
+                          `reportMonth=${evidenceTarget.monthIndex}&reportRow=${evidenceTarget.row}`,
+                        )
+                      }
+                      onClearEvidence={() => navigate("report", true)}
+                    />
                   </>
                 )}
                 {route === "nation" && (

@@ -28,7 +28,18 @@ import {
 } from "../application/home-view";
 import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
-import { PageDeck, type PageDeckCategory } from "./PageDeck";
+import {
+  PageDeck,
+  type PageDeckCategory,
+  type PageDeckNavigation,
+} from "./PageDeck";
+import {
+  monthlyBriefButtonId,
+  monthlyEvidenceQuery,
+  selectMonthlyBrief,
+  selectMonthlyEvidence,
+  type MonthlyEvidenceTarget,
+} from "../application/monthly-evidence";
 import { policyConfirmationContent } from "./PolicyConfirmation";
 import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { ExpertPortrait } from "./ExpertPortrait";
@@ -91,6 +102,8 @@ function preparednessIndicatorLabel(
 export function Home({
   state,
   onOpenReport,
+  onOpenEvidence,
+  evidenceReturn,
   onOpenPolicies,
   response,
   timeControls,
@@ -98,25 +111,22 @@ export function Home({
   state: GameState;
   timeControls?: ReactNode;
   onOpenReport(): void;
+  onOpenEvidence?(target: MonthlyEvidenceTarget): void;
+  evidenceReturn?:
+    Pick<MonthlyEvidenceTarget, "monthIndex" | "row"> | undefined;
   onOpenPolicies(): void;
   response?: ReactNode;
 }) {
   const reports = state.history.reports ?? [];
   const latest = reports.at(-1);
-  const prior = reports.at(-2);
+  const brief = selectMonthlyBrief(state, evidenceReturn?.monthIndex);
   const e = state.economy;
   const crisis =
     state.runState === "crisisStopped" ||
     e.rates.inflationAnnual >= 0.08 ||
     e.rates.unemployment >= 0.1;
   const cards = selectHomeIndicators(state);
-  const ranked = cards
-    .filter((item) => item.previous !== undefined)
-    .sort(
-      (a, b) =>
-        Math.abs((b.current - b.previous!) / (Math.abs(b.previous!) || 1)) -
-        Math.abs((a.current - a.previous!) / (Math.abs(a.previous!) || 1)),
-    );
+  const ranked = brief.indicators;
   const milestones = selectHomeMilestones(state);
   const recommendations = selectHomeRecommendations(state);
   const primaryCause = topCause(latest);
@@ -131,14 +141,39 @@ export function Home({
             ? `気になる兆候が${state.events.warnings!.length}件あります。`
             : "今のところ、大きな危機の兆候はありません。";
   const hasResponse = !!response;
+  const hasEvidenceReturn = evidenceReturn !== undefined;
   const latestPolicy = selectLatestConfirmedPolicy(state);
   const latestPolicyId = latestPolicy?.policyId;
   const [detail, setDetail] = useState(
-    hasResponse ? "response" : latestPolicy ? "policy" : "cause",
+    evidenceReturn
+      ? "report"
+      : hasResponse
+        ? "response"
+        : latestPolicy
+          ? "policy"
+          : "cause",
   );
   useEffect(() => {
-    setDetail(hasResponse ? "response" : latestPolicyId ? "policy" : "cause");
-  }, [hasResponse, latestPolicyId]);
+    setDetail(
+      hasEvidenceReturn
+        ? "report"
+        : hasResponse
+          ? "response"
+          : latestPolicyId
+            ? "policy"
+            : "cause",
+    );
+  }, [
+    hasResponse,
+    latestPolicyId,
+    hasEvidenceReturn,
+    evidenceReturn?.monthIndex,
+    evidenceReturn?.row,
+  ]);
+  function openEvidence(target: MonthlyEvidenceTarget) {
+    if (onOpenEvidence) onOpenEvidence(target);
+    else onOpenReport();
+  }
   const details: Record<string, { title: string; content: ReactNode }> = {
     ...(hasResponse
       ? { response: { title: "危機や出来事への対応", content: response } }
@@ -155,30 +190,63 @@ export function Home({
       title: "今月の報告",
       content: (
         <section className="panel">
-          <h3>今月の3行報告</h3>
-          {prior ? (
+          <h3 id="monthly-brief-heading">今月の3行報告</h3>
+          {brief.report && <p>{brief.report.monthIndex}月目の報告です。</p>}
+          {brief.prior ? (
             <div className="brief">
               {ranked.slice(0, 2).map(({ id, current, previous }, index) => (
                 <article key={id}>
                   <p>{`${index + 1}. ${label(id)}は前月から${current > previous! ? "上昇" : current < previous! ? "低下" : "横ばい"}、${display(id, current)}です。`}</p>
-                  <button className="brief-link" onClick={onOpenReport}>
-                    根拠を見る
+                  <button
+                    id={monthlyBriefButtonId(index as 0 | 1)}
+                    className="brief-link"
+                    aria-label={`${index + 1}行目・${label(id)}の根拠を見る`}
+                    onClick={() =>
+                      openEvidence({
+                        monthIndex: brief.report!.monthIndex,
+                        indicatorId: id,
+                        row: index as 0 | 1,
+                      })
+                    }
+                  >
+                    {label(id)}の根拠を見る
                   </button>
                 </article>
               ))}
               <article>
                 <p>{`3. ${
-                  latest?.topCauses[0]
-                    ? `${label(latest.topCauses[0].indicatorId)}にいちばん大きく影響したのは、${describeCause(latest.topCauses[0], state)}です`
+                  brief.cause
+                    ? `${label(brief.cause.indicatorId)}にいちばん大きく影響したのは、${describeCause(brief.cause, state)}です`
                     : "大きな変化はまだ確認されていません"
                 }。`}</p>
-                <button className="brief-link" onClick={onOpenReport}>
-                  根拠を見る
+                <button
+                  id={monthlyBriefButtonId(2)}
+                  className="brief-link"
+                  aria-label={`3行目・${brief.cause ? label(brief.cause.indicatorId) : "最大寄与"}の根拠を見る`}
+                  onClick={() =>
+                    openEvidence({
+                      monthIndex: brief.report!.monthIndex,
+                      row: 2,
+                      ...(brief.cause
+                        ? {
+                            indicatorId: brief.cause.indicatorId,
+                            cause: brief.cause,
+                          }
+                        : {}),
+                    })
+                  }
+                >
+                  {brief.cause ? label(brief.cause.indicatorId) : "最大寄与"}
+                  の根拠を見る
                 </button>
               </article>
             </div>
           ) : (
-            <p>月を進めると、主要な変化と次に注意する点を表示します。</p>
+            <p>
+              {evidenceReturn && !brief.report
+                ? "選んだ月の報告は保存されていません。ホームの詳細を切り替えて、現在の情報を確認できます。"
+                : "月を進めると、主要な変化と次に注意する点を表示します。"}
+            </p>
           )}
         </section>
       ),
@@ -321,7 +389,22 @@ export function Home({
         </select>
       </label>
       <div id="home-details" className="home-details">
-        <PageDeck key={detail} label={selected.title}>
+        <PageDeck
+          key={detail}
+          label={selected.title}
+          navigation={
+            detail === "report" && evidenceReturn
+              ? {
+                  key: `home-evidence-${evidenceReturn.monthIndex}-${evidenceReturn.row}`,
+                  elementId:
+                    brief.prior &&
+                    (evidenceReturn.row === 2 || ranked[evidenceReturn.row])
+                      ? monthlyBriefButtonId(evidenceReturn.row)
+                      : "monthly-brief-heading",
+                }
+              : undefined
+          }
+        >
           {selected.content}
         </PageDeck>
       </div>
@@ -372,8 +455,38 @@ function Trend({
   );
 }
 
-export function Report({ state }: { state: GameState }) {
+export function Report({
+  state,
+  evidenceTarget,
+  onReturnToReport,
+  onClearEvidence,
+}: {
+  state: GameState;
+  evidenceTarget?: MonthlyEvidenceTarget | undefined;
+  onReturnToReport?(): void;
+  onClearEvidence?(): void;
+}) {
   const latest = state.history.reports?.at(-1);
+  const evidence = evidenceTarget
+    ? selectMonthlyEvidence(state, evidenceTarget)
+    : undefined;
+  const targetKey = evidenceTarget ? monthlyEvidenceQuery(evidenceTarget) : "";
+  const targetLabel = evidenceTarget
+    ? `${evidenceTarget.monthIndex}月目・${evidenceTarget.indicatorId ? label(evidenceTarget.indicatorId) : "最大寄与"}`
+    : "";
+  const [requestedNavigation, setRequestedNavigation] = useState<{
+    targetKey: string;
+    navigation: PageDeckNavigation;
+  }>();
+  function openCategory(categoryId: string, nextTargetKey = targetKey) {
+    setRequestedNavigation((previous) => ({
+      targetKey: nextTargetKey,
+      navigation: {
+        key: `${previous?.navigation.key ?? "report"}-next`,
+        categoryId,
+      },
+    }));
+  }
   const profiles = expertProfilesForContentVersion(
     state.versions.contentVersion,
   );
@@ -415,31 +528,92 @@ export function Report({ state }: { state: GameState }) {
     },
     {
       id: "causes",
-      label: "変化の理由",
+      label: evidenceTarget ? `変化の理由（${targetLabel}）` : "変化の理由",
       content: (
         <>
-          <section className="panel">
-            <h3>変化の理由</h3>
-            <p>
-              前月からの変化に大きく影響した順に、
-              {visibleCauseCount(state.learningMode ?? "standard")}件を表示します。
-            </p>
-            {latest?.topCauses.length ? (
-              <ol>
-                {latest.topCauses
-                  .slice(0, visibleCauseCount(state.learningMode ?? "standard"))
-                  .map((cause, index) => (
-                    <li key={index}>
+          {evidenceTarget && evidence ? (
+            <section className="panel">
+              <h3>{targetLabel}の変化の理由</h3>
+              {evidence.causes.length ? (
+                <>
+                  {evidence.causes.map((cause, index) => (
+                    <p key={index}>
                       {label(cause.indicatorId)}：{describeCause(cause, state)}
                       、変化への影響 {cause.delta > 0 ? "+" : ""}
                       {cause.delta.toFixed(2)}
-                    </li>
+                    </p>
                   ))}
-              </ol>
-            ) : (
-              <p>月を進めると、指標が変わった理由を確認できます。</p>
-            )}
-          </section>
+                  <p className="quiet">
+                    {evidenceTarget.row === 2
+                      ? "ホームの3行目に表示された寄与です。"
+                      : "この指標に対応する保存済みの寄与を、影響の大きい順に表示しています。"}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    {evidence.missing === "report"
+                      ? "この月の報告が保存されていないため、根拠を表示できません。"
+                      : !evidenceTarget.indicatorId
+                        ? "この月の報告には、最大寄与の因果記録が保存されていません。"
+                        : "この月の保存済み報告には、この指標の因果記録がありません。"}
+                  </p>
+                  {evidence.missing !== "report" && (
+                    <p>
+                      月次報告には全指標を通じた上位8件の寄与だけが保存されます。記録がないことは、影響がなかったことを意味しません。
+                    </p>
+                  )}
+                  <p>
+                    「推移」でGDP・物価・失業の経過を、「国家史」で政策や出来事を確認できます。
+                  </p>
+                  <button onClick={() => openCategory("trend")}>
+                    推移を確認する
+                  </button>
+                  <button onClick={() => openCategory("history")}>
+                    国家史を確認する
+                  </button>
+                </>
+              )}
+              {evidence.report?.values[evidenceTarget.indicatorId ?? ""] !==
+                undefined && (
+                <p>
+                  この月の値：
+                  {display(
+                    evidenceTarget.indicatorId!,
+                    evidence.report.values[evidenceTarget.indicatorId!]!,
+                  )}
+                </p>
+              )}
+            </section>
+          ) : (
+            <section className="panel">
+              <h3>変化の理由</h3>
+              <p>
+                前月からの変化に大きく影響した順に、
+                {visibleCauseCount(state.learningMode ?? "standard")}
+                件を表示します。
+              </p>
+              {latest?.topCauses.length ? (
+                <ol>
+                  {latest.topCauses
+                    .slice(
+                      0,
+                      visibleCauseCount(state.learningMode ?? "standard"),
+                    )
+                    .map((cause, index) => (
+                      <li key={index}>
+                        {label(cause.indicatorId)}：
+                        {describeCause(cause, state)}
+                        、変化への影響 {cause.delta > 0 ? "+" : ""}
+                        {cause.delta.toFixed(2)}
+                      </li>
+                    ))}
+                </ol>
+              ) : (
+                <p>月を進めると、指標が変わった理由を確認できます。</p>
+              )}
+            </section>
+          )}
         </>
       ),
     },
@@ -661,7 +835,38 @@ export function Report({ state }: { state: GameState }) {
       ),
     },
   ];
-  return <PageDeck label="経済レポート" categories={categories} />;
+  return (
+    <PageDeck
+      label="経済レポート"
+      categories={categories}
+      navigation={
+        requestedNavigation?.targetKey === targetKey
+          ? requestedNavigation.navigation
+          : evidenceTarget
+            ? { key: `evidence-${targetKey}`, categoryId: "causes" }
+            : undefined
+      }
+      actions={
+        evidenceTarget && (
+          <>
+            {onReturnToReport && (
+              <button onClick={onReturnToReport}>ホームの報告へ戻る</button>
+            )}
+            {onClearEvidence && (
+              <button
+                onClick={() => {
+                  openCategory("causes", "");
+                  onClearEvidence();
+                }}
+              >
+                すべての変化の理由を見る
+              </button>
+            )}
+          </>
+        )
+      }
+    />
+  );
 }
 
 export type PolicyFormDraftState = {
