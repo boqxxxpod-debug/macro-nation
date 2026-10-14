@@ -28,7 +28,7 @@ import {
 } from "../application/home-view";
 import { describeCause, display, eventDisplayName, label } from "./game-format";
 import { nationVoiceContent } from "./NationVoice";
-import { PageDeck } from "./PageDeck";
+import { PageDeck, type PageDeckCategory } from "./PageDeck";
 import { policyConfirmationContent } from "./PolicyConfirmation";
 import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { ExpertPortrait } from "./ExpertPortrait";
@@ -395,226 +395,273 @@ export function Report({ state }: { state: GameState }) {
       contribution: cause.delta,
     })),
   };
-  return (
-    <PageDeck label="経済レポート">
-      <p className="quiet">
-        ゲーム内の計算による説明です。現実の経済を予測するものではありません。
-      </p>
-      <section className="panel">
-        <h3>経済の推移</h3>
-        {["realGdp", "inflation", "unemployment"].map((id) => (
-          <Trend key={id} reports={state.history.reports ?? []} id={id} />
-        ))}
-      </section>
-      {nationVoiceContent({ state })}
-      <section className="panel" aria-labelledby="national-history-heading">
-        <h3 id="national-history-heading">国家史</h3>
-        <p>政策や出来事を月ごとにまとめています。変化の理由も振り返れます。</p>
-        {nationalHistory(state).length ? (
-          <div className="history-timeline">
-            {nationalHistory(state).map((entry) => (
-              <article key={entry.entryId}>
-                <h4>
-                  {entry.month}月目：
-                  {entry.categories
-                    .map((category) => HISTORY_CATEGORY_LABELS[category])
-                    .join("・")}
-                </h4>
-                <p>
-                  記録：
-                  {[
-                    ...new Set(
-                      entry.referenceIds.map((id) =>
-                        historyReferenceDisplay(id, state),
-                      ),
-                    ),
-                  ].join("、")}
-                </p>
-                {entry.causeRefs.length > 0 && (
-                  <p>
-                    変化の理由：
-                    {[
-                      ...new Set(
-                        entry.causeRefs.map((ref) =>
-                          historyCauseDisplay(ref, state),
-                        ),
-                      ),
-                    ].join("、")}
-                  </p>
-                )}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>
-            まだ節目の記録はありません。政策や出来事があると、ここに残ります。
-          </p>
-        )}
-      </section>
-      <section className="panel">
-        <h3>変化の理由</h3>
-        <p>
-          前月からの変化に大きく影響した順に、
-          {visibleCauseCount(state.learningMode ?? "standard")}件を表示します。
-        </p>
-        {latest?.topCauses.length ? (
-          <ol>
-            {latest.topCauses
-              .slice(0, visibleCauseCount(state.learningMode ?? "standard"))
-              .map((cause, index) => (
-                <li key={index}>
-                  {label(cause.indicatorId)}：{describeCause(cause, state)}
-                  、変化への影響 {cause.delta > 0 ? "+" : ""}
-                  {cause.delta.toFixed(2)}
-                </li>
-              ))}
-          </ol>
-        ) : (
-          <p>月を進めると、指標が変わった理由を確認できます。</p>
-        )}
-      </section>
-      {state.learningMode === "learning" && (
-        <section className="panel" aria-labelledby="school-lenses-heading">
-          <h3 id="school-lenses-heading">思想比較</h3>
-          <p>
-            同じ結果を、異なる目的や前提から見比べます。どれが正解かを決めるものではありません。
-          </p>
-          <div className="school-lens-grid">
-            {schoolLensesForContentVersion(state.versions.contentVersion).map(
-              (lens) => (
-                <article key={lens.schoolId}>
-                  <h4>{lens.displayName}</h4>
-                  <p>
-                    <strong>重視する目的：</strong>
-                    {lens.goals.join("、")}
-                  </p>
-                  <p>
-                    <strong>前提：</strong>
-                    {lens.premises.join("、")}
-                  </p>
-                  <p>
-                    <strong>政策への見方：</strong>
-                    {lens.view}
-                  </p>
-                  <p>
-                    <strong>想定する利点：</strong>
-                    {lens.benefits.join("、")}
-                  </p>
-                  <p>
-                    <strong>想定するリスク：</strong>
-                    {lens.risks.join("、")}
-                  </p>
-                </article>
-              ),
-            )}
-          </div>
+  const categories: PageDeckCategory[] = [
+    {
+      id: "trend",
+      label: "推移",
+      content: (
+        <>
           <p className="quiet">
-            ゲーム内の説明です。現実の思想や政策の優劣を示すものではありません。
+            ゲーム内の計算による説明です。現実の経済を予測するものではありません。
           </p>
-        </section>
-      )}
-      {state.learningMode === "learning" && (
-        <section className="panel" aria-labelledby="forecast-records-heading">
-          <h3 id="forecast-records-heading">専門家の予測記録</h3>
-          {(state.history.forecastRecords ?? []).length ? (
-            <div>
-              {(state.history.forecastRecords ?? [])
-                .slice()
-                .reverse()
-                .map((record) => (
-                  <article key={record.recordId}>
-                    <h4>{record.recordedMonth}月目の政策判断</h4>
+          <section className="panel">
+            <h3>経済の推移</h3>
+            {["realGdp", "inflation", "unemployment"].map((id) => (
+              <Trend key={id} reports={state.history.reports ?? []} id={id} />
+            ))}
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "causes",
+      label: "変化の理由",
+      content: (
+        <>
+          <section className="panel">
+            <h3>変化の理由</h3>
+            <p>
+              前月からの変化に大きく影響した順に、
+              {visibleCauseCount(state.learningMode ?? "standard")}件を表示します。
+            </p>
+            {latest?.topCauses.length ? (
+              <ol>
+                {latest.topCauses
+                  .slice(0, visibleCauseCount(state.learningMode ?? "standard"))
+                  .map((cause, index) => (
+                    <li key={index}>
+                      {label(cause.indicatorId)}：{describeCause(cause, state)}
+                      、変化への影響 {cause.delta > 0 ? "+" : ""}
+                      {cause.delta.toFixed(2)}
+                    </li>
+                  ))}
+              </ol>
+            ) : (
+              <p>月を進めると、指標が変わった理由を確認できます。</p>
+            )}
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "voices",
+      label: "国の声",
+      content: (
+        <>
+          {nationVoiceContent({ state })}
+        </>
+      ),
+    },
+    {
+      id: "history",
+      label: "国家史",
+      content: (
+        <>
+          <section className="panel" aria-labelledby="national-history-heading">
+            <h3 id="national-history-heading">国家史</h3>
+            <p>政策や出来事を月ごとにまとめています。変化の理由も振り返れます。</p>
+            {nationalHistory(state).length ? (
+              <div className="history-timeline">
+                {nationalHistory(state).map((entry) => (
+                  <article key={entry.entryId}>
+                    <h4>
+                      {entry.month}月目：
+                      {entry.categories
+                        .map((category) => HISTORY_CATEGORY_LABELS[category])
+                        .join("・")}
+                    </h4>
                     <p>
-                      専門家：
-                      {record.expertIds
-                        .map(
-                          (id) =>
-                            profiles.find((profile) => profile.id === id)
-                              ?.displayName ?? "当時の専門家",
-                        )
-                        .join("、")}
-                      、確信度：
-                      {
-                        { low: "低", medium: "中", high: "高" }[
-                          record.confidence
-                        ]
-                      }
+                      記録：
+                      {[
+                        ...new Set(
+                          entry.referenceIds.map((id) =>
+                            historyReferenceDisplay(id, state),
+                          ),
+                        ),
+                      ].join("、")}
                     </p>
-                    {record.horizons.map((horizon) => (
-                      <p key={horizon.months}>
-                        {horizon.months === 12 ? "1年" : "5年"}：GDP差{" "}
-                        {display("realGdp", horizon.indicators.realGdp ?? 0)}
+                    {entry.causeRefs.length > 0 && (
+                      <p>
+                        変化の理由：
+                        {[
+                          ...new Set(
+                            entry.causeRefs.map((ref) =>
+                              historyCauseDisplay(ref, state),
+                            ),
+                          ),
+                        ].join("、")}
                       </p>
-                    ))}
-                    <p>
-                      主な不確実性：{uncertaintyExplanation(record.uncertainty)}
-                    </p>
+                    )}
                   </article>
                 ))}
-            </div>
-          ) : (
-            <p>政策を確定すると、そのときの1年・5年の見通しを保存します。</p>
-          )}
-          <p className="quiet">
-            見通しの数値は全専門家で共通です。それぞれの視点から解説します。
-          </p>
-        </section>
-      )}
-      {state.learningMode === "learning" && (
-        <section className="panel" aria-labelledby="notebook-heading">
-          <h3 id="notebook-heading">経済学ノート</h3>
-          {(state.history.learningEntries ?? []).length ? (
-            <div>
-              {(state.history.learningEntries ?? [])
-                .slice()
-                .reverse()
-                .map((entry) => {
-                  const entryDisplay = learningEntryDisplay(entry, state);
-                  return (
-                    <article key={entry.entryId}>
-                      <h4>{entryDisplay.concept}</h4>
+              </div>
+            ) : (
+              <p>
+                まだ節目の記録はありません。政策や出来事があると、ここに残ります。
+              </p>
+            )}
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "learning",
+      label: "学習内容",
+      content: (
+        <>
+          {state.learningMode === "learning" && (
+            <section className="panel" aria-labelledby="school-lenses-heading">
+              <h3 id="school-lenses-heading">思想比較</h3>
+              <p>
+                同じ結果を、異なる目的や前提から見比べます。どれが正解かを決めるものではありません。
+              </p>
+              <div className="school-lens-grid">
+                {schoolLensesForContentVersion(state.versions.contentVersion).map(
+                  (lens) => (
+                    <article key={lens.schoolId}>
+                      <h4>{lens.displayName}</h4>
                       <p>
-                        {entry.month}月目・{entryDisplay.kindLabel}
+                        <strong>重視する目的：</strong>
+                        {lens.goals.join("、")}
                       </p>
-                      <p>根拠：{entryDisplay.evidence}</p>
+                      <p>
+                        <strong>前提：</strong>
+                        {lens.premises.join("、")}
+                      </p>
+                      <p>
+                        <strong>政策への見方：</strong>
+                        {lens.view}
+                      </p>
+                      <p>
+                        <strong>想定する利点：</strong>
+                        {lens.benefits.join("、")}
+                      </p>
+                      <p>
+                        <strong>想定するリスク：</strong>
+                        {lens.risks.join("、")}
+                      </p>
                     </article>
-                  );
-                })}
-            </div>
-          ) : (
-            <p>月を進めると、用語や判断を振り返るノートが残ります。</p>
+                  ),
+                )}
+              </div>
+              <p className="quiet">
+                ゲーム内の説明です。現実の思想や政策の優劣を示すものではありません。
+              </p>
+            </section>
           )}
-          <p className="quiet">
-            ノートで用語や判断を振り返れます。記録が政策の効果を変えることはありません。
-          </p>
-        </section>
-      )}
-      <section className="panel">
-        <h3>経済ニュース</h3>
-        <h4>{story.headline}</h4>
-        <p>{story.explanation}</p>
-        <button
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError("");
-            void service
-              .news({ id: `month-${facts.month}`, facts })
-              .then(setStory)
-              .catch(() =>
-                setError(
-                  "特別報道を読み込めませんでした。少し待って、もう一度試してください。",
-                ),
-              )
-              .finally(() => setBusy(false));
-          }}
-        >
-          {busy ? "特別報道を読み込んでいます…" : "特別報道を読む"}
-        </button>
-        {error && <p role="alert">{error}</p>}
-      </section>
-    </PageDeck>
-  );
+          {state.learningMode === "learning" && (
+            <section className="panel" aria-labelledby="forecast-records-heading">
+              <h3 id="forecast-records-heading">専門家の予測記録</h3>
+              {(state.history.forecastRecords ?? []).length ? (
+                <div>
+                  {(state.history.forecastRecords ?? [])
+                    .slice()
+                    .reverse()
+                    .map((record) => (
+                      <article key={record.recordId}>
+                        <h4>{record.recordedMonth}月目の政策判断</h4>
+                        <p>
+                          専門家：
+                          {record.expertIds
+                            .map(
+                              (id) =>
+                                profiles.find((profile) => profile.id === id)
+                                  ?.displayName ?? "当時の専門家",
+                            )
+                            .join("、")}
+                          、確信度：
+                          {
+                            { low: "低", medium: "中", high: "高" }[
+                              record.confidence
+                            ]
+                          }
+                        </p>
+                        {record.horizons.map((horizon) => (
+                          <p key={horizon.months}>
+                            {horizon.months === 12 ? "1年" : "5年"}：GDP差{" "}
+                            {display("realGdp", horizon.indicators.realGdp ?? 0)}
+                          </p>
+                        ))}
+                        <p>
+                          主な不確実性：{uncertaintyExplanation(record.uncertainty)}
+                        </p>
+                      </article>
+                    ))}
+                </div>
+              ) : (
+                <p>政策を確定すると、そのときの1年・5年の見通しを保存します。</p>
+              )}
+              <p className="quiet">
+                見通しの数値は全専門家で共通です。それぞれの視点から解説します。
+              </p>
+            </section>
+          )}
+          {state.learningMode === "learning" && (
+            <section className="panel" aria-labelledby="notebook-heading">
+              <h3 id="notebook-heading">経済学ノート</h3>
+              {(state.history.learningEntries ?? []).length ? (
+                <div>
+                  {(state.history.learningEntries ?? [])
+                    .slice()
+                    .reverse()
+                    .map((entry) => {
+                      const entryDisplay = learningEntryDisplay(entry, state);
+                      return (
+                        <article key={entry.entryId}>
+                          <h4>{entryDisplay.concept}</h4>
+                          <p>
+                            {entry.month}月目・{entryDisplay.kindLabel}
+                          </p>
+                          <p>根拠：{entryDisplay.evidence}</p>
+                        </article>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p>月を進めると、用語や判断を振り返るノートが残ります。</p>
+              )}
+              <p className="quiet">
+                ノートで用語や判断を振り返れます。記録が政策の効果を変えることはありません。
+              </p>
+            </section>
+          )}
+        </>
+      ),
+    },
+    {
+      id: "news",
+      label: "経済ニュース",
+      content: (
+        <>
+          <section className="panel">
+            <h3>経済ニュース</h3>
+            <h4>{story.headline}</h4>
+            <p>{story.explanation}</p>
+            <button
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setError("");
+                void service
+                  .news({ id: `month-${facts.month}`, facts })
+                  .then(setStory)
+                  .catch(() =>
+                    setError(
+                      "特別報道を読み込めませんでした。少し待って、もう一度試してください。",
+                    ),
+                  )
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? "特別報道を読み込んでいます…" : "特別報道を読む"}
+            </button>
+            {error && <p role="alert">{error}</p>}
+          </section>
+        </>
+      ),
+    },
+  ];
+  return <PageDeck label="経済レポート" categories={categories} />;
 }
 
 export type PolicyFormDraftState = {
@@ -1028,10 +1075,372 @@ export function Preview({
   const effectStartMonth = output.primaryEffects.length
     ? Math.min(...output.primaryEffects.map((effect) => effect.startMonth))
     : null;
+  const categories: PageDeckCategory[] = [
+    {
+      id: "summary",
+      label: "判断要約",
+      content: (
+        <>
+          <h3>判断の要点</h3>
+          <section className="panel" aria-label="判断の要点">
+            <p>
+              <strong>政策案：</strong>
+              {draft ? label(rule?.policyType ?? draft.ruleId) : "今の政策を続ける"}
+              {draft && (
+                <>
+                  。{inputCopy?.label ?? "設定値"}：
+                  {inputCopy ? policyDisplayNumber(draft.value) : draft.value}
+                  {inputCopy?.unit ?? ""}
+                </>
+              )}
+            </p>
+            <p>
+              <strong>時期：</strong>政策の開始は
+              {output.activationMonth === null
+                ? "設定していません"
+                : `${output.activationMonth + 1}月目`}
+              、主効果の効き始めは
+              {effectStartMonth === null
+                ? "予定なし"
+                : `${effectStartMonth + 1}月目`}
+              。GDPへの効果がいちばん大きい時期は
+              {forecast(12, "realGdp")?.peakMonth ?? "—"}
+              か月後。
+            </p>
+            <p>
+              <strong>現状維持との差（1年後）：</strong>
+              {output.indicators
+                .filter((item) =>
+                  ["realGdp", "inflation", "unemployment"].includes(
+                    item.indicatorId,
+                  ),
+                )
+                .map(
+                  (item) =>
+                    `${label(item.indicatorId)} ${item.month12.deltaBase > 0 ? "+" : ""}${display(item.indicatorId, item.month12.deltaBase)}`,
+                )
+                .join("、")}
+              。新しい政策を加えない場合と比べた中心値です。
+            </p>
+            <p>
+              <strong>費用：</strong>
+              <TermHelp termId="politicalCapital" name="政治資本" />{" "}
+              {output.costs.politicalCapital}、
+              <TermHelp termId="implementationCapacity" name="実施能力" />{" "}
+              {output.costs.implementationCapacity}、
+              <TermHelp termId="foreignReserves" name="外貨準備" />{" "}
+              {output.costs.foreignReserves.toFixed(1)}、開始予算{" "}
+              {output.costs.immediateBudget}。
+            </p>
+            <p>
+              <strong>副作用：</strong>
+              {output.sideEffects.length
+                ? output.sideEffects
+                    .map(
+                      (effect) =>
+                        `${label(effect.targetPath)}（${effect.startMonth + 1}月目から）`,
+                    )
+                    .join("、")
+                : "この見通しで予定されている副作用はありません"}
+              。
+            </p>
+            {output.interactions.length > 0 && (
+              <p>
+                同じ種類の政策が{output.interactions.length}
+                件あります。効果が重なる点にも気をつけましょう。
+              </p>
+            )}
+            <p>
+              <strong>不確実性：</strong>確信度 {confidence}。主な要因は
+              {output.uncertainty.majorDrivers.map(label).join("、")}。
+            </p>
+            <p>{uncertaintyNote}</p>
+          </section>
+          <section className="panel" aria-labelledby="interaction-heading">
+            <h3 id="interaction-heading">政策の組み合わせ</h3>
+            {output.comboResults.map((combo) => {
+              const reason = combo.reason
+                ? {
+                    "missing-required-policy": "必要な政策が揃っていません",
+                    "forbidden-policy": "同時に使えない政策があります",
+                    "insufficient-overlap": `重複期間が${combo.overlapMonths}か月で条件を満たしません`,
+                    "insufficient-additional-cost":
+                      "組み合わせの追加費用が足りません（政策自体は確定できます）",
+                    "missing-required-combo":
+                      "前提となる組み合わせの効果がまだ出ていません",
+                    "already-fired-this-month": "今月はすでに効果が出ています",
+                  }[combo.reason]
+                : "すべての条件を満たします";
+              return (
+                <article className="combo-result" key={combo.comboId}>
+                  <h4>
+                    {combo.kind === "synergy"
+                      ? "効果を高め合う組み合わせ"
+                      : "効果を打ち消し合う組み合わせ"}
+                    ：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
+                  </h4>
+                  <p>
+                    条件：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
+                    {combo.forbiddenPolicyIds.length
+                      ? `（併用不可：${combo.forbiddenPolicyIds.map(label).join("、")}）`
+                      : ""}
+                  </p>
+                  <p>
+                    {combo.activated
+                      ? "組み合わせの効果が出る見込みです"
+                      : "組み合わせの効果は出ない見込みです"}
+                    。 {reason}。
+                  </p>
+                  <p>
+                    追加費用：政治資本 {combo.additionalCosts.politicalCapital}
+                    、実施能力 {combo.additionalCosts.implementationCapacity}
+                    、外貨準備 {combo.additionalCosts.foreignReserves}、予算{" "}
+                    {combo.additionalCosts.immediateBudget}。
+                  </p>
+                </article>
+              );
+            })}
+            {output.comboResults.length === 0 && (
+              <p>今の設定には、特別な組み合わせの効果はありません。</p>
+            )}
+          </section>
+          <label className="review-acknowledgement">
+            <input
+              type="checkbox"
+              checked={reviewed}
+              disabled={busy}
+              onChange={(event) =>
+                setReviewedKey(event.target.checked ? reviewKey : null)
+              }
+            />
+            費用・副作用・警告を確認しました
+          </label>
+          <p className="quiet">
+            ゲーム内の計算による見通しです。外部環境の揺れを想定し、結果の幅を示しています。
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "comparison",
+      label: "現状維持との比較",
+      content: (
+        <>
+          <section className="panel">
+            <h3>新しい政策を加えない場合との12か月比較</h3>
+            <div className="comparison-list">
+              {output.indicators
+                .filter((item) =>
+                  [
+                    "realGdp",
+                    "inflation",
+                    "unemployment",
+                    "policyTrust",
+                    "foreignReserves",
+                  ].includes(item.indicatorId),
+                )
+                .map((item) => (
+                  <article key={item.indicatorId}>
+                    <h4>{label(item.indicatorId)}</h4>
+                    <p>
+                      3か月：{display(item.indicatorId, item.month3.low)} ～{" "}
+                      {display(item.indicatorId, item.month3.high)}（中心{" "}
+                      {display(item.indicatorId, item.month3.base)}）
+                    </p>
+                    <p>
+                      6か月：{display(item.indicatorId, item.month6.low)} ～{" "}
+                      {display(item.indicatorId, item.month6.high)}
+                    </p>
+                    <p>
+                      12か月：{display(item.indicatorId, item.month12.low)} ～{" "}
+                      {display(item.indicatorId, item.month12.high)}
+                      、新しい政策を加えない場合との差{" "}
+                      {item.month12.deltaBase > 0 ? "+" : ""}
+                      {display(item.indicatorId, item.month12.deltaBase)}
+                    </p>
+                  </article>
+                ))}
+            </div>
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "forecast",
+      label: "長期見通し",
+      content: (
+        <>
+          <section className="panel" aria-labelledby="forecast-heading">
+            <h3 id="forecast-heading">1年・5年の見通し</h3>
+            <p>
+              確信度：{confidence}。主な不確実性：
+              {output.uncertainty.majorDrivers.map(label).join("、")}。
+            </p>
+            <div className="forecast-grid">
+              {["realGdp", "inflation", "unemployment"].map((indicatorId) => (
+                <article key={indicatorId}>
+                  <h4>{label(indicatorId)}</h4>
+                  <p>
+                    1年後の新しい政策を加えない場合との差：
+                    {display(indicatorId, forecast(12, indicatorId)?.endDelta ?? 0)}
+                  </p>
+                  <p>
+                    5年後の新しい政策を加えない場合との差：
+                    {display(indicatorId, forecast(60, indicatorId)?.endDelta ?? 0)}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "alternatives",
+      label: "別案",
+      content: (
+        <>
+          <section className="panel" aria-labelledby="counterfactual-heading">
+            <h3 id="counterfactual-heading">別の政策を選んだら</h3>
+            <p>
+              基準時点：ゲーム内{" "}
+              {output.activationMonth === null
+                ? "現在"
+                : `${output.activationMonth + 1}月目`}
+              。今の国の状態と外部環境をそろえて比べています。
+            </p>
+            <div
+              className="counterfactual-cards"
+              aria-label="政策案と新しい政策を加えない場合の比較"
+            >
+              {[output, ...counterfactuals].map((candidate) => {
+                const row = candidate.indicators.find(
+                  (item) => item.indicatorId === "realGdp",
+                )!;
+                const fiveYear = candidate.summaries.find(
+                  (item) =>
+                    item.indicatorId === "realGdp" && item.horizonMonths === 60,
+                );
+                return (
+                  <article key={candidate.draftHash}>
+                    <h4>
+                      {candidate.previewedDraft
+                        ? label(candidate.previewedDraft.ruleId)
+                        : "今の政策を続ける"}
+                    </h4>
+                    {[
+                      { horizon: "3か月", value: row.month3.deltaBase },
+                      { horizon: "6か月", value: row.month6.deltaBase },
+                      { horizon: "1年", value: row.month12.deltaBase },
+                      { horizon: "5年", value: fiveYear?.endDelta ?? 0 },
+                    ].map(({ horizon, value }) => (
+                      <p key={horizon}>
+                        {horizon}：{value > 0 ? "+" : ""}
+                        {display("realGdp", value)}
+                      </p>
+                    ))}
+                  </article>
+                );
+              })}
+            </div>
+            <small>表示値は、新しい政策を加えない場合との成長の差です。</small>
+          </section>
+        </>
+      ),
+    },
+    {
+      id: "experts",
+      label: "専門家",
+      content: (
+        <>
+          <section className="panel" aria-labelledby="advice-heading">
+            <h3 id="advice-heading">選択した専門家の解説</h3>
+            {expertIds.map((expertId) => {
+              const expert = profiles.find((item) => item.id === expertId)!;
+              const advice = advisor.advise(expert, adviceContext);
+              return (
+                <article
+                  className="expert-advice"
+                  key={expertId}
+                  style={{ "--expert-color": expert.colorToken } as CSSProperties}
+                >
+                  <header className="expert-identity" data-page-title>
+                    <ExpertPortrait expertId={expert.id} />
+                    <div className="expert-identity-copy">
+                      <h4>{expert.role}</h4>
+                      <p className="quiet">
+                        {expert.displayName ?? expert.role} · 口調：{expert.tone}
+                      </p>
+                    </div>
+                  </header>
+                  <p>
+                    <strong>結論：</strong>
+                    {adviceExplanation(
+                      advice.conclusion,
+                      expert.priorityIndicators ??
+                        Object.keys(adviceContext.effects),
+                    )}
+                  </p>
+                  <p>
+                    <strong>やさしい理由：</strong>
+                    {advice.reason}
+                  </p>
+                  <p>
+                    <strong>注意点：</strong>
+                    {advice.caution}
+                  </p>
+                  <details>
+                    <summary>比べている基準</summary>
+                    新しい政策を加えず、現在の政策だけを続けた場合との差です。
+                  </details>
+                </article>
+              );
+            })}
+            {dissentingExpert &&
+              (() => {
+                const dissent = advisor.advise(dissentingExpert, adviceContext);
+                return (
+                  <aside
+                    className="expert-dissent"
+                    style={
+                      {
+                        "--expert-color": dissentingExpert.colorToken,
+                      } as CSSProperties
+                    }
+                  >
+                    <header className="expert-identity" data-page-title>
+                      <ExpertPortrait expertId={dissentingExpert.id} />
+                      <div className="expert-identity-copy">
+                        <strong>
+                          別の視点：{" "}
+                          {dissentingExpert.displayName ?? dissentingExpert.role}
+                        </strong>
+                        <p className="quiet">
+                          {dissentingExpert.role} · 口調：{dissentingExpert.tone}
+                        </p>
+                      </div>
+                    </header>
+                    <p>
+                      {adviceExplanation(
+                        dissent.conclusion,
+                        dissentingExpert.priorityIndicators ??
+                          Object.keys(adviceContext.effects),
+                      )}{" "}
+                      {dissent.caution}
+                    </p>
+                  </aside>
+                );
+              })()}
+          </section>
+        </>
+      ),
+    },
+  ];
   return (
     <PageDeck
       key={reviewKey}
       label="政策の見通し"
+      categories={categories}
       actions={
         <>
           {onBack && (
@@ -1055,326 +1464,6 @@ export function Preview({
           )}
         </>
       }
-    >
-      <h3>判断の要点</h3>
-      <section className="panel" aria-label="判断の要点">
-        <p>
-          <strong>政策案：</strong>
-          {draft ? label(rule?.policyType ?? draft.ruleId) : "今の政策を続ける"}
-          {draft && (
-            <>
-              。{inputCopy?.label ?? "設定値"}：
-              {inputCopy ? policyDisplayNumber(draft.value) : draft.value}
-              {inputCopy?.unit ?? ""}
-            </>
-          )}
-        </p>
-        <p>
-          <strong>時期：</strong>政策の開始は
-          {output.activationMonth === null
-            ? "設定していません"
-            : `${output.activationMonth + 1}月目`}
-          、主効果の効き始めは
-          {effectStartMonth === null
-            ? "予定なし"
-            : `${effectStartMonth + 1}月目`}
-          。GDPへの効果がいちばん大きい時期は
-          {forecast(12, "realGdp")?.peakMonth ?? "—"}
-          か月後。
-        </p>
-        <p>
-          <strong>現状維持との差（1年後）：</strong>
-          {output.indicators
-            .filter((item) =>
-              ["realGdp", "inflation", "unemployment"].includes(
-                item.indicatorId,
-              ),
-            )
-            .map(
-              (item) =>
-                `${label(item.indicatorId)} ${item.month12.deltaBase > 0 ? "+" : ""}${display(item.indicatorId, item.month12.deltaBase)}`,
-            )
-            .join("、")}
-          。新しい政策を加えない場合と比べた中心値です。
-        </p>
-        <p>
-          <strong>費用：</strong>
-          <TermHelp termId="politicalCapital" name="政治資本" />{" "}
-          {output.costs.politicalCapital}、
-          <TermHelp termId="implementationCapacity" name="実施能力" />{" "}
-          {output.costs.implementationCapacity}、
-          <TermHelp termId="foreignReserves" name="外貨準備" />{" "}
-          {output.costs.foreignReserves.toFixed(1)}、開始予算{" "}
-          {output.costs.immediateBudget}。
-        </p>
-        <p>
-          <strong>副作用：</strong>
-          {output.sideEffects.length
-            ? output.sideEffects
-                .map(
-                  (effect) =>
-                    `${label(effect.targetPath)}（${effect.startMonth + 1}月目から）`,
-                )
-                .join("、")
-            : "この見通しで予定されている副作用はありません"}
-          。
-        </p>
-        {output.interactions.length > 0 && (
-          <p>
-            同じ種類の政策が{output.interactions.length}
-            件あります。効果が重なる点にも気をつけましょう。
-          </p>
-        )}
-        <p>
-          <strong>不確実性：</strong>確信度 {confidence}。主な要因は
-          {output.uncertainty.majorDrivers.map(label).join("、")}。
-        </p>
-        <p>{uncertaintyNote}</p>
-      </section>
-      <section className="panel" aria-labelledby="interaction-heading">
-        <h3 id="interaction-heading">政策の組み合わせ</h3>
-        {output.comboResults.map((combo) => {
-          const reason = combo.reason
-            ? {
-                "missing-required-policy": "必要な政策が揃っていません",
-                "forbidden-policy": "同時に使えない政策があります",
-                "insufficient-overlap": `重複期間が${combo.overlapMonths}か月で条件を満たしません`,
-                "insufficient-additional-cost":
-                  "組み合わせの追加費用が足りません（政策自体は確定できます）",
-                "missing-required-combo":
-                  "前提となる組み合わせの効果がまだ出ていません",
-                "already-fired-this-month": "今月はすでに効果が出ています",
-              }[combo.reason]
-            : "すべての条件を満たします";
-          return (
-            <article className="combo-result" key={combo.comboId}>
-              <h4>
-                {combo.kind === "synergy"
-                  ? "効果を高め合う組み合わせ"
-                  : "効果を打ち消し合う組み合わせ"}
-                ：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
-              </h4>
-              <p>
-                条件：{combo.requiredPolicyIds.map(label).join(" ＋ ")}
-                {combo.forbiddenPolicyIds.length
-                  ? `（併用不可：${combo.forbiddenPolicyIds.map(label).join("、")}）`
-                  : ""}
-              </p>
-              <p>
-                {combo.activated
-                  ? "組み合わせの効果が出る見込みです"
-                  : "組み合わせの効果は出ない見込みです"}
-                。 {reason}。
-              </p>
-              <p>
-                追加費用：政治資本 {combo.additionalCosts.politicalCapital}
-                、実施能力 {combo.additionalCosts.implementationCapacity}
-                、外貨準備 {combo.additionalCosts.foreignReserves}、予算{" "}
-                {combo.additionalCosts.immediateBudget}。
-              </p>
-            </article>
-          );
-        })}
-        {output.comboResults.length === 0 && (
-          <p>今の設定には、特別な組み合わせの効果はありません。</p>
-        )}
-      </section>
-      <label className="review-acknowledgement">
-        <input
-          type="checkbox"
-          checked={reviewed}
-          disabled={busy}
-          onChange={(event) =>
-            setReviewedKey(event.target.checked ? reviewKey : null)
-          }
-        />
-        費用・副作用・警告を確認しました
-      </label>
-      <p className="quiet">
-        ゲーム内の計算による見通しです。外部環境の揺れを想定し、結果の幅を示しています。
-      </p>
-      <section className="panel">
-        <h3>新しい政策を加えない場合との12か月比較</h3>
-        <div className="comparison-list">
-          {output.indicators
-            .filter((item) =>
-              [
-                "realGdp",
-                "inflation",
-                "unemployment",
-                "policyTrust",
-                "foreignReserves",
-              ].includes(item.indicatorId),
-            )
-            .map((item) => (
-              <article key={item.indicatorId}>
-                <h4>{label(item.indicatorId)}</h4>
-                <p>
-                  3か月：{display(item.indicatorId, item.month3.low)} ～{" "}
-                  {display(item.indicatorId, item.month3.high)}（中心{" "}
-                  {display(item.indicatorId, item.month3.base)}）
-                </p>
-                <p>
-                  6か月：{display(item.indicatorId, item.month6.low)} ～{" "}
-                  {display(item.indicatorId, item.month6.high)}
-                </p>
-                <p>
-                  12か月：{display(item.indicatorId, item.month12.low)} ～{" "}
-                  {display(item.indicatorId, item.month12.high)}
-                  、新しい政策を加えない場合との差{" "}
-                  {item.month12.deltaBase > 0 ? "+" : ""}
-                  {display(item.indicatorId, item.month12.deltaBase)}
-                </p>
-              </article>
-            ))}
-        </div>
-      </section>
-      <section className="panel" aria-labelledby="forecast-heading">
-        <h3 id="forecast-heading">1年・5年の見通し</h3>
-        <p>
-          確信度：{confidence}。主な不確実性：
-          {output.uncertainty.majorDrivers.map(label).join("、")}。
-        </p>
-        <div className="forecast-grid">
-          {["realGdp", "inflation", "unemployment"].map((indicatorId) => (
-            <article key={indicatorId}>
-              <h4>{label(indicatorId)}</h4>
-              <p>
-                1年後の新しい政策を加えない場合との差：
-                {display(indicatorId, forecast(12, indicatorId)?.endDelta ?? 0)}
-              </p>
-              <p>
-                5年後の新しい政策を加えない場合との差：
-                {display(indicatorId, forecast(60, indicatorId)?.endDelta ?? 0)}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="panel" aria-labelledby="counterfactual-heading">
-        <h3 id="counterfactual-heading">別の政策を選んだら</h3>
-        <p>
-          基準時点：ゲーム内{" "}
-          {output.activationMonth === null
-            ? "現在"
-            : `${output.activationMonth + 1}月目`}
-          。今の国の状態と外部環境をそろえて比べています。
-        </p>
-        <div
-          className="counterfactual-cards"
-          aria-label="政策案と新しい政策を加えない場合の比較"
-        >
-          {[output, ...counterfactuals].map((candidate) => {
-            const row = candidate.indicators.find(
-              (item) => item.indicatorId === "realGdp",
-            )!;
-            const fiveYear = candidate.summaries.find(
-              (item) =>
-                item.indicatorId === "realGdp" && item.horizonMonths === 60,
-            );
-            return (
-              <article key={candidate.draftHash}>
-                <h4>
-                  {candidate.previewedDraft
-                    ? label(candidate.previewedDraft.ruleId)
-                    : "今の政策を続ける"}
-                </h4>
-                {[
-                  { horizon: "3か月", value: row.month3.deltaBase },
-                  { horizon: "6か月", value: row.month6.deltaBase },
-                  { horizon: "1年", value: row.month12.deltaBase },
-                  { horizon: "5年", value: fiveYear?.endDelta ?? 0 },
-                ].map(({ horizon, value }) => (
-                  <p key={horizon}>
-                    {horizon}：{value > 0 ? "+" : ""}
-                    {display("realGdp", value)}
-                  </p>
-                ))}
-              </article>
-            );
-          })}
-        </div>
-        <small>表示値は、新しい政策を加えない場合との成長の差です。</small>
-      </section>
-      <section className="panel" aria-labelledby="advice-heading">
-        <h3 id="advice-heading">選択した専門家の解説</h3>
-        {expertIds.map((expertId) => {
-          const expert = profiles.find((item) => item.id === expertId)!;
-          const advice = advisor.advise(expert, adviceContext);
-          return (
-            <article
-              className="expert-advice"
-              key={expertId}
-              style={{ "--expert-color": expert.colorToken } as CSSProperties}
-            >
-              <header className="expert-identity" data-page-title>
-                <ExpertPortrait expertId={expert.id} />
-                <div className="expert-identity-copy">
-                  <h4>{expert.role}</h4>
-                  <p className="quiet">
-                    {expert.displayName ?? expert.role} · 口調：{expert.tone}
-                  </p>
-                </div>
-              </header>
-              <p>
-                <strong>結論：</strong>
-                {adviceExplanation(
-                  advice.conclusion,
-                  expert.priorityIndicators ??
-                    Object.keys(adviceContext.effects),
-                )}
-              </p>
-              <p>
-                <strong>やさしい理由：</strong>
-                {advice.reason}
-              </p>
-              <p>
-                <strong>注意点：</strong>
-                {advice.caution}
-              </p>
-              <details>
-                <summary>比べている基準</summary>
-                新しい政策を加えず、現在の政策だけを続けた場合との差です。
-              </details>
-            </article>
-          );
-        })}
-        {dissentingExpert &&
-          (() => {
-            const dissent = advisor.advise(dissentingExpert, adviceContext);
-            return (
-              <aside
-                className="expert-dissent"
-                style={
-                  {
-                    "--expert-color": dissentingExpert.colorToken,
-                  } as CSSProperties
-                }
-              >
-                <header className="expert-identity" data-page-title>
-                  <ExpertPortrait expertId={dissentingExpert.id} />
-                  <div className="expert-identity-copy">
-                    <strong>
-                      別の視点：{" "}
-                      {dissentingExpert.displayName ?? dissentingExpert.role}
-                    </strong>
-                    <p className="quiet">
-                      {dissentingExpert.role} · 口調：{dissentingExpert.tone}
-                    </p>
-                  </div>
-                </header>
-                <p>
-                  {adviceExplanation(
-                    dissent.conclusion,
-                    dissentingExpert.priorityIndicators ??
-                      Object.keys(adviceContext.effects),
-                  )}{" "}
-                  {dissent.caution}
-                </p>
-              </aside>
-            );
-          })()}
-      </section>
-    </PageDeck>
+    />
   );
 }
