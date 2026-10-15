@@ -83,6 +83,16 @@ jobs:
             test-results-pages/**/error-context.md
           if-no-files-found: ignore
 
+      - name: Upload help contrast evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: help-contrast
+          path: |
+            test-results/**/help-*.png
+            test-results/**/help-*.json
+          if-no-files-found: ignore
+
       - name: Upload expert portrait review images
         if: always()
         uses: actions/upload-artifact@v4

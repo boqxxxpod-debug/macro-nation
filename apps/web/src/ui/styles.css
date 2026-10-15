@@ -123,6 +123,7 @@ h4 {
 .panel,
 .indicator {
   background: #fffefb;
+  color: #172a33;
   border: 1px solid #c9d0cb;
   border-radius: 0.85rem;
   box-shadow: 0 0.35rem 1.2rem rgb(21 49 48 / 6%);
