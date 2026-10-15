@@ -4,16 +4,17 @@ import type {
   GameState,
   MonthlyReportSnapshot,
   ReactionSnapshot,
+  ScenarioId,
   VersionTuple,
 } from "@macro-nation/domain";
 import { endMonthForState } from "@macro-nation/domain";
 import {
   createConfigSnapshot,
-  loadSCN01ConfigPack,
+  loadScenarioConfigPack,
 } from "@macro-nation/model-config";
 import {
   ENGINE_VERSION,
-  createSCN01InitialState,
+  createScenarioInitialState,
   policyStateHash,
   runPolicyHeadless,
   submitPolicyCommand,
@@ -32,6 +33,11 @@ import {
   queueElapsed,
   stopClock,
 } from "./clock-adapter";
+import {
+  progressionFromStates,
+  unlockedScenarioIds,
+  type ScenarioProgression,
+} from "./scenario-progression";
 
 export function browserGameRepository(): GameRepository | null {
   return typeof indexedDB === "undefined"
@@ -48,6 +54,7 @@ export interface GameRepository {
     shouldCommit?: () => boolean,
   ): Promise<void>;
   create(state: GameState, startCommandId?: string): Promise<void>;
+  loadProgression?(): Promise<ScenarioProgression>;
 }
 
 export interface SlotLoadResult {
@@ -102,11 +109,27 @@ export async function createGame(
   seed: string,
   slotId: GameState["slotId"] = 1,
   learningMode: NonNullable<GameState["learningMode"]> = "learning",
-  durationMode: Exclude<DurationMode, "custom"> = "short",
+  durationMode?: Exclude<DurationMode, "custom">,
   difficulty: GameState["difficulty"] = "intro",
   startCommandId?: string,
+  scenarioId: ScenarioId = "SCN-01",
 ): Promise<GameState> {
-  const pack = await loadSCN01ConfigPack();
+  if (scenarioId !== "SCN-01") {
+    const progression = repository.loadProgression
+      ? await repository.loadProgression()
+      : progressionFromStates(
+          (
+            await Promise.all(
+              ([1, 2, 3] as const).map((id) => repository.load(id)),
+            )
+          ).filter((state): state is GameState => state !== null),
+        );
+    if (!unlockedScenarioIds(progression).includes(scenarioId))
+      throw new Error("SCN-01を完了すると、このシナリオを選べます。");
+  }
+  const pack = await loadScenarioConfigPack(scenarioId);
+  const selectedDuration =
+    durationMode ?? (scenarioId === "SCN-01" ? "short" : "standard");
   const configSnapshot = await createConfigSnapshot(
     pack,
     pack.scenario.parameterOverrides,
@@ -121,18 +144,18 @@ export async function createGame(
     rngVersion: pack.manifest.rngVersion,
     configVersion: pack.manifest.configVersion,
   };
-  const initial = createSCN01InitialState({
+  const initial = createScenarioInitialState({
     seed,
     slotId,
     configSnapshot,
     versions,
-    durationMode,
+    durationMode: selectedDuration,
   });
   const state: GameState = {
     ...initial,
     runState: "paused",
     difficulty,
-    durationMode,
+    durationMode: selectedDuration,
     learningMode,
     pendingOfflineSteps: 0,
     clock: {
@@ -151,7 +174,18 @@ export async function createGame(
   await repository.create(state, startCommandId);
   // An idempotent retry may have found the already committed start command.
   // Always return the durable value rather than a newly generated duplicate.
-  return (await repository.load(slotId)) ?? state;
+  const durable = await repository.load(slotId);
+  if (
+    durable &&
+    (durable.scenarioId !== state.scenarioId ||
+      durable.difficulty !== state.difficulty ||
+      durable.durationMode !== state.durationMode ||
+      durable.learningMode !== state.learningMode ||
+      durable.rng.rootSeed !== state.rng.rootSeed ||
+      durable.clock.endMonth !== state.clock.endMonth)
+  )
+    throw new Error("Save slot already exists with different start settings");
+  return durable ?? state;
 }
 
 /** One explicit month, persisted before the UI shows its result. */

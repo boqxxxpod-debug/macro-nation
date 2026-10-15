@@ -4,7 +4,7 @@ import type { GameState } from "@macro-nation/domain";
 async function savedState(page: Page): Promise<GameState> {
   return page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("macro-nation-games", 1);
+      const request = indexedDB.open("macro-nation-games");
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -110,7 +110,7 @@ async function seedLandscape(
         history: { ...original.history, reports },
       };
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("macro-nation-games", 1);
+        const request = indexedDB.open("macro-nation-games");
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });

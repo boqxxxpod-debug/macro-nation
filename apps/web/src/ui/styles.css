@@ -1307,6 +1307,12 @@ label select {
   font-size: 1.15rem;
   flex: 1;
 }
+.shell-scenario {
+  display: block;
+  font-size: 0.7em;
+  font-weight: 400;
+  line-height: 1.4;
+}
 .viewport-shell .hero .eyebrow,
 .viewport-shell .hero .lead {
   display: none;

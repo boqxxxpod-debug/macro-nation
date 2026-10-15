@@ -406,7 +406,7 @@ export function parseConfigPack(
     "limits-v1.json",
     "effect-curves-v1.json",
     "standard-nation-v1.json",
-    "scn01-v1.json",
+    `${pack.scenario.id.toLowerCase().replaceAll("-", "")}-v1.json`,
   ] as const;
   for (const fileName of requiredHashFiles) {
     if (!(fileName in pack.manifest.fileHashes)) {

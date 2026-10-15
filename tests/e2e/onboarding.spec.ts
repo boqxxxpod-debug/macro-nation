@@ -80,7 +80,7 @@ async function startGame(page: Page) {
 async function savedState(page: Page, slotId = 1): Promise<GameState> {
   return page.evaluate(async (slotId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("macro-nation-games", 1);
+      const request = indexedDB.open("macro-nation-games");
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });

@@ -54,6 +54,15 @@ interface Kernel {
   readonly shape: string;
   readonly weights: readonly number[];
 }
+
+function initialPolicyRate(snapshot: ConfigSnapshot): number {
+  const scenario = snapshot.normalizedConfig.scenario as
+    { readonly initialState?: { readonly policyRate?: number } } | undefined;
+  const nation = snapshot.normalizedConfig.nation as {
+    readonly initial: { readonly policyRate: number };
+  };
+  return scenario?.initialState?.policyRate ?? nation.initial.policyRate;
+}
 const POLICY_TYPES = [
   "interestRate",
   "taxPackage",
@@ -361,10 +370,7 @@ export function activateDuePolicies(state: GameState): ActivationResult {
     !active.some((p) => p.type === "interestRate") &&
     !due.some((p) => p.type === "interestRate")
   ) {
-    const nation = working.configSnapshot.normalizedConfig.nation as {
-      initial: { policyRate: number };
-    };
-    const next = nation.initial.policyRate;
+    const next = initialPolicyRate(working.configSnapshot);
     causal.push(
       createContributionBuilder("policyRate", working.economy.rates.policyRate)
         .add(
@@ -710,11 +716,7 @@ export function terminateActivePolicy(
     );
     policyRate = percentRate(
       stillActive.at(-1)?.inputs?.value ??
-        (
-          state.configSnapshot.normalizedConfig.nation as {
-            initial: { policyRate: number };
-          }
-        ).initial.policyRate,
+        initialPolicyRate(state.configSnapshot),
     );
     causal.push(
       createContributionBuilder("policyRate", state.economy.rates.policyRate)

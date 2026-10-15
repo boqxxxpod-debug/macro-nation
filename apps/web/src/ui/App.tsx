@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { DurationMode, GameState } from "@macro-nation/domain";
+import type { DurationMode, GameState, ScenarioId } from "@macro-nation/domain";
 import {
   policyMeetingStatus,
   policyDraftHash,
@@ -51,6 +51,13 @@ import { clockStatus } from "./time-status";
 import { tutorialContent } from "./tutorial-content";
 import { gameGoalContent, gameGuideContent } from "./GameGuide";
 import gameGuideCopy from "./game-guide-copy.json";
+import { scenarioCatalog } from "../application/scenario-catalog";
+import {
+  emptyScenarioProgression,
+  progressionFromStates,
+  unlockedScenarioIds,
+  type ScenarioProgression,
+} from "../application/scenario-progression";
 
 type Route =
   | "home"
@@ -142,6 +149,8 @@ function errorMessage(cause: unknown, context: ErrorContext): string {
     return "保存データを確認できませんでした。別の保存先から続けるか、空いている保存先で新しく始めてください。";
   if (/Save slot already exists|slot occupied/.test(message))
     return "この保存先にはゲームがあります。続きから開くか、空いている保存先を選んでください。";
+  if (/SCN-01を完了/.test(message))
+    return "小さな開放経済を予定期間の最後まで完了すると、このシナリオを選べます。";
   if (/Saved game changed|stale state|concurrent save/i.test(message))
     return "保存したゲームの状態が変わりました。画面を再読み込みし、最後に保存された状態を確認してください。";
   if (
@@ -272,6 +281,7 @@ export function App({
 
   const confirmationId = useRef<string | null>(null);
   const startCommandId = useRef(crypto.randomUUID());
+  const automaticStartSeed = useRef<string | null>(null);
   if (!previewClient.current) previewClient.current = new PreviewClient();
   const [state, setState] = useState<GameState | null>(null);
   const [route, setRoute] = useState<Route>(routeFromLocation);
@@ -380,8 +390,21 @@ export function App({
     useState<Exclude<DurationMode, "custom">>("short");
   const [difficulty, setDifficulty] =
     useState<GameState["difficulty"]>("intro");
+  const [scenarioId, setScenarioId] = useState<ScenarioId>("SCN-01");
   const [slotId, setSlotId] = useState<GameState["slotId"]>(1);
   const [slots, setSlots] = useState<ReadonlyMap<number, GameState>>(new Map());
+  const [progression, setProgression] = useState<ScenarioProgression>(
+    emptyScenarioProgression,
+  );
+  const unlockedScenarios = unlockedScenarioIds(
+    progressionFromStates([...slots.values()], progression),
+  );
+  const selectedScenario = scenarioCatalog.find(
+    (item) => item.id === scenarioId,
+  )!;
+  const activeScenario = scenarioCatalog.find(
+    (item) => item.id === state?.scenarioId,
+  );
   const [launchPanel, setLaunchPanel] = useState<"history" | "help" | null>(
     null,
   );
@@ -542,28 +565,35 @@ export function App({
       setLoading(false);
       return;
     }
-    void Promise.all(
-      SLOT_IDS.map(async (id) => {
-        const result = repository.loadSlot
-          ? await repository.loadSlot(id)
-          : { state: await repository.load(id), recovered: false };
-        const saved = result.state
-          ? await migrateFirstPlayableSave(repository, result.state)
-          : null;
-        return {
-          id,
-          saved,
-          recovered: result.recovered,
-          reason: result.reason,
-        };
-      }),
-    )
-      .then(async (loaded) => {
+    void Promise.all([
+      Promise.all(
+        SLOT_IDS.map(async (id) => {
+          const result = repository.loadSlot
+            ? await repository.loadSlot(id)
+            : { state: await repository.load(id), recovered: false };
+          const saved = result.state
+            ? await migrateFirstPlayableSave(repository, result.state)
+            : null;
+          return {
+            id,
+            saved,
+            recovered: result.recovered,
+            reason: result.reason,
+          };
+        }),
+      ),
+      repository.loadProgression?.() ??
+        Promise.resolve(emptyScenarioProgression()),
+    ])
+      .then(async ([loaded, savedProgression]) => {
         if (active) {
           const available = new Map<number, GameState>();
           for (const item of loaded)
             if (item.saved) available.set(item.id, item.saved);
           setSlots(available);
+          setProgression(
+            progressionFromStates([...available.values()], savedProgression),
+          );
           const requestedSlot = slotFromLocation();
           const first = requestedSlot
             ? (loaded.find((item) => item.id === requestedSlot)?.saved ?? null)
@@ -766,6 +796,19 @@ export function App({
     selectGame(null);
     setMenuOpen(false);
     setRoute("nation");
+    if (repository?.loadProgression)
+      void repository.loadProgression().then(
+        (saved) =>
+          setProgression((current) => ({
+            completedScenarioIds: [
+              ...new Set([
+                ...current.completedScenarioIds,
+                ...saved.completedScenarioIds,
+              ]),
+            ],
+          })),
+        (cause: unknown) => setError(errorMessage(cause, "load")),
+      );
   }
   function openGameHelp() {
     setHelpOpen(true);
@@ -781,14 +824,17 @@ export function App({
     const requestedSlot = slotId;
     const created = await createGame(
       repository,
-      startSeed.trim() || seedFactory(),
+      startSeed.trim() || (automaticStartSeed.current ??= seedFactory()),
       requestedSlot,
       learningMode,
       durationMode,
       difficulty,
       startCommandId.current,
+      scenarioId,
     );
     if (selectedSession !== session.current) return;
+    startCommandId.current = crypto.randomUUID();
+    automaticStartSeed.current = null;
     selectGame(created);
     setSlots((current) => new Map(current).set(requestedSlot, created));
     navigate("nation");
@@ -970,7 +1016,12 @@ export function App({
     >
       <header className="hero">
         <p className="eyebrow">国家運営シミュレーション</p>
-        <h1>MACRO NATION</h1>
+        <h1>
+          MACRO NATION
+          {activeScenario && (
+            <span className="shell-scenario">{activeScenario.title}</span>
+          )}
+        </h1>
         <p className="lead">
           政策の時間差や良い点・注意点を、数字と理由から確かめます。
         </p>
@@ -1032,6 +1083,7 @@ export function App({
                   className="start-summary"
                   aria-label={gameGuideCopy.summary.label}
                 >
+                  シナリオ：{selectedScenario.title}・
                   {gameGuideCopy.summary.difficulty}：
                   {DIFFICULTY_LABELS[difficulty]}・
                   {gameGuideCopy.summary.duration}：
@@ -1050,7 +1102,11 @@ export function App({
                 </p>
                 <button
                   className="primary"
-                  disabled={busy || !repository}
+                  disabled={
+                    busy ||
+                    !repository ||
+                    !unlockedScenarios.includes(scenarioId)
+                  }
                   onClick={() => void action(start, "save")}
                 >
                   はじめる
@@ -1103,8 +1159,12 @@ export function App({
                       )
                       .map(([id, saved]) => (
                         <li key={id}>
-                          <strong>保存先{id}</strong>：{durationLabel(saved)}、
-                          {saved.monthIndex}か月まで進行、
+                          <strong>保存先{id}</strong>：
+                          {scenarioCatalog.find(
+                            (item) => item.id === saved.scenarioId,
+                          )?.title ?? "シナリオ"}
+                          、{durationLabel(saved)}、{saved.monthIndex}
+                          か月まで進行、
                           {saved.runState === "completed"
                             ? "予定期間を終了"
                             : saved.runState === "failed"
@@ -1137,7 +1197,7 @@ export function App({
                     <h3>保存先{id}</h3>
                     <p>
                       {saved
-                        ? `${saved.monthIndex}か月目・${durationLabel(saved)}・${DIFFICULTY_LABELS[saved.difficulty]}・${LEARNING_MODE_LABELS[saved.learningMode ?? "standard"]}`
+                        ? `${scenarioCatalog.find((item) => item.id === saved.scenarioId)?.title ?? "シナリオ"}・${saved.monthIndex}か月目・${durationLabel(saved)}・${DIFFICULTY_LABELS[saved.difficulty]}・${LEARNING_MODE_LABELS[saved.learningMode ?? "standard"]}`
                         : "まだ保存されていません。"}
                     </p>
                     {saved ? (
@@ -1170,8 +1230,27 @@ export function App({
               <h3 id="scenario-heading">新しいゲームの設定</h3>
               <label>
                 シナリオ
-                <select defaultValue="SCN-01">
-                  <option value="SCN-01">小さな開放経済</option>
+                <select
+                  value={scenarioId}
+                  onChange={(event) => {
+                    const next = event.target.value as ScenarioId;
+                    if (!unlockedScenarios.includes(next)) return;
+                    setScenarioId(next);
+                    setDurationMode(next === "SCN-01" ? "short" : "standard");
+                  }}
+                >
+                  {scenarioCatalog.map((scenario) => (
+                    <option
+                      key={scenario.id}
+                      value={scenario.id}
+                      disabled={!unlockedScenarios.includes(scenario.id)}
+                    >
+                      {scenario.title}
+                      {!unlockedScenarios.includes(scenario.id)
+                        ? "（小さな開放経済の完了で解放）"
+                        : ""}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1238,6 +1317,20 @@ export function App({
               <p id="reproduction-help" className="quiet">
                 空欄なら自動で作ります。同じコードと開始設定を使い、ゲームの版・設定データ・選ぶ政策・進め方も同じにすると、結果を再現できます。
               </p>
+              <div className="scenario-catalog" aria-label="シナリオの課題">
+                {scenarioCatalog.map((scenario) => (
+                  <article className="panel" key={scenario.id}>
+                    <h4>{scenario.title}</h4>
+                    <p>開始時の課題：{scenario.challenge}</p>
+                    <p>考えること：{scenario.tradeoff}</p>
+                    <p className="quiet">
+                      {unlockedScenarios.includes(scenario.id)
+                        ? "選択できます。"
+                        : "解放条件：小さな開放経済を予定期間の最後まで完了してください。"}
+                    </p>
+                  </article>
+                ))}
+              </div>
 
               {!repository && (
                 <p role="alert">
@@ -1636,6 +1729,32 @@ export function App({
                         state,
                         onOpenReport: () => void navigate("report"),
                       }) ?? tutorialContent(state)}
+                      {activeScenario && (
+                        <section className="panel">
+                          <h3>{activeScenario.title}</h3>
+                          <p>{activeScenario.challenge}</p>
+                          <p>{activeScenario.tradeoff}</p>
+                          <h4>現在の状況</h4>
+                          <p>為替指数：{state.economy.indices.fx.toFixed(1)}</p>
+                          <p>
+                            外貨準備：
+                            {state.economy.flows.imports > 0
+                              ? `${(state.economy.stocks.foreignReserves / state.economy.flows.imports).toFixed(1)}か月分`
+                              : "輸入額がないため算出できません。"}
+                          </p>
+                          <p>
+                            相手国関係：
+                            {state.economy.external.partnerRelations.toFixed(1)}
+                          </p>
+                          <p>
+                            政府債務のGDP比：
+                            {display(
+                              "governmentDebtRatio",
+                              state.economy.ratios.governmentDebtRatio,
+                            )}
+                          </p>
+                        </section>
+                      )}
                     </NationView>
                   </>
                 )}

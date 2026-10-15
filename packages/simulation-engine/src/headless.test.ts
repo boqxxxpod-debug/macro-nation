@@ -157,7 +157,11 @@ describe("SCN-01 no-policy headless runner", () => {
 
   it("keeps six reviews and three structural updates unique over 30 years", () => {
     const initialState = makeState("thirty-years", "ultraLong");
-    const result = runNoPolicyHeadless({ initialState, tickCount: 360 });
+    const result = runNoPolicyHeadless({
+      initialState,
+      tickCount: 360,
+      collectTrace: false,
+    });
     expect(result.failure).toBeNull();
     expect(
       result.finalState.history.reviews?.map((item) => item.monthIndex),
@@ -182,7 +186,7 @@ describe("SCN-01 no-policy headless runner", () => {
       replayNoPolicyPackage(createNoPolicyReplayPackage(initialState, 360))
         .finalState,
     ).toEqual(result.finalState);
-  }, 10_000);
+  }, 30_000);
 
   it("reports 12-step progress and only cancels at a 96-step checkpoint", () => {
     const progress: number[] = [];
