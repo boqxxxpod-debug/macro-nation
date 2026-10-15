@@ -91,7 +91,7 @@ function evidenceButton(page: Page, row: number) {
 async function savedState(page: Page): Promise<GameState> {
   return page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("macro-nation-games", 1);
+      const request = indexedDB.open("macro-nation-games");
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -128,7 +128,7 @@ async function seedReports(page: Page, missingInflation = false) {
   await page.evaluate(
     async ({ causes, oldCause, missingInflation }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("macro-nation-games", 1);
+        const request = indexedDB.open("macro-nation-games");
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });

@@ -246,6 +246,16 @@ function configuredBaselinePublicInvestment(
   snapshot: ConfigSnapshot,
   fallback: number,
 ): number {
+  const scenario = snapshot.normalizedConfig.scenario as
+    | { readonly initialState?: { readonly publicInvestment?: unknown } }
+    | undefined;
+  const override = scenario?.initialState?.publicInvestment;
+  if (
+    typeof override === "number" &&
+    Number.isFinite(override) &&
+    override >= 0
+  )
+    return override;
   const nation = snapshot.normalizedConfig.nation;
   if (!nation || typeof nation !== "object" || Array.isArray(nation))
     return fallback;

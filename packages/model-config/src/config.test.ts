@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   SCN01_CONFIG_FILES,
   SCN01_CONFIG_PACK,
+  SCN02_CONFIG_PACK,
+  SCN03_CONFIG_PACK,
   assertConfigCompatibility,
   loadConfigPack,
   loadSCN01ConfigPack,
+  loadScenarioConfigPack,
   assertEngineCompatibility,
   createConfigSnapshot,
   createSnapshotIndicatorRegistry,
@@ -16,6 +19,52 @@ import {
 } from "./index";
 
 describe("ConfigPack v1", () => {
+  it.each([SCN02_CONFIG_PACK, SCN03_CONFIG_PACK])(
+    "loads the pinned provisional $scenario.id pack without changing shared model data",
+    async (pack) => {
+      await expect(loadScenarioConfigPack(pack.scenario.id)).resolves.toEqual(
+        pack,
+      );
+      expect(pack.scenario.provenance?.calibrationStatus).toBe("provisional");
+      expect(pack.scenario.provenance?.unresolvedFields).toContain(
+        "scenario-specific monthly external baseline",
+      );
+      expect(pack.scenario.durationMonths).toBe(96);
+      expect(pack.coefficients).toEqual(SCN01_CONFIG_PACK.coefficients);
+      expect(pack.shockModel).toEqual(SCN01_CONFIG_PACK.shockModel);
+      expect(pack.manifest.modelVersion).toBe(
+        SCN01_CONFIG_PACK.manifest.modelVersion,
+      );
+    },
+  );
+
+  it("resolves scenario IDs explicitly and rejects an unsupported ID", async () => {
+    await expect(loadScenarioConfigPack("SCN-01")).resolves.toEqual(
+      SCN01_CONFIG_PACK,
+    );
+    expect(() => loadScenarioConfigPack("unknown-scenario")).toThrow(
+      /Unsupported scenario/,
+    );
+  });
+
+  it.each([
+    { inflationAnnual: Number.NaN },
+    { reserveImportMonths: -1 },
+    { realGdpGrowthAnnual: -1 },
+    { governmentDebt: 1, governmentDebtRatio: 1 },
+    { foreignReserves: 1, reserveImportMonths: 1 },
+  ])(
+    "rejects invalid or ambiguous scenario initial values %j",
+    (initialState) => {
+      expect(() =>
+        parseConfigPack({
+          ...SCN02_CONFIG_PACK,
+          scenario: { ...SCN02_CONFIG_PACK.scenario, initialState },
+        }),
+      ).toThrow();
+    },
+  );
+
   it("validates the standard SCN-01 fixture and hashes", async () => {
     expect(SCN01_CONFIG_PACK.manifest.modelVersion).toBe("0.1.2");
     expect(SCN01_CONFIG_PACK.scenario.clock.policyCycleSteps).toBe(3);

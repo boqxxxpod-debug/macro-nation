@@ -78,13 +78,45 @@ function roleOnPage(
   role: Parameters<typeof screen.queryAllByRole>[0],
   name: string | RegExp,
 ) {
-  return onPage(label, () => screen.queryAllByRole(role, { name })[0]);
+  // PageDeck keeps each item mounted and changes hidden between pages.
+  // Resolve candidates once rather than recalculating visibility for the
+  // entire document after every page turn.
+  const candidates = screen.queryAllByRole(role, { name, hidden: true });
+  return onPage(label, () =>
+    candidates.find(
+      (element) => element.isConnected && !element.closest("[hidden]"),
+    ),
+  );
 }
 
 function textOnPage(label: string, text: string | RegExp) {
   return onPage(label, () =>
     screen.queryAllByText(text).find((element) => !element.closest("[hidden]")),
   );
+}
+
+function textAcrossPages(label: string) {
+  const deck = [
+    ...document.querySelectorAll<HTMLElement>("[data-page-deck]"),
+  ].find((element) => element.getAttribute("aria-label") === label)!;
+  const previous = within(deck).getByRole("button", {
+    name: `${label}の前のページ`,
+  }) as HTMLButtonElement;
+  while (!previous.disabled) fireEvent.click(previous);
+  const next = within(deck).getByRole("button", {
+    name: `${label}の次のページ`,
+  }) as HTMLButtonElement;
+  const text: string[] = [];
+  for (let page = 0; page < 300; page += 1) {
+    text.push(
+      [...deck.querySelectorAll<HTMLElement>("[data-page-item]:not([hidden])")]
+        .map((item) => item.textContent)
+        .join(" "),
+    );
+    if (next.disabled) return text.join(" ");
+    fireEvent.click(next);
+  }
+  throw new Error(`PageDeck exceeded the expected page count: ${label}`);
 }
 
 function memoryRepository() {
@@ -118,6 +150,265 @@ function memoryRepository() {
     },
   };
 }
+
+function scenarioRepository(completedScenarioIds?: readonly string[]) {
+  const saved = new Map<number, GameState>();
+  const startCommands = new Map<number, string>();
+  const repository: GameRepository = {
+    async load(id) {
+      return saved.has(id) ? structuredClone(saved.get(id)!) : null;
+    },
+    async create(state, commandId) {
+      if (saved.has(state.slotId)) {
+        if (commandId && startCommands.get(state.slotId) === commandId) return;
+        throw new Error("slot occupied");
+      }
+      saved.set(state.slotId, structuredClone(state));
+      if (commandId) startCommands.set(state.slotId, commandId);
+    },
+    async save(expected, next) {
+      const before = saved.get(next.slotId);
+      if (!before || policyStateHash(before) !== expected)
+        throw new Error("stale state");
+      saved.set(next.slotId, structuredClone(next));
+    },
+    ...(completedScenarioIds
+      ? {
+          async loadProgression() {
+            return { completedScenarioIds };
+          },
+        }
+      : {}),
+  };
+  return { repository, saved };
+}
+
+describe("scenario selection", () => {
+  it("shows all three challenges and keeps advanced scenarios locked before completion", async () => {
+    const memory = scenarioRepository();
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    const select = roleOnPage("開始設定", "combobox", "シナリオ");
+    expect(within(select).getAllByRole("option")).toHaveLength(3);
+    expect(
+      within(select).getByRole("option", { name: "小さな開放経済" }),
+    ).toBeEnabled();
+    for (const title of ["通貨安と輸入インフレ", "関税応酬と供給制約"])
+      expect(
+        within(select).getByRole("option", { name: new RegExp(title) }),
+      ).toBeDisabled();
+    fireEvent.change(select, { target: { value: "SCN-02" } });
+    expect(select).toHaveValue("SCN-01");
+    expect(screen.getByLabelText("選択中の開始設定")).toHaveTextContent(
+      "シナリオ：小さな開放経済",
+    );
+    const catalog = textAcrossPages("開始設定");
+    for (const description of [
+      /穏やかな物価高と成長鈍化に向き合う/,
+      /通貨安によって輸入品の価格が上がっている/,
+      /金利と為替介入だけでは解けない/,
+      /相手国との関係が悪化し、物価高と成長停滞/,
+      /国内産業の保護と、輸入品を使う産業や家計の費用/,
+      /解放条件：小さな開放経済を予定期間の最後まで完了/,
+    ])
+      expect(catalog).toMatch(description);
+    expect(memory.saved.size).toBe(0);
+  }, 15_000);
+
+  it("unlocks from a committed introduction completion and starts the chosen advanced scenario", async () => {
+    const memory = scenarioRepository();
+    const introduction = await createGame(
+      memory.repository,
+      "completed-introduction",
+    );
+    await memory.repository.save(policyStateHash(introduction), {
+      ...introduction,
+      runState: "completed",
+      monthIndex: introduction.clock.endMonth!,
+    });
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    fireEvent.click(screen.getByRole("button", { name: "保存スロット" }));
+    const select = roleOnPage("開始設定", "combobox", "シナリオ");
+    for (const title of ["通貨安と輸入インフレ", "関税応酬と供給制約"])
+      expect(within(select).getByRole("option", { name: title })).toBeEnabled();
+    fireEvent.change(select, { target: { value: "SCN-02" } });
+    expect(screen.getByLabelText("選択中の開始設定")).toHaveTextContent(
+      "シナリオ：通貨安と輸入インフレ・難易度：入門・期間：8年",
+    );
+    fireEvent.click(roleOnPage("開始設定", "radio", /30年（360か月）/));
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-03" },
+    });
+    expect(screen.getByLabelText("選択中の開始設定")).toHaveTextContent(
+      "期間：8年",
+    );
+    fireEvent.click(roleOnPage("開始設定", "radio", /4年（48か月）/));
+    fireEvent.click(roleOnPage("開始設定", "button", "保存先2ではじめる"));
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(memory.saved.get(2)).toMatchObject({
+      scenarioId: "SCN-03",
+      durationMode: "short",
+      clock: { endMonth: 48 },
+    });
+    expect(document.querySelector(".shell-scenario")).toHaveTextContent(
+      "関税応酬と供給制約",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "地域一覧" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "見たい内容" }), {
+      target: { value: "guidance" },
+    });
+    expect(textOnPage("運営の案内", "為替指数：108.0")).toBeVisible();
+    expect(textOnPage("運営の案内", "外貨準備：6.0か月分")).toBeVisible();
+    expect(textOnPage("運営の案内", "相手国関係：40.0")).toBeVisible();
+    expect(textOnPage("運営の案内", "政府債務のGDP比：95.0%")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "詳細を閉じる" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存スロット" }));
+    expect(
+      textOnPage("開始設定", /関税応酬と供給制約・0か月目/),
+    ).toBeInTheDocument();
+    fireEvent.click(roleOnPage("開始設定", "button", "保存先2の続きから"));
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(document.querySelector(".shell-scenario")).toHaveTextContent(
+      "関税応酬と供給制約",
+    );
+  }, 15_000);
+
+  it("keeps advanced scenarios locked after a failed introduction", async () => {
+    const memory = scenarioRepository();
+    const introduction = await createGame(
+      memory.repository,
+      "failed-introduction",
+    );
+    await memory.repository.save(policyStateHash(introduction), {
+      ...introduction,
+      runState: "failed",
+    });
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    fireEvent.click(screen.getByRole("button", { name: "保存スロット" }));
+    const select = roleOnPage("開始設定", "combobox", "シナリオ");
+    expect(
+      within(select).getByRole("option", { name: /通貨安と輸入インフレ/ }),
+    ).toBeDisabled();
+    expect(
+      within(select).getByRole("option", { name: /関税応酬と供給制約/ }),
+    ).toBeDisabled();
+  });
+
+  it("uses persisted completion without requiring an introduction save and preserves the selected scenario on a start retry", async () => {
+    const memory = scenarioRepository(["SCN-01"]);
+    const view = render(
+      <App
+        repository={memory.repository}
+        seedFactory={() => "advanced-retry"}
+      />,
+    );
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-02" },
+    });
+    const create = vi
+      .spyOn(memory.repository, "create")
+      .mockRejectedValueOnce(new Error("storage unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("選択中の開始設定")).toHaveTextContent(
+      "シナリオ：通貨安と輸入インフレ",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(memory.saved.get(1)).toMatchObject({
+      scenarioId: "SCN-02",
+      durationMode: "standard",
+      rng: { rootSeed: "advanced-retry" },
+      clock: { endMonth: 96 },
+    });
+    expect(create.mock.calls[0]?.[0].scenarioId).toBe("SCN-02");
+    expect(create.mock.calls[1]?.[0].scenarioId).toBe("SCN-02");
+    expect(create.mock.calls[1]?.[1]).toBe(create.mock.calls[0]?.[1]);
+    view.unmount();
+    memory.saved.clear();
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    const select = roleOnPage("開始設定", "combobox", "シナリオ");
+    expect(
+      within(select).getByRole("option", { name: "通貨安と輸入インフレ" }),
+    ).toBeEnabled();
+    expect(
+      within(select).getByRole("option", { name: "関税応酬と供給制約" }),
+    ).toBeEnabled();
+  });
+
+  it("rejects a different selected scenario after an acknowledged creation could not be read", async () => {
+    const memory = scenarioRepository(["SCN-01"]);
+    render(
+      <App
+        repository={memory.repository}
+        seedFactory={() => "committed-start-retry"}
+      />,
+    );
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-02" },
+    });
+    vi.spyOn(memory.repository, "load").mockRejectedValueOnce(
+      new Error("storage unavailable"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("alert");
+    expect(memory.saved.get(1)?.scenarioId).toBe("SCN-02");
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-03" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "はじめる" })).toBeEnabled(),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "この保存先にはゲームがあります",
+    );
+    expect(
+      screen.getByRole("heading", { name: "はじめる・続きから" }),
+    ).toBeVisible();
+    expect(memory.saved.get(1)?.scenarioId).toBe("SCN-02");
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-02" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(document.querySelector(".shell-scenario")).toHaveTextContent(
+      "通貨安と輸入インフレ",
+    );
+  });
+
+  it("retains an automatically generated seed when retrying an acknowledged start", async () => {
+    const memory = scenarioRepository(["SCN-01"]);
+    const seedFactory = vi
+      .fn()
+      .mockReturnValueOnce("original-automatic-seed")
+      .mockReturnValue("different-rerolled-seed");
+    render(<App repository={memory.repository} seedFactory={seedFactory} />);
+    await screen.findByRole("heading", { name: "はじめる・続きから" });
+    fireEvent.change(roleOnPage("開始設定", "combobox", "シナリオ"), {
+      target: { value: "SCN-02" },
+    });
+    vi.spyOn(memory.repository, "load").mockRejectedValueOnce(
+      new Error("storage unavailable"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("alert");
+    expect(memory.saved.get(1)?.rng.rootSeed).toBe("original-automatic-seed");
+    fireEvent.click(screen.getByRole("button", { name: "はじめる" }));
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    expect(seedFactory).toHaveBeenCalledTimes(1);
+    expect(memory.saved.get(1)?.rng.rootSeed).toBe("original-automatic-seed");
+    expect(document.querySelector(".shell-scenario")).toHaveTextContent(
+      "通貨安と輸入インフレ",
+    );
+  });
+});
 
 describe("SCN-01 user journey", () => {
   it("keeps the objective, play loop, and selected settings beside the start action", async () => {
@@ -766,7 +1057,7 @@ describe("SCN-01 user journey", () => {
     expect(
       screen.getByRole("button", { name: "政策を確定する" }),
     ).toBeEnabled();
-  });
+  }, 15_000);
 
   it.each([
     ["completed", "予定期間を終えました", "予定期間を終了"],

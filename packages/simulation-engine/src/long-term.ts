@@ -27,6 +27,7 @@ function scenario(state: GameState): {
     readonly structuralIntervalMonths: number;
   }[];
   readonly longTerm?: LongTermRules;
+  readonly initialState?: { readonly realGdp?: number };
 } {
   return (state.configSnapshot.normalizedConfig.scenario ?? {}) as ReturnType<
     typeof scenario
@@ -214,12 +215,13 @@ export function appendReview(
   const initial = state.history.reports?.[0]?.values;
   const baselineGdp =
     initial?.realGdp ??
+    scenario(state).initialState?.realGdp ??
     (
       state.configSnapshot.normalizedConfig.nation as {
         initial: { realGdp: number };
       }
     ).initial.realGdp;
-  const baselineIncome = initial?.realHouseholdIncome ?? baselineGdp;
+  const baselineIncome = initial?.realHouseholdIncome ?? 100;
   const reviewSnapshot: ReviewSnapshot = {
     monthIndex: month,
     axes: {

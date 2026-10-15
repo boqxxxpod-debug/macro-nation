@@ -378,22 +378,54 @@ export const contentSchema = z.object({
   textKeys: z.array(z.string().min(1)),
 });
 
+const nationInitialSchema = z.object({
+  realGdp: z.number().positive(),
+  cpi: z.number().positive(),
+  fx: z.number().min(20).max(500),
+  unemployment: z.number().min(0.02).max(0.3),
+  policyRate: z.number().min(-0.02).max(0.3),
+  governmentDebt: z.number().nonnegative(),
+  foreignReserves: z.number().nonnegative(),
+  publicInvestment: z.number().nonnegative(),
+  policyTrust: z.number().min(0).max(100),
+  support: z.number().min(0).max(100),
+});
+
+const scenarioInitialSchema = nationInitialSchema
+  .partial()
+  .extend({
+    realGdpGrowthAnnual: z.number().finite().gt(-1).optional(),
+    inflationAnnual: z.number().finite().min(-0.1).max(0.5).optional(),
+    expectedInflation: z.number().finite().gt(-1).optional(),
+    potentialGdp: z.number().positive().optional(),
+    importPrice: z.number().positive().optional(),
+    governmentDebtRatio: z.number().finite().nonnegative().optional(),
+    reserveImportMonths: z.number().finite().nonnegative().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.governmentDebt !== undefined &&
+      value.governmentDebtRatio !== undefined
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Initial debt must use either a stock or an annual GDP ratio",
+      });
+    if (
+      value.foreignReserves !== undefined &&
+      value.reserveImportMonths !== undefined
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Initial reserves must use either a stock or import months",
+      });
+  });
+
 export const nationSchema = z.object({
   nationId: z.string().min(1),
   displayNameKey: z.string().min(1),
   population: z.number().positive(),
-  initial: z.object({
-    realGdp: z.number().positive(),
-    cpi: z.number().positive(),
-    fx: z.number().min(20).max(500),
-    unemployment: z.number().min(0.02).max(0.3),
-    policyRate: z.number().min(-0.02).max(0.3),
-    governmentDebt: z.number().nonnegative(),
-    foreignReserves: z.number().nonnegative(),
-    publicInvestment: z.number().nonnegative(),
-    policyTrust: z.number().min(0).max(100),
-    support: z.number().min(0).max(100),
-  }),
+  initial: nationInitialSchema,
   industryStructure: z.record(z.string(), z.number().min(0).max(1)),
   industryLoadings: z.record(
     z.string(),
@@ -474,6 +506,19 @@ export const scenarioSchema = z.object({
   startYear: z.number().int(),
   startMonth: z.number().int().min(1).max(12),
   nationId: z.string().min(1),
+  /** Scenario values override the shared NationProfile only at initialization. */
+  initialState: scenarioInitialSchema.optional(),
+  provenance: z
+    .object({
+      calibrationStatus: z.enum(["provisional", "approved"]),
+      sourceTitle: z.string().min(1),
+      sourceSection: z.string().min(1),
+      sourceConfigVersion: z.string().min(1),
+      inheritedFrom: z.string().min(1).optional(),
+      inheritedFields: z.array(z.string().min(1)),
+      unresolvedFields: z.array(z.string().min(1)),
+    })
+    .optional(),
   clock: z.object({
     simulationStep: z.literal("month"),
     policyCycleSteps: z.number().int().positive(),

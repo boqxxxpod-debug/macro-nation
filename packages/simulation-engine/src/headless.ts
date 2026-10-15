@@ -12,6 +12,7 @@ import {
   type EconomyState,
   type GameState,
   type PolicyDecision,
+  type ScenarioId,
   type VersionTuple,
 } from "@macro-nation/domain";
 import { updateDemandAndGdp } from "./demand";
@@ -137,12 +138,21 @@ interface ScenarioNation {
 }
 
 interface ScenarioData {
-  readonly id: string;
+  readonly id: ScenarioId;
   readonly nationId: string;
   readonly startYear: number;
   readonly startMonth: number;
   readonly clock: ScenarioClock;
   readonly externalBaseline: Readonly<Record<string, number>>;
+  readonly initialState?: Partial<ScenarioInitialValues> & {
+    readonly realGdpGrowthAnnual?: number;
+    readonly inflationAnnual?: number;
+    readonly expectedInflation?: number;
+    readonly potentialGdp?: number;
+    readonly importPrice?: number;
+    readonly governmentDebtRatio?: number;
+    readonly reserveImportMonths?: number;
+  };
 }
 
 function requireObject(value: unknown, path: string): Record<string, unknown> {
@@ -181,6 +191,9 @@ function initialScenarioConfig(configSnapshot: ConfigSnapshot): {
     normalized.scenario,
     "scenario",
   ) as unknown as ScenarioData;
+  if (typeof scenario.id !== "string" || !scenario.id.trim()) {
+    throw new Error("Config snapshot is missing scenario.id");
+  }
   if (scenario.nationId !== nation.nationId) {
     throw new Error(
       `Scenario nation ${scenario.nationId} does not match ${nation.nationId}`,
@@ -202,8 +215,8 @@ function initialEconomy(
     }
     return value;
   };
-  const initial = nation.initial;
-  // Current SCN-01 data does not yet define tax/spending bases, external-debt share,
+  const initial = { ...nation.initial, ...scenario.initialState };
+  // The shared NationProfile does not define tax/spending bases, external-debt share,
   // or sector-specific import exposure. Keep this bootstrap explicit and neutral:
   // balance the primary budget at government consumption, hold debt domestically,
   // and use the configured aggregate import share for every sector.
@@ -211,6 +224,13 @@ function initialEconomy(
   const cpi = initial.cpi;
   const nominalGdpPerMonth = realGdp * (cpi / 100);
   const annualNominalGdp = nominalGdpPerMonth * 12;
+  const governmentDebt =
+    scenario.initialState?.governmentDebtRatio === undefined
+      ? initial.governmentDebt
+      : scenario.initialState.governmentDebtRatio * annualNominalGdp;
+  const inflationAnnual =
+    scenario.initialState?.inflationAnnual ?? p("CORE-INF-001");
+  const potentialGdp = scenario.initialState?.potentialGdp ?? realGdp;
   const marketRate = initial.policyRate;
   const foreignGrowthAnnual = requireNumber(
     scenario.externalBaseline,
@@ -242,7 +262,11 @@ function initialEconomy(
   };
   const taxRevenue = componentFlows.governmentConsumption;
   const primarySpending = componentFlows.governmentConsumption;
-  const interestPayment = (initial.governmentDebt * marketRate) / 12;
+  const interestPayment = (governmentDebt * marketRate) / 12;
+  const foreignReserves =
+    scenario.initialState?.reserveImportMonths === undefined
+      ? initial.foreignReserves
+      : scenario.initialState.reserveImportMonths * componentFlows.imports;
   const industries = Object.fromEntries(
     INDUSTRY_IDS.map((id) => {
       const employmentShare = nation.industryStructure[id];
@@ -269,20 +293,24 @@ function initialEconomy(
       fx: indexLevel(initial.fx),
       nominalWage: indexLevel(cpi),
       realHouseholdIncome: indexLevel(100),
-      potentialGdp: indexLevel(realGdp),
-      importPrice: indexLevel(cpi * (initial.fx / 100)),
+      potentialGdp: indexLevel(potentialGdp),
+      importPrice: indexLevel(
+        scenario.initialState?.importPrice ?? cpi * (initial.fx / 100),
+      ),
     },
     rates: {
-      inflationAnnual: percentRate(p("CORE-INF-001")),
+      inflationAnnual: percentRate(inflationAnnual),
       unemployment: percentRate(initial.unemployment),
       policyRate: percentRate(initial.policyRate),
       marketRate: percentRate(marketRate),
-      expectedInflation: percentRate(p("CORE-INF-001")),
+      expectedInflation: percentRate(
+        scenario.initialState?.expectedInflation ?? inflationAnnual,
+      ),
       foreignRate: percentRate(foreignRateAnnual),
     },
     ratios: {
       governmentDebtRatio: percentRate(
-        annualNominalGdp > 0 ? initial.governmentDebt / annualNominalGdp : 0,
+        annualNominalGdp > 0 ? governmentDebt / annualNominalGdp : 0,
       ),
       fiscalBalanceRatio: percentRate(
         annualNominalGdp > 0
@@ -309,10 +337,10 @@ function initialEconomy(
       foreignReserveChange: flowPerMonth(0),
     },
     stocks: {
-      governmentDebt: stockLevel(initial.governmentDebt),
-      domesticGovernmentDebt: stockLevel(initial.governmentDebt),
+      governmentDebt: stockLevel(governmentDebt),
+      domesticGovernmentDebt: stockLevel(governmentDebt),
       externalGovernmentDebt: stockLevel(0),
-      foreignReserves: stockLevel(initial.foreignReserves),
+      foreignReserves: stockLevel(foreignReserves),
       publicCapital: stockLevel(0),
     },
     sentiment: {
@@ -359,25 +387,34 @@ function initialEconomy(
       fxShockLogIndex: 0 as EconomyState["external"]["fxShockLogIndex"],
     },
     memory: {
-      previousRealGdp: indexLevel(realGdp),
+      previousRealGdp: indexLevel(
+        scenario.initialState?.realGdpGrowthAnnual === undefined
+          ? realGdp
+          : realGdp /
+              Math.pow(1 + scenario.initialState.realGdpGrowthAnnual, 1 / 12),
+      ),
       outputGrowthGapHistory: [],
       previousFxIndex: indexLevel(initial.fx),
       previousResourcePriceIndex: indexLevel(resourcePriceIndex),
       effectiveDebtRateAnnual: percentRate(marketRate),
-      baselinePotentialGdp: indexLevel(realGdp),
+      baselinePotentialGdp: indexLevel(potentialGdp),
       publicCapitalFormationHistory: [],
     },
   };
 }
 
-/** Build the SCN-01 bootstrap state from its ConfigSnapshot and neutral defaults. */
-export function createSCN01InitialState(input: {
+export interface ScenarioInitialStateInput {
   readonly configSnapshot: ConfigSnapshot;
   readonly seed: string;
   readonly versions: VersionTuple;
   readonly slotId?: 1 | 2 | 3;
   readonly durationMode?: Exclude<DurationMode, "custom">;
-}): GameState {
+}
+
+/** Build a scenario from its saved ConfigSnapshot and shared NationProfile. */
+export function createScenarioInitialState(
+  input: ScenarioInitialStateInput,
+): GameState {
   if (!input.seed.trim()) throw new Error("seed must be non-empty");
   if (input.versions.engineVersion !== ENGINE_VERSION) {
     throw new Error(
@@ -396,8 +433,6 @@ export function createSCN01InitialState(input: {
     );
   }
   const { nation, scenario } = initialScenarioConfig(input.configSnapshot);
-  if (scenario.id !== "SCN-01")
-    throw new Error(`Expected SCN-01, got ${scenario.id}`);
   const clock = {
     simulationStep: scenario.clock.simulationStep,
     policyCycleSteps: scenario.clock.policyCycleSteps,
@@ -419,7 +454,7 @@ export function createSCN01InitialState(input: {
     gameId: `headless-${input.seed}`,
     slotId: input.slotId ?? 1,
     nationId: nation.nationId,
-    scenarioId: "SCN-01",
+    scenarioId: scenario.id,
     difficulty: "standard",
     durationMode,
     monthIndex: 0,
@@ -453,6 +488,16 @@ export function createSCN01InitialState(input: {
     versions: input.versions,
     configSnapshot: input.configSnapshot,
   };
+}
+
+/** Compatibility entrypoint retaining the SCN-01-only contract. */
+export function createSCN01InitialState(
+  input: ScenarioInitialStateInput,
+): GameState {
+  const { scenario } = initialScenarioConfig(input.configSnapshot);
+  if (scenario.id !== "SCN-01")
+    throw new Error(`Expected SCN-01, got ${scenario.id}`);
+  return createScenarioInitialState(input);
 }
 
 function noPolicyFailure(state: GameState): HeadlessFailure | null {
@@ -889,7 +934,7 @@ export function runPolicyHeadless(input: NoPolicyRunInput): NoPolicyRunResult {
   return runHeadless(input, "fixed-policy-v1");
 }
 
-/** Run SCN-01 without policy commands using the production monthly tick and model blocks. */
+/** Run a configured scenario without policy commands using the production monthly pipeline. */
 export function runNoPolicyHeadless(
   input: NoPolicyRunInput,
 ): NoPolicyRunResult {
