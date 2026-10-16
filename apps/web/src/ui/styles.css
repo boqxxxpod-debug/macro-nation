@@ -2169,3 +2169,24 @@ label select {
   bottom: auto;
   min-height: calc(100vh - 16px);
 }
+.policy-resource h4 {
+  margin: 0 0 0.35rem;
+}
+.resource-unit {
+  font-size: 0.85em;
+  font-weight: normal;
+}
+.resource-comparison {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.resource-comparison > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+.resource-comparison dd {
+  margin: 0;
+  text-align: right;
+}

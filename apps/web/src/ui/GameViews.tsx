@@ -10,11 +10,13 @@ import type {
   ConfigSnapshot,
   GameState,
   MonthlyReportSnapshot,
+  PolicyCosts,
 } from "@macro-nation/domain";
 import {
   createReservedPolicy,
   policyMeetingStatus,
   policyRules,
+  policyStateHash,
   type PolicyDraft,
   type PreviewOutput,
 } from "../application/policy-view";
@@ -47,6 +49,8 @@ import { selectLatestConfirmedPolicy } from "../application/policy-confirmation"
 import { ExpertPortrait } from "./ExpertPortrait";
 import { reportIndicatorUnit, reportNumber } from "./report-format";
 import { TermHelp } from "./TermHelp";
+import { policyResourcesContent } from "./PolicyResources";
+import { policyResourceComparison } from "../application/policy-resources";
 import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
 import { tutorialContent } from "./tutorial-content";
@@ -1130,31 +1134,26 @@ export function PolicyForm({
     onDraftChange?.(next);
   }
   const meeting = policyMeetingStatus(state);
+  let draftCosts: PolicyCosts | null = null;
   const policyIssue = (() => {
     try {
-      const costs = createReservedPolicy(
+      draftCosts = createReservedPolicy(
         state,
         ruleId,
         value,
         draftId,
         ahead,
       ).costs;
-      const held = state.policyAdministration?.reservations ?? [];
-      const resources = {
-        politicalCapital: state.resources.politicalCapital,
-        implementationCapacity: state.resources.implementationCapacity,
-        foreignReserves: state.economy.stocks.foreignReserves,
-        immediateBudget: state.resources.discretionaryBudget,
-      };
-      for (const key of Object.keys(costs) as (keyof typeof costs)[]) {
-        const available =
-          resources[key] - held.reduce((sum, item) => sum + item.costs[key], 0);
-        if (costs[key] > available)
-          return {
-            kind: "resources" as const,
-            message: `${key === "foreignReserves" ? "外貨準備" : key === "politicalCapital" ? "政治資本" : key === "implementationCapacity" ? "実施能力" : "開始予算"}が足りません。必要 ${costs[key].toFixed(1)}、使える量 ${available.toFixed(1)}です。設定値や政策を見直して、もう一度見通しを確認してください。`,
-          };
-      }
+      if (
+        policyResourceComparison(state, draftCosts).some(
+          (row) => row.shortage > 0,
+        )
+      )
+        return {
+          kind: "resources" as const,
+          message:
+            "費用と資源の残量で不足量を確認し、政策案を見直してください。",
+        };
       return null;
     } catch {
       return {
@@ -1359,12 +1358,14 @@ export function PolicyForm({
         )}
         {policyIssue && <p role="status">{policyIssue.message}</p>}
       </section>
+      {draftCosts && policyResourcesContent(state, draftCosts)}
       {extra}
     </PageDeck>
   );
 }
 
 export function Preview({
+  state,
   output,
   configSnapshot,
   counterfactuals,
@@ -1373,7 +1374,9 @@ export function Preview({
   busy,
   onConfirm,
   onBack,
+  onRefresh,
 }: {
+  state: GameState;
   output: PreviewOutput | null;
   configSnapshot: ConfigSnapshot;
   counterfactuals: readonly PreviewOutput[];
@@ -1382,8 +1385,10 @@ export function Preview({
   busy: boolean;
   onConfirm(): void;
   onBack?(): void;
+  onRefresh?(): void;
 }) {
   const [reviewedKey, setReviewedKey] = useState<string | null>(null);
+  const currentHash = useMemo(() => policyStateHash(state), [state]);
   const reviewKey = output ? `${output.stateHash}:${output.draftHash}` : null;
   const reviewed = reviewKey !== null && reviewedKey === reviewKey;
   if (!output)
@@ -1397,6 +1402,50 @@ export function Preview({
         </p>
       </PageDeck>
     );
+  if (output.stateHash !== currentHash) {
+    let latestCosts: PolicyCosts | null = null;
+    const draft = output.previewedDraft;
+    if (draft) {
+      try {
+        latestCosts = createReservedPolicy(
+          state,
+          draft.ruleId,
+          draft.value,
+          draft.policyId,
+          draft.quartersAhead,
+        ).costs;
+      } catch {
+        // The current state's allowed policy inputs may also have changed.
+      }
+    }
+    return (
+      <PageDeck
+        label="政策の見通し"
+        actions={
+          <>
+            {onBack && (
+              <button onClick={onBack} disabled={busy}>
+                案を修正する
+              </button>
+            )}
+            {onRefresh && (
+              <button className="primary" onClick={onRefresh} disabled={busy}>
+                最新状態で見通しを更新
+              </button>
+            )}
+          </>
+        }
+      >
+        <p role="status">
+          資源やゲームの状態が変わりました。以下は最新状態の残量です。見通しを更新して、費用・副作用・警告をもう一度確認してください。
+        </p>
+        {latestCosts && policyResourcesContent(state, latestCosts)}
+      </PageDeck>
+    );
+  }
+  const insufficient = policyResourceComparison(state, output.costs).some(
+    (row) => row.shortage > 0,
+  );
   const forecast = (months: 12 | 60, indicatorId: string) =>
     output.summaries.find(
       (item) =>
@@ -1453,7 +1502,9 @@ export function Preview({
           <section className="panel" aria-label="判断の要点">
             <p>
               <strong>政策案：</strong>
-              {draft ? label(rule?.policyType ?? draft.ruleId) : "今の政策を続ける"}
+              {draft
+                ? label(rule?.policyType ?? draft.ruleId)
+                : "今の政策を続ける"}
               {draft && (
                 <>
                   。{inputCopy?.label ?? "設定値"}：
@@ -1491,16 +1542,6 @@ export function Preview({
               。新しい政策を加えない場合と比べた中心値です。
             </p>
             <p>
-              <strong>費用：</strong>
-              <TermHelp termId="politicalCapital" name="政治資本" />{" "}
-              {output.costs.politicalCapital}、
-              <TermHelp termId="implementationCapacity" name="実施能力" />{" "}
-              {output.costs.implementationCapacity}、
-              <TermHelp termId="foreignReserves" name="外貨準備" />{" "}
-              {output.costs.foreignReserves.toFixed(1)}、開始予算{" "}
-              {output.costs.immediateBudget}。
-            </p>
-            <p>
               <strong>副作用：</strong>
               {output.sideEffects.length
                 ? output.sideEffects
@@ -1524,8 +1565,12 @@ export function Preview({
             </p>
             <p>{uncertaintyNote}</p>
           </section>
+          {policyResourcesContent(state, output.costs)}
           <section className="panel" aria-labelledby="interaction-heading">
             <h3 id="interaction-heading">政策の組み合わせ</h3>
+            <p>
+              組み合わせの追加費用は基本費用と別で、確定時の予約対象外です。上の採用後残量には含めません。開始月以降の実施時に条件と使える量を再判定し、発動した場合だけ消費します。予約した政策が未実施の場合など、見込みは変わることがあります。
+            </p>
             {output.comboResults.map((combo) => {
               const reason = combo.reason
                 ? {
@@ -1560,10 +1605,12 @@ export function Preview({
                     。 {reason}。
                   </p>
                   <p>
-                    追加費用：政治資本 {combo.additionalCosts.politicalCapital}
-                    、実施能力 {combo.additionalCosts.implementationCapacity}
-                    、外貨準備 {combo.additionalCosts.foreignReserves}、予算{" "}
-                    {combo.additionalCosts.immediateBudget}。
+                    発動時の追加費用（基本費用・予約対象外）：政治資本{" "}
+                    {combo.additionalCosts.politicalCapital}
+                    点、実施能力 {combo.additionalCosts.implementationCapacity}
+                    点、外貨準備 {combo.additionalCosts.foreignReserves} model
+                    unit、予算 {combo.additionalCosts.immediateBudget} model
+                    unit。
                   </p>
                 </article>
               );
@@ -1818,9 +1865,9 @@ export function Preview({
           )}
           <button
             className="primary"
-            disabled={busy || !reviewed}
+            disabled={busy || !reviewed || insufficient}
             onClick={() => {
-              if (reviewed && !busy) onConfirm();
+              if (reviewed && !busy && !insufficient) onConfirm();
             }}
           >
             {busy ? "政策を保存しています…" : "政策を確定する"}

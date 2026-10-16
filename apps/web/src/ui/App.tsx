@@ -1661,6 +1661,7 @@ export function App({
                   <>
                     <h2 tabIndex={-1}>政策の見通し</h2>
                     <Preview
+                      state={state}
                       output={preview}
                       configSnapshot={state.configSnapshot}
                       counterfactuals={counterfactuals}
@@ -1669,6 +1670,17 @@ export function App({
                       busy={busy}
                       onConfirm={() => void action(confirm, "save")}
                       onBack={() => navigate("policies")}
+                      onRefresh={() => {
+                        if (preview?.previewedDraft)
+                          void action(
+                            () =>
+                              previewDraft(
+                                preview.previewedDraft!,
+                                previewExpertIds,
+                              ),
+                            "preview",
+                          );
+                      }}
                     />
                   </>
                 )}

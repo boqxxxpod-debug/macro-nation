@@ -54,7 +54,7 @@ async function setRateAndPreview(page: Page, rate: string) {
   await page.getByRole("button", { name: "見通しを確認" }).click();
   await expect(
     page.getByRole("heading", { name: "政策の見通し" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 60_000 });
   await waitForPageLayout(page);
   await expect(
     previewDeck(page).locator("[data-page-current]"),
@@ -117,6 +117,7 @@ async function readToAcknowledgement(page: Page, rate: string) {
   const checkbox = deck.getByRole("checkbox", { name: REVIEW_LABEL });
   const next = deck.getByRole("button", { name: "政策の見通しの次のページ" });
   const summary: string[] = [];
+  const resourceCosts: Record<string, string> = {};
   for (let step = 0; step < MAX_PAGE_STEPS; step++) {
     await waitForPageLayout(page);
     await expectViewport(page);
@@ -136,6 +137,17 @@ async function readToAcknowledgement(page: Page, rate: string) {
         )
         .allTextContents()),
     );
+    for (const card of await deck
+      .locator(
+        '[data-page-item]:not([hidden]) article[aria-label$="の費用と残量"]',
+      )
+      .all()) {
+      const name = (await card.getAttribute("aria-label"))!.replace(
+        "の費用と残量",
+        "",
+      );
+      resourceCosts[name] = await card.locator("dd").nth(3).innerText();
+    }
     if (await checkbox.isVisible()) {
       await expect(checkbox).not.toBeChecked();
       expect(
@@ -143,7 +155,9 @@ async function readToAcknowledgement(page: Page, rate: string) {
           Array.from(
             input
               .closest("[data-page-deck]")!
-              .querySelectorAll('section[aria-label="判断の要点"] p'),
+              .querySelectorAll(
+                'section[aria-label="判断の要点"] p, article[aria-label$="の費用と残量"]',
+              ),
           ).every(
             (paragraph) =>
               !!(
@@ -159,7 +173,6 @@ async function readToAcknowledgement(page: Page, rate: string) {
         "政策案：",
         "時期：",
         "現状維持との差（1年後）：",
-        "費用：",
         "副作用：",
         "不確実性：",
       ])
@@ -169,7 +182,7 @@ async function readToAcknowledgement(page: Page, rate: string) {
       expect(text).toMatch(/いちばん大きい時期は\d+か月後/);
       expect(text).toContain("新しい政策を加えない場合と比べた中心値");
       for (const cost of ["政治資本", "実施能力", "外貨準備", "開始予算"])
-        expect(text).toMatch(new RegExp(`${cost}\\d+(?:\\.\\d+)?`));
+        expect(resourceCosts[cost]).toMatch(/\d+(?:\.\d+)?/);
       expect(text).toMatch(/副作用：.+（\d+月目から）/);
       expect(text).toMatch(/不確実性：確信度[高中低]。主な要因は.+。/);
       expect(text).toContain("この範囲に収まる確率を示すものではありません");

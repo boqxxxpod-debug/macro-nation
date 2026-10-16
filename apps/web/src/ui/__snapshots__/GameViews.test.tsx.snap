@@ -12,7 +12,8 @@ exports[`game screen wording > explains the next step for paused on Home 1`] = `
 
 exports[`game screen wording > gives a next step for an unaffordable policy 1`] = `
 [
-  "政治資本が足りません。必要 1.0、使える量 0.0です。設定値や政策を見直して、もう一度見通しを確認してください。",
+  "費用と資源の残量で不足量を確認し、政策案を見直してください。",
+  "政治資本が足りません。必要 1点、使える量 0点、不足量 1点。設定値や政策を見直して、もう一度見通しを確認してください。",
   "政策を進める準備が足りません。本文の案内を確認してください。",
 ]
 `;
@@ -30,7 +31,8 @@ exports[`game screen wording > keeps ordinary news and gives retry guidance afte
 
 exports[`game screen wording > offers policy choices without promising reserve recovery during a crisis 1`] = `
 [
-  "外貨準備が足りません。必要 12.0、使える量 0.0です。設定値や政策を見直して、もう一度見通しを確認してください。",
+  "費用と資源の残量で不足量を確認し、政策案を見直してください。",
+  "外貨準備が足りません。必要 12 model unit、使える量 0 model unit、不足量 12 model unit。設定値や政策を見直して、もう一度見通しを確認してください。",
   "政策を進める準備が足りません。本文の案内を確認してください。",
 ]
 `;
@@ -38,6 +40,11 @@ exports[`game screen wording > offers policy choices without promising reserve r
 exports[`game screen wording > preserves preview values and confirmation while hiding internal IDs 1`] = `
 [
   "判断の要点",
+  "費用と資源の残量",
+  "政治資本（残量0〜100点）",
+  "実施能力（残量0〜100点）",
+  "外貨準備（model unit）",
+  "開始予算（model unit）",
   "政策の組み合わせ",
   "効果を高め合う組み合わせ：税制 ＋ 公共事業",
   "効果を打ち消し合う組み合わせ：関税 ＋ 税制",
