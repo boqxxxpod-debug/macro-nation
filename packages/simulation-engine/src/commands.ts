@@ -68,12 +68,18 @@ export function policyStateHash(state: GameState): string {
     ...state,
     configSnapshot: { configHash: state.configSnapshot.configHash },
   };
-  let hash = 0xcbf29ce484222325n;
+  // FNV-1a 64-bit, represented as two unsigned 32-bit halves. The prime is
+  // 0x100000001b3 = 2^40 + 435; every intermediate stays below 2^53, so these
+  // operations preserve the original BigInt hash without a BigInt per byte.
+  let high = 0xcbf29ce4;
+  let low = 0x84222325;
   for (const character of new TextEncoder().encode(canonical(identity))) {
-    hash ^= BigInt(character);
-    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+    low = (low ^ character) >>> 0;
+    const lowProduct = low * 0x1b3;
+    high = (high * 0x1b3 + low * 0x100 + Math.floor(lowProduct / 0x100000000)) >>> 0;
+    low = lowProduct >>> 0;
   }
-  return hash.toString(16).padStart(16, "0");
+  return high.toString(16).padStart(8, "0") + low.toString(16).padStart(8, "0");
 }
 
 function administration(state: GameState): PolicyAdministration {

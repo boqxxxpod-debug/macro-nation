@@ -65,12 +65,20 @@ export interface SlotLoadResult {
 
 export function reportSnapshot(
   state: GameState,
-  causal: readonly CausalContribution[] = [],
+  causal?: readonly CausalContribution[],
   reactions: readonly ReactionSnapshot[] = [],
 ): MonthlyReportSnapshot {
   const e = state.economy;
   return {
     monthIndex: state.monthIndex,
+    causalTrace: {
+      completeness: causal !== undefined
+        ? "complete"
+        : state.monthIndex === 0 ? "initial" : "legacy-incomplete",
+      // Preserve every stage entry and term, including confidence, effect IDs,
+      // and diagnostics. Sorting the compact summary must not reorder the trace.
+      indicators: structuredClone(causal ?? []),
+    },
     values: {
       realHouseholdIncome: e.indices.realHouseholdIncome,
       realGdp: e.indices.realGdp,
@@ -88,7 +96,7 @@ export function reportSnapshot(
       energy: e.infrastructure.energy,
       consumption: e.flows.consumption,
     },
-    topCauses: causal
+    topCauses: (causal ?? [])
       .flatMap((item) =>
         item.contributions.map((term) => ({
           indicatorId: item.indicatorId,
@@ -135,7 +143,7 @@ export async function createGame(
     pack.scenario.parameterOverrides,
   );
   const versions: VersionTuple = {
-    saveSchemaVersion: "4",
+    saveSchemaVersion: "5",
     engineVersion: ENGINE_VERSION,
     configSchemaVersion: pack.manifest.configSchemaVersion,
     modelVersion: pack.manifest.modelVersion,
@@ -229,8 +237,21 @@ export function calculateMonth(
     throw new Error("自動進行を停止してから月を進めてください");
   if (fromOffline && !isAutomaticRunning(state))
     throw new Error("自動進行を再開してから残りの月を進めてください");
+  // The Engine reads report values for review baselines, but never archived
+  // explanation traces. Keep the summaries in its isolated input so each tick
+  // need not recursively clone every historical term. Restore the untouched
+  // durable reports below when appending this month's complete trace.
+  const engineHistory: GameState["history"] = {
+    ...state.history,
+    ...(state.history.reports ? {
+      reports: state.history.reports.map((report) => {
+        const { causalTrace, ...snapshot } = report;
+        return causalTrace ? snapshot : report;
+      }),
+    } : {}),
+  };
   const result = runPolicyHeadless({
-    initialState: { ...state, runState: "running" },
+    initialState: { ...state, runState: "running", history: engineHistory },
     tickCount: 1,
     // Offline progress is the same sequence of monthly ticks as foreground
     // progress. Keep explanation data in the durable state as well as the

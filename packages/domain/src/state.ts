@@ -8,7 +8,7 @@ import type {
   StockLevel,
 } from "./numeric";
 import type { ConfigIdentity, VersionTuple } from "./version";
-import type { CausalRef } from "./causal";
+import type { CausalContribution, CausalRef } from "./causal";
 
 export const PRIMARY_INDICATOR_IDS = [
   "realGdp",
@@ -409,6 +409,8 @@ export interface LongTermState {
 export interface MonthlyReportSnapshot {
   readonly monthIndex: number;
   readonly values: Readonly<Record<string, number>>;
+  /** Schema 5 retains the Engine trace in stage order, including repeated metrics. */
+  readonly causalTrace?: MonthlyReportCausalTrace;
   readonly topCauses: readonly {
     readonly indicatorId: string;
     readonly sourceType: string;
@@ -418,6 +420,12 @@ export interface MonthlyReportSnapshot {
   }[];
   /** Explanation-only results; these never feed back into economic state. */
   readonly reactions?: readonly ReactionSnapshot[];
+}
+
+export interface MonthlyReportCausalTrace {
+  /** Initial months have no tick; legacy records cannot recover discarded terms. */
+  readonly completeness: "complete" | "legacy-incomplete" | "initial";
+  readonly indicators: readonly CausalContribution[];
 }
 
 export type ReactionAudience = "citizens" | "business" | "market";

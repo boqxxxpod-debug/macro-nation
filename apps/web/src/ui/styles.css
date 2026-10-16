@@ -1516,7 +1516,9 @@ label select {
 }
 .page-content > [data-page-item][hidden] {
   display: block;
-  position: fixed;
+  /* Keep the same containing block when visibility changes. Fixed blocks can
+     briefly resolve the visible 100% width against the viewport on mobile. */
+  position: absolute;
   inset: 0 auto auto 0;
   width: var(--page-width, 320px);
   visibility: hidden;
@@ -1533,6 +1535,14 @@ label select {
 .page-controls span {
   font-size: 0.875rem;
   text-align: center;
+}
+.page-controls .page-status-category,
+.page-controls .page-status-pagination {
+  display: block;
+}
+.page-controls .page-status-pagination {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .page-controls button,
 .page-actions button {

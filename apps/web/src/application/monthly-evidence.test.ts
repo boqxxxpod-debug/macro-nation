@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { GameState, MonthlyReportSnapshot } from "@macro-nation/domain";
+import type {
+  CausalContribution,
+  GameState,
+  MonthlyReportSnapshot,
+} from "@macro-nation/domain";
 import { createGame } from "./game-service";
 import {
   monthlyBriefButtonId,
@@ -7,6 +11,8 @@ import {
   parseMonthlyEvidence,
   selectMonthlyBrief,
   selectMonthlyEvidence,
+  savedReportIndicatorIds,
+  selectReportCauses,
   type MonthlyEvidenceTarget,
   type ReportCause,
 } from "./monthly-evidence";
@@ -192,6 +198,176 @@ describe("monthly evidence selectors", () => {
     });
     selectMonthlyBrief(state);
     expect(state).toEqual(before);
+  });
+});
+
+describe("saved indicator breakdown", () => {
+  function stage(
+    overrides: Partial<CausalContribution> = {},
+  ): CausalContribution {
+    return {
+      indicatorId: "realGdp",
+      beforeValue: 100,
+      afterValue: 100.00001,
+      totalDelta: 0.00001,
+      diagnostics: [],
+      contributions: [
+        {
+          sourceType: "inertia",
+          sourceId: "gdp",
+          labelKey: "gdp",
+          delta: 0.00001,
+          confidence: "high",
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("uses all saved stages rather than the cross-indicator summary or current values", () => {
+    const saved: MonthlyReportSnapshot = {
+      ...report(1, [cause({ indicatorId: "politicalCapital", delta: -100 })]),
+      causalTrace: {
+        completeness: "complete",
+        indicators: [
+          stage(),
+          stage({
+            beforeValue: 100.00001,
+            afterValue: 100.00003,
+            totalDelta: 0.00002,
+            contributions: [
+              {
+                sourceType: "random",
+                sourceId: "gdp-noise",
+                labelKey: "gdp.noise",
+                delta: 0.00002,
+                confidence: "low",
+              },
+            ],
+          }),
+        ],
+      },
+    };
+    const state = game(saved, report(2));
+    const before = structuredClone(state);
+    const selected = selectReportCauses(state, {
+      monthIndex: 1,
+      indicatorId: "realGdp",
+    });
+    expect(selected).toMatchObject({
+      report: saved,
+      completeness: "complete",
+      beforeValue: 100,
+      afterValue: 100.00003,
+    });
+    expect(selected.totalDelta).toBeCloseTo(0.00003, 12);
+    expect(selected.contributionSum).toBeCloseTo(0.00003, 12);
+    expect(selected.causes.map((item) => item.sourceId)).toEqual([
+      "gdp-noise",
+      "gdp",
+    ]);
+    expect(
+      selectMonthlyEvidence(state, {
+        monthIndex: 1,
+        indicatorId: "realGdp",
+        row: 0,
+      }).causes,
+    ).toEqual(selected.causes);
+    expect(state).toEqual(before);
+  });
+
+  it("lists retained metrics outside the brief, including values with no causal record", () => {
+    const saved: MonthlyReportSnapshot = {
+      ...report(1, [cause({ indicatorId: "politicalCapital" })], {
+        realGdp: 100,
+        inflation: 0.02,
+      }),
+      causalTrace: {
+        completeness: "complete",
+        indicators: [stage(), stage({ indicatorId: "publicCapital" })],
+      },
+    };
+    expect(savedReportIndicatorIds(saved)).toEqual([
+      "realGdp",
+      "inflation",
+      "publicCapital",
+      "politicalCapital",
+    ]);
+    expect(savedReportIndicatorIds()).toEqual([]);
+  });
+
+  it("keeps legacy causes and missing bounds without inferring prior/current values", () => {
+    const saved = report(1, [cause()], { realGdp: 200 });
+    expect(
+      selectReportCauses(game(report(0, [], { realGdp: 100 }), saved), {
+        monthIndex: 1,
+        indicatorId: "realGdp",
+      }),
+    ).toEqual({
+      report: saved,
+      causes: [cause()],
+      completeness: "legacy-incomplete",
+    });
+    expect(
+      selectReportCauses(game(saved), {
+        monthIndex: 1,
+        indicatorId: "inflation",
+      }),
+    ).toEqual({
+      report: saved,
+      causes: [],
+      completeness: "legacy-incomplete",
+      missing: "cause",
+    });
+    expect(
+      selectReportCauses(game(saved), {
+        monthIndex: 0,
+        indicatorId: "realGdp",
+      }),
+    ).toEqual({
+      causes: [],
+      completeness: "legacy-incomplete",
+      missing: "report",
+    });
+  });
+
+  it("exposes a recorded zero change and distinguishes the initial snapshot", () => {
+    const saved: MonthlyReportSnapshot = {
+      ...report(1),
+      causalTrace: {
+        completeness: "complete",
+        indicators: [
+          stage({
+            beforeValue: 100,
+            afterValue: 100,
+            totalDelta: 0,
+            contributions: [],
+          }),
+        ],
+      },
+    };
+    expect(
+      selectReportCauses(game(saved), {
+        monthIndex: 1,
+        indicatorId: "realGdp",
+      }),
+    ).toMatchObject({
+      completeness: "complete",
+      beforeValue: 100,
+      afterValue: 100,
+      totalDelta: 0,
+      contributionSum: 0,
+    });
+    const initialReport: MonthlyReportSnapshot = {
+      ...report(0),
+      causalTrace: { completeness: "initial", indicators: [] },
+    };
+    expect(
+      selectReportCauses(game(initialReport), {
+        monthIndex: 0,
+        indicatorId: "realGdp",
+      }),
+    ).toMatchObject({ completeness: "initial", causes: [] });
   });
 });
 

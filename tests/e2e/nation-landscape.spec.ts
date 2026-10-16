@@ -36,6 +36,10 @@ async function seedLandscape(
       const reports = ratios.map((ratio, monthIndex) => ({
         ...base,
         monthIndex,
+        causalTrace: {
+          completeness: "legacy-incomplete" as const,
+          indicators: [],
+        },
         values: {
           ...base.values,
           realGdp: scale(base.values.realGdp, ratio),

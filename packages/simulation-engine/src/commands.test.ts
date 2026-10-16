@@ -73,6 +73,69 @@ const commit = (
   draft: draft(state, policyId, ruleId, value, quartersAhead),
 });
 
+/** Reference retained from the original persisted command-hash contract. */
+function legacyPolicyStateHash(state: GameState): string {
+  function canonical(value: unknown): string {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+    const entries = value as Record<string, unknown>;
+    return `{${Object.keys(entries).sort().filter((key) => entries[key] !== undefined)
+      .map((key) => `${JSON.stringify(key)}:${canonical(entries[key])}`).join(",")}}`;
+  }
+  const identity = { ...state, configSnapshot: { configHash: state.configSnapshot.configHash } };
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(canonical(identity))) {
+    hash ^= BigInt(byte);
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+describe("saved policy state hash compatibility", () => {
+  it.each(["ASCII text", "日本語の国家と政策 🌏📈", "controls:\u0000\n\t\"\\", "surrogate:\ud800"])(
+    "preserves the legacy UTF-8 FNV64 hash for %j",
+    (gameId) => {
+      const state = { ...initial, gameId };
+      expect(policyStateHash(state)).toBe(legacyPolicyStateHash(state));
+      const reordered = Object.fromEntries(Object.entries(state).reverse()) as unknown as GameState;
+      expect(policyStateHash(reordered)).toBe(legacyPolicyStateHash(state));
+    },
+  );
+
+  it("preserves carry arithmetic and saved-history coverage over a long canonical payload", () => {
+    const state: GameState = {
+      ...initial,
+      history: {
+        ...initial.history,
+        reports: Array.from({ length: 360 }, (_, monthIndex) => ({
+          monthIndex,
+          values: { realGdp: 100 + monthIndex / 10, inflation: -0.02 + monthIndex / 10000 },
+          topCauses: [],
+          causalTrace: {
+            completeness: "complete" as const,
+            indicators: [{
+              indicatorId: "realGdp", beforeValue: 100, afterValue: 101, totalDelta: 1,
+              contributions: [{
+                sourceType: "policy" as const, sourceId: `政策-${monthIndex}`, effectId: `effect-${monthIndex}`,
+                labelKey: "policy.savedHistory", confidence: "medium" as const, delta: 1,
+              }],
+              diagnostics: [],
+            }],
+          },
+        })),
+      },
+    };
+    const legacyHash = legacyPolicyStateHash(state);
+    expect(policyStateHash(state)).toBe(legacyHash);
+    const mutated: GameState = {
+      ...state,
+      history: { ...state.history, reports: state.history.reports!.slice(1) },
+    };
+    expect(policyStateHash(mutated)).not.toBe(legacyHash);
+    expect(policyStateHash(mutated)).toBe(legacyPolicyStateHash(mutated));
+  });
+});
+
 describe("quarterly policy commands", () => {
   it("uses exactly three actions per quarter, with no fourth commitment", () => {
     let state = initial;

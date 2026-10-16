@@ -1,4 +1,5 @@
 import type { GameState } from "@macro-nation/domain";
+import { isMonthlyReportCausalTrace } from "@macro-nation/domain";
 import {
   loadSCN01ConfigPack,
   sha256Hex,
@@ -10,12 +11,12 @@ import {
 } from "@macro-nation/simulation-engine";
 import type { GameRepository } from "./game-service";
 
-/** Schema 4 adds learning history without changing the saved economic run. */
+/** Schema 5 preserves monthly causal traces without changing the economic run. */
 export async function migrateFirstPlayableSave(
   repository: GameRepository,
   state: GameState,
 ): Promise<GameState> {
-  if (!["1", "2", "3", "4"].includes(state.versions.saveSchemaVersion))
+  if (!["1", "2", "3", "4", "5"].includes(state.versions.saveSchemaVersion))
     throw new Error("保存データの版に対応していません。元の版で再開してください");
   if (
     state.history.learningEntries !== undefined &&
@@ -23,9 +24,21 @@ export async function migrateFirstPlayableSave(
   )
     throw new Error("保存済みの学習履歴の形式を確認できません");
   if (
+    (state.versions.saveSchemaVersion === "5" && state.history.reports === undefined) ||
+    (state.history.reports !== undefined && !Array.isArray(state.history.reports)) ||
+    (state.history.reports ?? []).some((report) =>
+      !report ||
+      (report.causalTrace === undefined
+        ? state.versions.saveSchemaVersion === "5"
+        : !isMonthlyReportCausalTrace(report.causalTrace) ||
+          (report.causalTrace.completeness === "initial" && report.monthIndex !== 0)),
+    )
+  )
+    throw new Error("保存済みの月次因果記録の形式を確認できません");
+  if (
     state.versions.engineVersion === ENGINE_VERSION &&
     state.clock.endMonth !== undefined &&
-    state.versions.saveSchemaVersion === "4" &&
+    state.versions.saveSchemaVersion === "5" &&
     state.clock.progressionMode !== undefined &&
     state.clock.lastProcessedWallClockMs !== undefined &&
     state.clock.remainderMs !== undefined &&
@@ -33,7 +46,7 @@ export async function migrateFirstPlayableSave(
   )
     return state;
   if (
-    state.scenarioId !== "SCN-01" ||
+    (state.scenarioId !== "SCN-01" && state.versions.engineVersion !== ENGINE_VERSION) ||
     !["0.1.7", "0.1.8", ENGINE_VERSION].includes(state.versions.engineVersion)
   )
     throw new Error(
@@ -67,7 +80,7 @@ export async function migrateFirstPlayableSave(
       }
     : state.configSnapshot;
   const hasDuration = state.versions.engineVersion !== "0.1.7" && state.clock.endMonth !== undefined &&
-    ["2", "3", "4"].includes(state.versions.saveSchemaVersion);
+    ["2", "3", "4", "5"].includes(state.versions.saveSchemaVersion);
   const durationMode = hasDuration ? state.durationMode ?? "short" : "short";
   const needsClockDefaults = state.clock.progressionMode === undefined;
   const runState = needsClockDefaults &&
@@ -98,11 +111,20 @@ export async function migrateFirstPlayableSave(
       reviews: state.history.reviews ?? [],
       entries: state.history.entries ?? [],
       learningEntries: state.history.learningEntries ?? [],
+      reports: (state.history.reports ?? []).map((report) => ({
+        ...report,
+        // The old cross-indicator top eight cannot reconstruct a full trace.
+        // Preserve the recorded summary and explicitly mark the missing data.
+        causalTrace: report.causalTrace ?? {
+          completeness: "legacy-incomplete" as const,
+          indicators: [],
+        },
+      })),
     },
     versions: {
       ...state.versions,
       engineVersion: ENGINE_VERSION,
-      saveSchemaVersion: "4",
+      saveSchemaVersion: "5",
       ...(needsPlayableRules ? { configVersion: "0.1.3" } : {}),
     },
     configSnapshot,

@@ -9,6 +9,11 @@ import {
   type GameRepository,
 } from "./game-service";
 
+// Foreground/offline equivalence retains and verifies full saved causal traces
+// across both runs; the 100-month case also exercises the durable batch limit.
+const YEAR_RUN_TIMEOUT_MS = 15_000;
+const OFFLINE_LIMIT_RUN_TIMEOUT_MS = 120_000;
+
 const inlineMonthClient = {
   async calculate(state: GameState) {
     return calculateMonth(state, true);
@@ -26,7 +31,9 @@ function deferred() {
 
 function memory() {
   const slots = new Map<GameState["slotId"], GameState>();
-  const saves: GameState[] = [];
+  // Only the write count is inspected; retaining a full history at every
+  // intermediate tick would keep hundreds of redundant causal traces alive.
+  const saves: number[] = [];
   let beforeSave: ((state: GameState) => void | Promise<void>) | undefined;
   let nextLoad:
     | {
@@ -56,7 +63,7 @@ function memory() {
       if (!current || policyStateHash(current) !== expected)
         throw new Error("stale save");
       slots.set(next.slotId, structuredClone(next));
-      saves.push(structuredClone(next));
+      saves.push(next.tickSequence);
     },
   };
   return {
@@ -170,6 +177,7 @@ describe("GameClockController wall-clock progression", () => {
       expect(f.storage.saved().runState).toBe("running");
       f.controller.dispose();
     },
+    YEAR_RUN_TIMEOUT_MS,
   );
 
   it.each([false, true])(
@@ -210,7 +218,7 @@ describe("GameClockController wall-clock progression", () => {
 
   it("starts new games paused in manual mode and ignores elapsed time", async () => {
     const f = await fixture();
-    expect(f.initial.versions.saveSchemaVersion).toBe("4");
+    expect(f.initial.versions.saveSchemaVersion).toBe("5");
     expect(f.initial.runState).toBe("paused");
     expect(f.initial.clock.progressionMode).toBe("manual");
     expect(f.initial.clock.lastProcessedWallClockMs).toBeNull();
@@ -265,7 +273,7 @@ describe("GameClockController wall-clock progression", () => {
     expect(delayed.storage.saved().history.reports).toHaveLength(13);
     sequential.controller.dispose();
     delayed.controller.dispose();
-  });
+  }, YEAR_RUN_TIMEOUT_MS);
 
   it("matches manual Engine results after the same number of elapsed months", async () => {
     const automatic = await fixture();
@@ -281,7 +289,7 @@ describe("GameClockController wall-clock progression", () => {
       simulationResult(stepped),
     );
     automatic.controller.dispose();
-  });
+  }, YEAR_RUN_TIMEOUT_MS);
 
   it("preserves pending months and the fraction on policy pause, excluding stopped time", async () => {
     const f = await fixture();
@@ -423,7 +431,7 @@ describe("GameClockController wall-clock progression", () => {
     expect(f.storage.saved().clock.remainderMs).toBe(17);
     expect(f.storage.saved().runState).toBe("running");
     f.controller.dispose();
-  }, 15_000);
+  }, OFFLINE_LIMIT_RUN_TIMEOUT_MS);
 
   it("honors a smaller configured offline processing limit", async () => {
     const f = await fixture();

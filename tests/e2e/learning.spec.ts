@@ -116,7 +116,7 @@ test("learning notes are Japanese, keyboard reachable and durable after a monthl
   const state = await savedState(page);
   expect(state.learningMode).toBe("learning");
   expect(state.versions).toMatchObject({
-    saveSchemaVersion: "4",
+    saveSchemaVersion: "5",
     contentVersion: "1.3.0",
   });
   const entries = state.history.learningEntries!;
@@ -215,7 +215,7 @@ test("schema 3 legacy learning evidence migrates without changing the saved econ
   await expect(page.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
   await expect
     .poll(async () => (await savedState(page)).versions.saveSchemaVersion)
-    .toBe("4");
+    .toBe("5");
   const migrated = await savedState(page);
   expect(migrated.versions.contentVersion).toBe("1.2.0");
   expect(migrated).toEqual({
@@ -225,7 +225,7 @@ test("schema 3 legacy learning evidence migrates without changing the saved econ
       appliedMilestones: legacy.history.appliedMilestones ?? [],
       reviews: legacy.history.reviews ?? [],
     },
-    versions: { ...legacy.versions, saveSchemaVersion: "4" },
+    versions: { ...legacy.versions, saveSchemaVersion: "5" },
   });
   await openNotebookWithKeyboard(page);
   await expectJapaneseNotebook(page, migrated);

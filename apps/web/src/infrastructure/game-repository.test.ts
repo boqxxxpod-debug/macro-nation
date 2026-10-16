@@ -2,11 +2,11 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 import type { GameState } from "@macro-nation/domain";
 import { policyStateHash } from "@macro-nation/simulation-engine";
-import { createGame } from "../application/game-service";
+import { advanceMonth, createGame } from "../application/game-service";
 import { unlockedScenarioIds } from "../application/scenario-progression";
 import { IndexedDbGameRepository } from "./game-repository";
 
-async function replaceCurrentWithCorrupt(factory: IDBFactory) {
+async function replaceCurrentWithCorrupt(factory: IDBFactory, current: unknown = { slotId: 1 }) {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = factory.open("macro-nation-games");
     request.onsuccess = () => resolve(request.result);
@@ -17,7 +17,7 @@ async function replaceCurrentWithCorrupt(factory: IDBFactory) {
     const store = transaction.objectStore("slots");
     const request = store.get(1);
     request.onsuccess = () =>
-      store.put({ ...request.result, current: { slotId: 1 } });
+      store.put({ ...request.result, current });
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -25,6 +25,34 @@ async function replaceCurrentWithCorrupt(factory: IDBFactory) {
 }
 
 describe("IndexedDbGameRepository generations", () => {
+  it("reloads full causal history and recovers when schema 5 trace data is corrupt", async () => {
+    const factory = new IDBFactory();
+    const repository = new IndexedDbGameRepository(factory);
+    const initial = await createGame(repository, "causal-repository-reload");
+    const advanced = await advanceMonth(repository, 1);
+    const reloaded = new IndexedDbGameRepository(factory);
+    expect((await reloaded.load(1))?.history.reports).toEqual(advanced.history.reports);
+    for (const causalTrace of [undefined, {
+      completeness: "complete",
+      indicators: [{
+        ...advanced.history.reports!.at(-1)!.causalTrace!.indicators[0],
+        afterValue: Number.NaN,
+      }],
+    }]) {
+      await replaceCurrentWithCorrupt(factory, {
+        ...advanced,
+        history: {
+          ...advanced.history,
+          reports: advanced.history.reports!.map((report) => report.monthIndex === 1
+            ? { ...report, causalTrace } : report),
+        },
+      });
+      const recovered = await reloaded.loadSlot(1);
+      expect(recovered.recovered).toBe(true);
+      expect(recovered.state).toEqual(initial);
+    }
+  });
+
   it("aborts a queued write when its selected game is no longer active", async () => {
     const repository = new IndexedDbGameRepository(new IDBFactory());
     const initial = await createGame(repository, "guarded-save");

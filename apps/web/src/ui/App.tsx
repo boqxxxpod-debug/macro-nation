@@ -1678,6 +1678,9 @@ export function App({
                     <Report
                       state={state}
                       evidenceTarget={evidenceTarget}
+                      onSelectEvidence={(target) =>
+                        navigate("report", false, monthlyEvidenceQuery(target))
+                      }
                       onReturnToReport={() =>
                         evidenceTarget &&
                         navigate(
