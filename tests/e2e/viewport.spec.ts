@@ -518,6 +518,10 @@ async function seedPresentation(
                             (_, monthIndex) => ({
                               ...state.history.reports!.at(-1)!,
                               monthIndex,
+                              causalTrace: {
+                                completeness: "legacy-incomplete" as const,
+                                indicators: [],
+                              },
                             }),
                           )
                         : state.history.reports,

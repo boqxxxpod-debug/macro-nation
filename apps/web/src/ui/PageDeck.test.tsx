@@ -771,7 +771,7 @@ describe("PageDeck requested navigation", () => {
     expect(source).toHaveFocus();
   });
 
-  it("allows user paging before the animation-frame focus transfer from a returned source", () => {
+  it("allows user paging before the returned source's animation-frame confirmation", () => {
     const callbacks: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callbacks.push(callback);
@@ -784,6 +784,7 @@ describe("PageDeck requested navigation", () => {
         navigation={{ key: "returned", elementId: "reason:income" }}
       />,
     );
+    act(() => callbacks.splice(0).forEach((callback) => callback(0)));
     expect(
       screen.getByRole("button", { name: "所得の理由を開く" }),
     ).toHaveFocus();
@@ -798,6 +799,221 @@ describe("PageDeck requested navigation", () => {
     expect(
       screen.getByRole("button", { name: "所得の理由を開く" }),
     ).toBeVisible();
+  });
+
+  it("retries a requested source focus after late layout settles instead of consuming a failed focus", () => {
+    const focus = HTMLElement.prototype.focus;
+    let rejectedFirstFocus = false;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement,
+      options,
+    ) {
+      // Browsers ignore focus while a newly returned destination is inert.
+      if (this.id === "reason:income" && !rejectedFirstFocus) {
+        rejectedFirstFocus = true;
+        return;
+      }
+      focus.call(this, options);
+    });
+    render(
+      <PageDeck
+        label="帰還の再計測"
+        categories={categories}
+        navigation={{ key: "return-after-reflow", elementId: "reason:income" }}
+      />,
+    );
+    const source = screen.getByRole("button", { name: "所得の理由を開く" });
+    expect(rejectedFirstFocus).toBe(true);
+    expect(source).not.toHaveFocus();
+    availableHeight = 250;
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(source).toBeVisible();
+    expect(source).toHaveFocus();
+    fireEvent.click(
+      screen.getByRole("button", { name: "帰還の再計測の次のページ" }),
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("news");
+    expect(screen.getByLabelText("帰還の再計測の内容")).toHaveFocus();
+  });
+
+  it("confirms the current source across frames when late content replaces its first focused node", () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+    const flush = () =>
+      act(() => {
+        const callbacks = [...frames.values()];
+        frames.clear();
+        callbacks.forEach((callback) => callback(0));
+      });
+    const view = (revision: number) => (
+      <PageDeck
+        label="帰還の確定"
+        navigation={{ key: "same-return", elementId: "source" }}
+      >
+        <p>保存した報告</p>
+        <span>
+          <button key={revision} id="source">
+            根拠を再確認
+          </button>
+        </span>
+      </PageDeck>
+    );
+    const { rerender } = render(view(1));
+    flush();
+    const first = screen.getByRole("button", { name: "根拠を再確認" });
+    expect(first).toHaveFocus();
+    rerender(view(2));
+    const replacement = screen.getByRole("button", { name: "根拠を再確認" });
+    expect(replacement).not.toBe(first);
+    flush();
+    flush();
+    expect(replacement).toHaveFocus();
+    expect(frames.size).toBe(0);
+  });
+
+  it("keeps user focus when it moves before the requested source is confirmed", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    render(
+      <PageDeck
+        label="帰還の操作"
+        categories={categories}
+        navigation={{ key: "return", elementId: "reason:income" }}
+      />,
+    );
+    act(() => callbacks.splice(0).forEach((callback) => callback(0)));
+    expect(
+      screen.getByRole("button", { name: "所得の理由を開く" }),
+    ).toHaveFocus();
+    const selector = screen.getByRole("combobox");
+    selector.focus();
+    act(() => callbacks.splice(0).forEach((callback) => callback(0)));
+    expect(selector).toHaveFocus();
+  });
+
+  it("traverses a long category through the ninth and tenth pages to the final page", () => {
+    render(
+      <PageDeck
+        label="月次の全内訳"
+        categories={[
+          {
+            id: "causes",
+            label: "変化の理由（1月目・実質GDP）",
+            content: Array.from({ length: 12 }, (_, index) => (
+              <p key={index}>保存された寄与 {index + 1}</p>
+            )),
+          },
+        ]}
+      />,
+    );
+    const next = screen.getByRole("button", {
+      name: "月次の全内訳の次のページ",
+    });
+    for (let page = 1; page <= 12; page++) {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        `変化の理由（1月目・実質GDP） · ${page} / 12ページ`,
+      );
+      expect(screen.getByText(`保存された寄与 ${page}`)).toBeVisible();
+      if (page < 12) fireEvent.click(next);
+    }
+    expect(next).toBeDisabled();
+  });
+
+  it("ignores a queued measurement from the previous page after its observer is disconnected", () => {
+    const measurements: (() => void)[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          measurements.push(() =>
+            callback([], this as unknown as ResizeObserver),
+          );
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    render(<PageDeck label="月次のページ" categories={categories} />);
+    const previousPageMeasurement = measurements.at(-1)!;
+    fireEvent.click(
+      screen.getByRole("button", { name: "月次のページの次のページ" }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("推移 · 2 / 2ページ");
+    act(previousPageMeasurement);
+    expect(screen.getByRole("status")).toHaveTextContent("推移 · 2 / 2ページ");
+    expect(screen.getByText("次の指標")).toBeVisible();
+    act(measurements.at(-1)!);
+    expect(screen.getByRole("status")).toHaveTextContent("推移 · 2 / 2ページ");
+  });
+
+  it("uses one content width for hidden blocks so page turns do not repack earlier pages", () => {
+    availableHeight = 200;
+    let widthReads = 0;
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(
+      function (this: HTMLElement) {
+        if (this.classList.contains("page-content")) {
+          widthReads = 0;
+          return availableHeight;
+        }
+        return 60;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(
+      () => (widthReads++ === 0 ? 320 : 360),
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const width = this.hidden
+          ? Number.parseFloat(this.style.getPropertyValue("--page-width"))
+          : 320;
+        const height = this.hasAttribute("data-page-item")
+          ? width > 320
+            ? 50
+            : 90
+          : availableHeight;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: height,
+          width,
+          height,
+          toJSON: () => ({}),
+        };
+      },
+    );
+    render(
+      <PageDeck
+        label="全内訳の幅"
+        categories={[
+          {
+            id: "causes",
+            label: "保存済みの寄与",
+            content: Array.from({ length: 6 }, (_, index) => (
+              <p key={index}>保存された寄与 {index + 1}</p>
+            )),
+          },
+        ]}
+      />,
+    );
+    const next = screen.getByRole("button", { name: "全内訳の幅の次のページ" });
+    for (let page = 1; page <= 3; page++) {
+      expect(screen.getByRole("status")).toHaveTextContent(`${page} / 3ページ`);
+      expect(screen.getByText(`保存された寄与 ${page * 2 - 1}`)).toBeVisible();
+      expect(screen.getByText(`保存された寄与 ${page * 2}`)).toBeVisible();
+      if (page < 3) fireEvent.click(next);
+    }
+    expect(next).toBeDisabled();
   });
 
   it("waits for initial height and text splitting before restoring a source outside the first page", () => {

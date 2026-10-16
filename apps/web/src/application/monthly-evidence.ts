@@ -16,6 +16,85 @@ export interface MonthlyEvidence {
   readonly missing?: "report" | "indicator" | "cause";
 }
 
+/** Only IDs actually retained in this month's report, including legacy values. */
+export function savedReportIndicatorIds(
+  report?: MonthlyReportSnapshot,
+): readonly string[] {
+  if (!report) return [];
+  return [
+    ...new Set([
+      ...Object.keys(report.values),
+      ...(report.causalTrace?.indicators.map((item) => item.indicatorId) ?? []),
+      ...report.topCauses.map((item) => item.indicatorId),
+    ]),
+  ];
+}
+
+function savedCauses(report: MonthlyReportSnapshot): readonly ReportCause[] {
+  if (report.causalTrace?.completeness !== "complete") return report.topCauses;
+  return report.causalTrace.indicators.flatMap((item) =>
+    item.contributions.map((term) => ({
+      indicatorId: item.indicatorId,
+      sourceType: term.sourceType,
+      sourceId: term.sourceId,
+      labelKey: term.labelKey,
+      delta: term.delta,
+    })),
+  );
+}
+
+export interface ReportCauses extends MonthlyEvidence {
+  readonly completeness: "complete" | "legacy-incomplete" | "initial";
+  readonly beforeValue?: number;
+  readonly afterValue?: number;
+  readonly totalDelta?: number;
+  readonly contributionSum?: number;
+}
+
+/** Select saved causal data, never recomputing a past month from today's state. */
+export function selectReportCauses(
+  state: GameState,
+  target: { readonly monthIndex: number; readonly indicatorId: string },
+): ReportCauses {
+  const report = state.history.reports?.find(
+    (item) => item.monthIndex === target.monthIndex,
+  );
+  if (!report)
+    return { causes: [], completeness: "legacy-incomplete", missing: "report" };
+  const completeness = report.causalTrace?.completeness ?? "legacy-incomplete";
+  const causes = savedCauses(report)
+    .filter((cause) => cause.indicatorId === target.indicatorId)
+    .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
+  const stages =
+    completeness === "complete"
+      ? report.causalTrace!.indicators.filter(
+          (item) => item.indicatorId === target.indicatorId,
+        )
+      : [];
+  return {
+    report,
+    causes,
+    completeness,
+    ...(stages.length
+      ? {
+          beforeValue: stages[0]!.beforeValue,
+          afterValue: stages.at(-1)!.afterValue,
+          totalDelta: stages.reduce((sum, item) => sum + item.totalDelta, 0),
+          contributionSum: stages.reduce(
+            (sum, item) =>
+              sum +
+              item.contributions.reduce(
+                (subtotal, term) => subtotal + term.delta,
+                0,
+              ),
+            0,
+          ),
+        }
+      : {}),
+    ...(!causes.length ? { missing: "cause" as const } : {}),
+  };
+}
+
 /** Resolve the saved month and reason without substituting newer evidence. */
 export function selectMonthlyEvidence(
   state: GameState,
@@ -29,7 +108,7 @@ export function selectMonthlyEvidence(
   if (target.row === 2) {
     const reference = target.cause;
     const cause = reference
-      ? report.topCauses.find(
+      ? savedCauses(report).find(
           (item) =>
             item.indicatorId === reference.indicatorId &&
             item.sourceType === reference.sourceType &&
@@ -44,7 +123,7 @@ export function selectMonthlyEvidence(
   }
 
   if (!target.indicatorId) return { report, causes: [], missing: "indicator" };
-  const causes = report.topCauses
+  const causes = savedCauses(report)
     .filter((cause) => cause.indicatorId === target.indicatorId)
     .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
   return causes.length

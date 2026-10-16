@@ -1,4 +1,5 @@
 import type { GameState } from "@macro-nation/domain";
+import { isMonthlyReportCausalTrace } from "@macro-nation/domain";
 import {
   policyStateHash,
   type PolicyStateRepository,
@@ -102,7 +103,13 @@ function isGameState(
     typeof state.versions?.saveSchemaVersion === "string" &&
     typeof state.configSnapshot?.configHash === "string" &&
     typeof state.rng === "object" &&
-    typeof state.economy === "object"
+    typeof state.economy === "object" &&
+    (state.versions.saveSchemaVersion !== "5" ||
+      (Array.isArray(state.history?.reports) &&
+        state.history.reports.every((report) =>
+          report && isMonthlyReportCausalTrace(report.causalTrace) &&
+          (report.causalTrace.completeness !== "initial" || report.monthIndex === 0),
+        )))
   );
 }
 

@@ -911,7 +911,7 @@ describe("SCN-01 user journey", () => {
     );
     expect(screen.getByRole("heading", { name: "経済レポート" })).toHaveFocus();
     expect(
-      roleOnPage("経済レポート", "heading", "変化の理由"),
+      roleOnPage("経済レポート", "heading", "1月目・実質GDPの変化の理由"),
     ).toBeInTheDocument();
     expect(
       roleOnPage("経済レポート", "heading", "経済学ノート"),

@@ -9,6 +9,7 @@ artifacts/headless/
 artifacts/issue-92/
 artifacts/issue-107/
 artifacts/issue-117/
+artifacts/issue-119/
 .DS_Store
 .env
 .env.*

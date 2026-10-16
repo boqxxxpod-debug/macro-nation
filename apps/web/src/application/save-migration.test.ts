@@ -28,12 +28,74 @@ function migrationStorage() {
 }
 
 describe("first playable save migration", () => {
-  it("creates schema 4 learning history and reopens it without another save", async () => {
+  it("creates schema 5 learning and causal history and reopens it without another save", async () => {
     const storage = migrationStorage();
-    const current = await createGame(storage.repository, "learning-schema-4");
-    expect(current.versions.saveSchemaVersion).toBe("4");
+    const current = await createGame(storage.repository, "learning-schema-5");
+    expect(current.versions.saveSchemaVersion).toBe("5");
     expect(current.history.learningEntries).toEqual([]);
+    expect(current.history.reports?.[0]?.causalTrace).toEqual({
+      completeness: "initial", indicators: [],
+    });
     expect(await migrateFirstPlayableSave(storage.repository, current)).toBe(current);
+    expect(storage.saves).toBe(0);
+  });
+
+  it.each(["1", "2", "3", "4"])(
+    "marks every schema %s historical month incomplete without inventing discarded contributions",
+    async (saveSchemaVersion) => {
+      const storage = migrationStorage();
+      await createGame(storage.repository, "legacy-causal-trace", 1, "standard");
+      await advanceMonth(storage.repository, 1);
+      const current = await advanceMonth(storage.repository, 1);
+      const reports = current.history.reports!.map(({ causalTrace, ...report }) => {
+        expect(causalTrace).toBeDefined();
+        return report;
+      });
+      const legacy: GameState = {
+        ...current,
+        versions: { ...current.versions, saveSchemaVersion },
+        history: { ...current.history, reports },
+      };
+      storage.replace(legacy);
+      const savesBeforeMigration = storage.saves;
+      const migrated = await migrateFirstPlayableSave(storage.repository, legacy);
+      expect(migrated.history.reports).toEqual(reports.map((report) => ({
+        ...report,
+        causalTrace: { completeness: "legacy-incomplete", indicators: [] },
+      })));
+      expect(migrated.economy).toEqual(legacy.economy);
+      expect(migrated.rng).toEqual(legacy.rng);
+      expect(migrated.configSnapshot).toEqual(legacy.configSnapshot);
+      expect(migrated.versions).toEqual({ ...legacy.versions, saveSchemaVersion: "5" });
+      expect(await migrateFirstPlayableSave(storage.repository, migrated)).toBe(migrated);
+      expect(storage.saves).toBe(savesBeforeMigration + 1);
+      const next = await advanceMonth(storage.repository, 1);
+      expect(next.history.reports?.slice(0, 3)).toEqual(migrated.history.reports);
+      expect(next.history.reports?.at(-1)?.causalTrace?.completeness).toBe("complete");
+      expect(next.history.reports?.at(-1)?.causalTrace?.indicators.some(
+        (item) => item.indicatorId === "inflation",
+      )).toBe(true);
+    },
+  );
+
+  it("rejects malformed schema 5 causal history without rewriting it", async () => {
+    const storage = migrationStorage();
+    const current = await createGame(storage.repository, "corrupt-causal-trace");
+    const report = current.history.reports![0]!;
+    for (const causalTrace of [undefined, null, {}, {
+      completeness: "complete", indicators: [{ indicatorId: "realGdp" }],
+    }, {
+      completeness: "legacy-incomplete", indicators: [{ indicatorId: "realGdp" }],
+    }]) {
+      const corrupted = {
+        ...current,
+        history: { ...current.history, reports: [{ ...report, causalTrace }] },
+      } as unknown as GameState;
+      storage.replace(corrupted);
+      await expect(migrateFirstPlayableSave(storage.repository, corrupted))
+        .rejects.toThrow(/月次因果記録の形式/);
+      expect(await storage.repository.load(1)).toEqual(corrupted);
+    }
     expect(storage.saves).toBe(0);
   });
 
@@ -56,7 +118,7 @@ describe("first playable save migration", () => {
     expect(storage.saves).toBe(0);
   });
 
-  it.each(["1", "2", "3"])(
+  it.each(["1", "2", "3", "4"])(
     "migrates a schema %s save without learning history and preserves its economic run",
     async (saveSchemaVersion) => {
       const storage = migrationStorage();
@@ -68,7 +130,7 @@ describe("first playable save migration", () => {
         delete clock.endMonth;
         delete clock.durationMode;
       }
-      if (saveSchemaVersion !== "3") {
+      if (!["3", "4"].includes(saveSchemaVersion)) {
         delete clock.progressionMode;
         delete clock.lastProcessedWallClockMs;
         delete clock.remainderMs;
@@ -83,7 +145,7 @@ describe("first playable save migration", () => {
       };
       storage.replace(legacy);
       const migrated = await migrateFirstPlayableSave(storage.repository, legacy);
-      expect(migrated.versions).toEqual({ ...legacy.versions, saveSchemaVersion: "4" });
+      expect(migrated.versions).toEqual({ ...legacy.versions, saveSchemaVersion: "5" });
       expect(migrated.history.learningEntries).toEqual([]);
       expect(migrated.configSnapshot).toEqual(legacy.configSnapshot);
       expect(migrated.economy).toEqual(legacy.economy);
@@ -125,7 +187,7 @@ describe("first playable save migration", () => {
     };
     storage.replace(legacy);
     const migrated = await migrateFirstPlayableSave(storage.repository, legacy);
-    expect(migrated.versions.saveSchemaVersion).toBe("4");
+    expect(migrated.versions.saveSchemaVersion).toBe("5");
     expect(migrated.runState).toBe("running");
     expect(migrated.clock).toEqual(legacy.clock);
     expect(migrated.pendingOfflineSteps).toBe(3);
@@ -203,7 +265,7 @@ describe("first playable save migration", () => {
       expect(migrated.economy).toEqual(legacy.economy);
       expect(migrated.rng).toEqual(legacy.rng);
       expect(migrated.versions.engineVersion).toBe(legacy.versions.engineVersion);
-      expect(migrated.versions.saveSchemaVersion).toBe("4");
+      expect(migrated.versions.saveSchemaVersion).toBe("5");
       expect(await migrateFirstPlayableSave(repository, migrated)).toEqual(migrated);
       expect(saves).toBe(1);
       await expect(migrateFirstPlayableSave(repository, {
@@ -261,7 +323,7 @@ describe("first playable save migration", () => {
     expect(migrated.versions.engineVersion).toBe(ENGINE_VERSION);
     expect(migrated.durationMode).toBe("short");
     expect(migrated.clock.endMonth).toBe(48);
-    expect(migrated.versions.saveSchemaVersion).toBe("4");
+    expect(migrated.versions.saveSchemaVersion).toBe("5");
     expect((await advanceMonth(repository, 1)).monthIndex).toBe(1);
     await expect(
       migrateFirstPlayableSave(repository, {

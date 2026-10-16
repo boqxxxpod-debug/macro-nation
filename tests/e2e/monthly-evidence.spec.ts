@@ -148,6 +148,8 @@ async function seedReports(page: Page, missingInflation = false) {
             };
             const updated: GameState = {
               ...state,
+              // These intentionally model the summaries retained by old saves.
+              versions: { ...state.versions, saveSchemaVersion: "4" },
               learningMode: "casual",
               history: {
                 ...state.history,
@@ -323,15 +325,31 @@ async function expectTarget(page: Page, row: number, month = 2) {
 
 async function expectMatchingCauses(page: Page, row: number) {
   const indicator = ROWS[row]!;
+  const matching =
+    row === 2
+      ? [MAXIMUM_CAUSE]
+      : CURRENT_CAUSES.filter((cause) => cause.indicatorId === indicator);
+  if (row !== 2) {
+    const region = reportDeck(page);
+    // Casual mode initially shows the strongest cause; full retained evidence
+    // remains available through the normal expansion control.
+    await expect(region.locator("[data-report-cause]")).toHaveCount(1);
+    const expand = region.getByRole("button", {
+      name: `保存された寄与をすべて表示（${matching.length}件）`,
+      exact: true,
+    });
+    await reach(page, expand, region);
+    await expand.click();
+    await waitForPageLayout(page);
+    await expect(region.locator("[data-report-cause]")).toHaveCount(
+      matching.length,
+    );
+  }
   const text = (
     await reportDeck(page)
       .locator('[data-page-item][data-page-category="causes"]')
       .allTextContents()
   ).join("\n");
-  const matching =
-    row === 2
-      ? [MAXIMUM_CAUSE]
-      : CURRENT_CAUSES.filter((cause) => cause.indicatorId === indicator);
   for (const cause of matching) expect(text).toContain(cause.sourceId);
   for (const cause of CURRENT_CAUSES.filter(
     (cause) => !matching.includes(cause),
@@ -438,8 +456,8 @@ for (const viewport of VIEWPORTS) {
           name: "経済レポートのカテゴリ",
         }),
       ).toHaveValue("causes");
-      await expect(reportDeck(page).getByRole("status")).not.toContainText(
-        "2月目",
+      await expect(reportDeck(page).getByRole("status")).toContainText(
+        "2月目・失業率",
       );
       await page.getByRole("button", { name: "経済指標", exact: true }).click();
       await page.getByRole("button", { name: "レポート", exact: true }).click();

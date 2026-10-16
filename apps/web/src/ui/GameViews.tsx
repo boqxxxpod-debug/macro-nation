@@ -36,13 +36,16 @@ import {
 import {
   monthlyBriefButtonId,
   monthlyEvidenceQuery,
+  savedReportIndicatorIds,
   selectMonthlyBrief,
   selectMonthlyEvidence,
+  selectReportCauses,
   type MonthlyEvidenceTarget,
 } from "../application/monthly-evidence";
 import { policyConfirmationContent } from "./PolicyConfirmation";
 import { selectLatestConfirmedPolicy } from "../application/policy-confirmation";
 import { ExpertPortrait } from "./ExpertPortrait";
+import { reportIndicatorUnit, reportNumber } from "./report-format";
 import { TermHelp } from "./TermHelp";
 import policyInputCopy from "./policy-input-copy.json";
 import { isTutorialTime } from "../application/game-clock";
@@ -216,7 +219,7 @@ export function Home({
               <article>
                 <p>{`3. ${
                   brief.cause
-                    ? `${label(brief.cause.indicatorId)}にいちばん大きく影響したのは、${describeCause(brief.cause, state)}です`
+                    ? `保存済み寄与の数値の絶対値が最大なのは、${label(brief.cause.indicatorId)}への${describeCause(brief.cause, state)}です（指標ごとに単位が異なります）`
                     : "大きな変化はまだ確認されていません"
                 }。`}</p>
                 <button
@@ -460,20 +463,63 @@ export function Report({
   evidenceTarget,
   onReturnToReport,
   onClearEvidence,
+  onSelectEvidence,
 }: {
   state: GameState;
   evidenceTarget?: MonthlyEvidenceTarget | undefined;
   onReturnToReport?(): void;
   onClearEvidence?(): void;
+  onSelectEvidence?(target: MonthlyEvidenceTarget): void;
 }) {
-  const latest = state.history.reports?.at(-1);
-  const evidence = evidenceTarget
-    ? selectMonthlyEvidence(state, evidenceTarget)
-    : undefined;
+  const reports = state.history.reports ?? [];
+  const latest = reports.at(-1);
   const targetKey = evidenceTarget ? monthlyEvidenceQuery(evidenceTarget) : "";
-  const targetLabel = evidenceTarget
-    ? `${evidenceTarget.monthIndex}月目・${evidenceTarget.indicatorId ? label(evidenceTarget.indicatorId) : "最大寄与"}`
-    : "";
+  const [selection, setSelection] = useState<MonthlyEvidenceTarget>(
+    () =>
+      evidenceTarget ?? {
+        monthIndex: latest?.monthIndex ?? state.monthIndex,
+        ...(savedReportIndicatorIds(latest).includes("realGdp")
+          ? { indicatorId: "realGdp" }
+          : savedReportIndicatorIds(latest)[0]
+            ? { indicatorId: savedReportIndicatorIds(latest)[0]! }
+            : {}),
+        row: 0 as const,
+      },
+  );
+  const selectedTarget = evidenceTarget ?? selection;
+  const selectedId =
+    selectedTarget.cause?.indicatorId ?? selectedTarget.indicatorId;
+  const selectedReport = reports.find(
+    (report) => report.monthIndex === selectedTarget.monthIndex,
+  );
+  const indicatorIds = savedReportIndicatorIds(selectedReport);
+  const breakdown = selectReportCauses(state, {
+    monthIndex: selectedTarget.monthIndex,
+    indicatorId: selectedId ?? "",
+  });
+  const exactEvidence =
+    selectedTarget.row === 2
+      ? selectMonthlyEvidence(state, selectedTarget)
+      : undefined;
+  const causes = exactEvidence?.causes ?? breakdown.causes;
+  const missing = exactEvidence?.missing ?? breakdown.missing;
+  const targetLabel = `${selectedTarget.monthIndex}月目・${selectedId ? label(selectedId) : "保存された指標"}`;
+  const scopeKey = monthlyEvidenceQuery(selectedTarget);
+  const [expandedScope, setExpandedScope] = useState<string>();
+  const expanded = expandedScope === scopeKey;
+  const causeLimit = visibleCauseCount(state.learningMode ?? "standard");
+  const unit = reportIndicatorUnit(state.configSnapshot, selectedId ?? "");
+  const totalsMatch =
+    breakdown.totalDelta !== undefined &&
+    breakdown.contributionSum !== undefined &&
+    Math.abs(breakdown.totalDelta - breakdown.contributionSum) <=
+      Math.max(1e-9, Math.abs(breakdown.totalDelta) * 1e-8);
+
+  function selectTarget(next: MonthlyEvidenceTarget) {
+    setSelection(next);
+    setExpandedScope(undefined);
+    onSelectEvidence?.(next);
+  }
   const [requestedNavigation, setRequestedNavigation] = useState<{
     targetKey: string;
     navigation: PageDeckNavigation;
@@ -528,92 +574,204 @@ export function Report({
     },
     {
       id: "causes",
-      label: evidenceTarget ? `変化の理由（${targetLabel}）` : "変化の理由",
+      label:
+        reports.length || evidenceTarget
+          ? `変化の理由（${targetLabel}）`
+          : "変化の理由",
       content: (
         <>
-          {evidenceTarget && evidence ? (
-            <section className="panel">
-              <h3>{targetLabel}の変化の理由</h3>
-              {evidence.causes.length ? (
+          <section className="panel">
+            <h3>
+              {reports.length || evidenceTarget
+                ? `${targetLabel}の変化の理由`
+                : "変化の理由"}
+            </h3>
+            {(reports.length > 0 || evidenceTarget) && (
+              <>
+                <label>
+                  報告の月
+                  <select
+                    value={selectedTarget.monthIndex}
+                    onChange={(event) => {
+                      const monthIndex = Number(event.target.value);
+                      const ids = savedReportIndicatorIds(
+                        reports.find(
+                          (report) => report.monthIndex === monthIndex,
+                        ),
+                      );
+                      const indicatorId =
+                        selectedId && ids.includes(selectedId)
+                          ? selectedId
+                          : ids.includes("realGdp")
+                            ? "realGdp"
+                            : ids[0];
+                      selectTarget({
+                        monthIndex,
+                        row: 0,
+                        ...(indicatorId ? { indicatorId } : {}),
+                      });
+                    }}
+                  >
+                    {!selectedReport && (
+                      <option value={selectedTarget.monthIndex}>
+                        {selectedTarget.monthIndex}月目（記録なし）
+                      </option>
+                    )}
+                    {reports.map((report) => (
+                      <option key={report.monthIndex} value={report.monthIndex}>
+                        {report.monthIndex}月目
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  報告の指標
+                  <select
+                    value={selectedId ?? ""}
+                    disabled={!indicatorIds.length}
+                    onChange={(event) =>
+                      selectTarget({
+                        monthIndex: selectedTarget.monthIndex,
+                        indicatorId: event.target.value,
+                        row: 0,
+                      })
+                    }
+                  >
+                    {(!selectedId || !indicatorIds.includes(selectedId)) && (
+                      <option value={selectedId ?? ""}>
+                        {selectedId
+                          ? `${label(selectedId)}（記録なし）`
+                          : "指標の記録なし"}
+                      </option>
+                    )}
+                    {indicatorIds.map((id) => (
+                      <option key={id} value={id}>
+                        {label(id)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+            {breakdown.beforeValue !== undefined &&
+            breakdown.afterValue !== undefined ? (
+              <p data-report-summary>
+                {`因果記録の前値：${reportNumber(breakdown.beforeValue, unit)} → 後値：${reportNumber(breakdown.afterValue, unit)}`}
+              </p>
+            ) : selectedId &&
+              selectedReport?.values[selectedId] !== undefined ? (
+              <p data-report-summary>
+                この月の値：
+                {reportNumber(selectedReport.values[selectedId]!, unit)}
+                。前月の値・変化量の因果記録は保存されていません。
+              </p>
+            ) : (
+              selectedReport && <p>この月の指標値は保存されていません。</p>
+            )}
+            {breakdown.totalDelta !== undefined &&
+              breakdown.contributionSum !== undefined && (
                 <>
-                  {evidence.causes.map((cause, index) => (
-                    <p key={index}>
-                      {label(cause.indicatorId)}：{describeCause(cause, state)}
-                      、変化への影響 {cause.delta > 0 ? "+" : ""}
-                      {cause.delta.toFixed(2)}
-                    </p>
-                  ))}
-                  <p className="quiet">
-                    {evidenceTarget.row === 2
-                      ? "ホームの3行目に表示された寄与です。"
-                      : "この指標に対応する保存済みの寄与を、影響の大きい順に表示しています。"}
+                  <p data-report-total>
+                    記録された変化：
+                    {reportNumber(breakdown.totalDelta, unit, true)}
+                    、保存済み寄与の合計：
+                    {reportNumber(breakdown.contributionSum, unit, true)}
                   </p>
-                </>
-              ) : (
-                <>
                   <p>
-                    {evidence.missing === "report"
-                      ? "この月の報告が保存されていないため、根拠を表示できません。"
-                      : !evidenceTarget.indicatorId
-                        ? "この月の報告には、最大寄与の因果記録が保存されていません。"
-                        : "この月の保存済み報告には、この指標の因果記録がありません。"}
+                    合計の照合：
+                    {totalsMatch
+                      ? "一致（丸め前の保存値で確認）"
+                      : "不一致（保存された因果記録を確認してください）"}
+                    。表示値の四捨五入により合計が一致しない場合があります。
                   </p>
-                  {evidence.missing !== "report" && (
-                    <p>
-                      月次報告には全指標を通じた上位8件の寄与だけが保存されます。記録がないことは、影響がなかったことを意味しません。
-                    </p>
-                  )}
-                  <p>
-                    「推移」でGDP・物価・失業の経過を、「国家史」で政策や出来事を確認できます。
-                  </p>
-                  <button onClick={() => openCategory("trend")}>
-                    推移を確認する
-                  </button>
-                  <button onClick={() => openCategory("history")}>
-                    国家史を確認する
-                  </button>
                 </>
               )}
-              {evidence.report?.values[evidenceTarget.indicatorId ?? ""] !==
-                undefined && (
+            {selectedReport &&
+              breakdown.completeness === "legacy-incomplete" && (
                 <p>
-                  この月の値：
-                  {display(
-                    evidenceTarget.indicatorId!,
-                    evidence.report.values[evidenceTarget.indicatorId!]!,
-                  )}
+                  この月は旧形式の記録で、全指標を通じた上位8件の寄与だけが保存されています。全内訳と変化量の照合はできません。記録がないことは、影響がなかったことを意味しません。
                 </p>
               )}
-            </section>
-          ) : (
-            <section className="panel">
-              <h3>変化の理由</h3>
-              <p>
-                前月からの変化に大きく影響した順に、
-                {visibleCauseCount(state.learningMode ?? "standard")}
-                件を表示します。
-              </p>
-              {latest?.topCauses.length ? (
+            {selectedReport && breakdown.completeness === "initial" && (
+              <p>開始時点の記録です。月次変化の因果記録はまだありません。</p>
+            )}
+            {causes.length ? (
+              <>
+                <p className="quiet">
+                  {selectedTarget.row === 2
+                    ? "ホームの3行目に表示された寄与です。"
+                    : `選択した月・指標の保存済み寄与を、数値の絶対値が大きい順に${expanded ? "全件" : `上位${causeLimit}件`}表示します。`}
+                </p>
                 <ol>
-                  {latest.topCauses
+                  {causes
                     .slice(
                       0,
-                      visibleCauseCount(state.learningMode ?? "standard"),
+                      expanded || selectedTarget.row === 2
+                        ? undefined
+                        : causeLimit,
                     )
                     .map((cause, index) => (
-                      <li key={index}>
+                      <li key={index} data-report-cause={cause.sourceId}>
                         {label(cause.indicatorId)}：
-                        {describeCause(cause, state)}
-                        、変化への影響 {cause.delta > 0 ? "+" : ""}
-                        {cause.delta.toFixed(2)}
+                        {describeCause(cause, state)}（
+                        {causeCategory(cause.sourceType)}）、変化への影響{" "}
+                        {reportNumber(cause.delta, unit, true)}
                       </li>
                     ))}
                 </ol>
-              ) : (
-                <p>月を進めると、指標が変わった理由を確認できます。</p>
-              )}
-            </section>
-          )}
+                {selectedTarget.row === 2 &&
+                  selectedId &&
+                  breakdown.causes.length > 1 && (
+                    <button
+                      onClick={() => {
+                        const next = {
+                          monthIndex: selectedTarget.monthIndex,
+                          indicatorId: selectedId,
+                          row: 0 as const,
+                        };
+                        selectTarget(next);
+                        setExpandedScope(monthlyEvidenceQuery(next));
+                      }}
+                    >
+                      この指標の全内訳を見る
+                    </button>
+                  )}
+                {selectedTarget.row !== 2 && causes.length > causeLimit && (
+                  <button
+                    aria-expanded={expanded}
+                    onClick={() =>
+                      setExpandedScope(expanded ? undefined : scopeKey)
+                    }
+                  >
+                    {expanded
+                      ? `上位${causeLimit}件に戻す`
+                      : `保存された寄与をすべて表示（${causes.length}件）`}
+                  </button>
+                )}
+              </>
+            ) : !reports.length && !evidenceTarget ? (
+              <p>月を進めると、指標が変わった理由を確認できます。</p>
+            ) : (
+              <>
+                <p>
+                  {missing === "report"
+                    ? "この月の報告が保存されていないため、根拠を表示できません。"
+                    : selectedTarget.row === 2
+                      ? "この月の保存済み報告には、参照された寄与の因果記録がありません。"
+                      : "この月の保存済み報告には、この指標の因果記録がありません。"}
+                </p>
+                <p>
+                  「推移」でGDP・物価・失業の経過を、「国家史」で政策や出来事を確認できます。
+                </p>
+                <button onClick={() => openCategory("trend")}>
+                  推移を確認する
+                </button>
+                <button onClick={() => openCategory("history")}>
+                  国家史を確認する
+                </button>
+              </>
+            )}
+          </section>
         </>
       ),
     },
@@ -855,6 +1013,11 @@ export function Report({
             {onClearEvidence && (
               <button
                 onClick={() => {
+                  setSelection({
+                    monthIndex: selectedTarget.monthIndex,
+                    row: 0,
+                    ...(selectedId ? { indicatorId: selectedId } : {}),
+                  });
                   openCategory("causes", "");
                   onClearEvidence();
                 }}

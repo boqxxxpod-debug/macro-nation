@@ -214,6 +214,7 @@ export function PageDeck({
 }) {
   const id = useId();
   const content = useRef<HTMLDivElement>(null);
+  const layoutStable = useRef(false);
   const appliedNavigationKeys = useRef(new Set<string>());
   const [pendingNavigationFocus, setPendingNavigationFocus] = useState<{
     key: string;
@@ -266,17 +267,21 @@ export function PageDeck({
     categoryPages.findIndex((entry) => entry.index === current),
   );
   const statusId = `${id}-status`;
-  const status = expanded
-    ? `${currentCategory ? `${currentCategory.label} · ` : ""}全文を表示しています`
+  const position = expanded
+    ? "全文を表示しています"
     : currentCategory
-      ? `${currentCategory.label} · ${categoryPage + 1} / ${Math.max(1, categoryPages.length)}ページ`
+      ? `${categoryPage + 1} / ${Math.max(1, categoryPages.length)}ページ`
       : `${current + 1} / ${pageCount}ページ`;
 
   useLayoutEffect(() => {
     const container = content.current;
     if (!container) return;
+    let active = true;
     const measure = () => {
+      if (!active) return;
+      layoutStable.current = false;
       const available = container.clientHeight;
+      const availableWidth = container.clientWidth;
       const nodes = [
         ...container.querySelectorAll<HTMLElement>(":scope > [data-page-item]"),
       ];
@@ -331,13 +336,14 @@ export function PageDeck({
       // expanding here would change its own height and oscillate every commit.
       setExpanded(nextExpanded);
       if (nextExpanded) {
+        layoutStable.current = expanded;
         applyNavigation();
         return;
       }
       if (available <= 0) return;
       const charactersPerLine = Math.max(
         12,
-        Math.floor(container.clientWidth / 18),
+        Math.floor(availableWidth / 18),
       );
       const nextLimit = Math.max(
         20,
@@ -349,9 +355,13 @@ export function PageDeck({
       }
       const next: number[][] = [[]];
       let height = 0;
+      // Hidden blocks use an explicit width. Apply one width to the whole
+      // measurement before reading heights, including blocks just hidden by a
+      // page turn, so a relayout cannot mix wrapping from different widths.
+      for (const node of nodes)
+        node.style.setProperty("--page-width", `${availableWidth}px`);
       for (let index = 0; index < nodes.length; index++) {
         const node = nodes[index]!;
-        node.style.setProperty("--page-width", `${container.clientWidth}px`);
         const itemHeight = Math.ceil(node.getBoundingClientRect().height) + 8;
         const categoryBoundary =
           index > 0 &&
@@ -373,6 +383,7 @@ export function PageDeck({
       };
       const layoutChanged =
         JSON.stringify(layout) !== JSON.stringify(nextLayout);
+      layoutStable.current = !layoutChanged && !expanded;
       setLayout((previous) =>
         JSON.stringify(previous) === JSON.stringify(nextLayout)
           ? previous
@@ -380,7 +391,7 @@ export function PageDeck({
       );
       // A request is applied only after text splitting and measurement settle.
       // Later news updates and user paging must not replay the same request.
-      if (applyNavigation(next)) return;
+      if (layoutStable.current && applyNavigation(next)) return;
       // Keep the same category and visible item when pages are remeasured.
       // A global page number alone would drift into another category on resize.
       const preferredCategory =
@@ -396,7 +407,10 @@ export function PageDeck({
         focusedItemIndex >= 0
           ? itemKeys[focusedItemIndex]
           : layout.firstItemKeys[current];
-      if (preferredCategory || focusedItemIndex >= 0) {
+      if (
+        (layoutChanged || expanded || expandedCategoryId) &&
+        (preferredCategory || focusedItemIndex >= 0)
+      ) {
         const matchingPages = next
           .map((indices, index) => ({ indices, index }))
           .filter(
@@ -431,6 +445,7 @@ export function PageDeck({
     window.addEventListener("resize", measure);
     window.visualViewport?.addEventListener("resize", measure);
     return () => {
+      active = false;
       observer?.disconnect();
       window.removeEventListener("resize", measure);
       window.visualViewport?.removeEventListener("resize", measure);
@@ -447,42 +462,127 @@ export function PageDeck({
       );
       return;
     }
-    // Wait until the selected page has committed and hidden/inert is removed.
-    if (
-      request.expanded !== expanded ||
-      (!expanded && request.page !== current) ||
-      (expanded && request.categoryId !== currentCategory?.id)
-    )
-      return;
-    const element = request.elementId
-      ? [...container.querySelectorAll<HTMLElement>("[id]")].find(
-          (node) => node.id === request.elementId,
-        )
-      : undefined;
-    const anchor = request.categoryId
-      ? [
-          ...container.querySelectorAll<HTMLElement>(
-            ":scope > [data-page-category-start]",
-          ),
-        ].find((node) => node.dataset.pageCategoryStart === request.categoryId)
-      : undefined;
-    const target = element ?? (expanded ? (anchor ?? container) : container);
-    if (target.tabIndex < 0 && !target.hasAttribute("tabindex"))
-      target.tabIndex = -1;
-    setPendingNavigationFocus((pending) =>
-      pending === request ? undefined : pending,
-    );
-    target.focus({ preventScroll: true });
-    if (expanded) target.scrollIntoView?.({ block: "start", behavior: "auto" });
+    let cancelled = false;
+    let frame: number | undefined;
+    let focusedTarget: HTMLElement | undefined;
+    let stableFrames = 0;
+    function finish() {
+      setPendingNavigationFocus((pending) =>
+        pending === request ? undefined : pending,
+      );
+    }
+    function schedule() {
+      if (!cancelled) frame = requestAnimationFrame(attempt);
+    }
+    function retryAfterCommit() {
+      // Retry even when ResizeObserver settles without changing React state.
+      queueMicrotask(() => {
+        if (!cancelled) schedule();
+      });
+    }
+    function attempt() {
+      if (cancelled || !request || !container) return;
+      if (!layoutStable.current) {
+        stableFrames = 0;
+        retryAfterCommit();
+        return;
+      }
+      const active = document.activeElement;
+      if (
+        focusedTarget &&
+        active !== focusedTarget &&
+        active !== document.body &&
+        active !== document.documentElement
+      ) {
+        // A user may move focus while the final layout is being confirmed.
+        finish();
+        return;
+      }
+      const element = request.elementId
+        ? [...container.querySelectorAll<HTMLElement>("[id]")].find(
+            (node) => node.id === request.elementId,
+          )
+        : undefined;
+      const anchor = request.categoryId
+        ? [
+            ...container.querySelectorAll<HTMLElement>(
+              ":scope > [data-page-category-start]",
+            ),
+          ].find(
+            (node) => node.dataset.pageCategoryStart === request.categoryId,
+          )
+        : undefined;
+      // Text splitting can replace the destination after the first focus.
+      // Always resolve its current node and committed page again.
+      const item = (element ?? anchor)?.closest<HTMLElement>(
+        "[data-page-item]",
+      );
+      const itemIndex = item
+        ? [
+            ...container.querySelectorAll<HTMLElement>(
+              ":scope > [data-page-item]",
+            ),
+          ].indexOf(item)
+        : -1;
+      const destinationPage =
+        itemIndex >= 0
+          ? layout.pages.findIndex((indices) => indices.includes(itemIndex))
+          : request.page;
+      if (
+        !expanded &&
+        destinationPage !== undefined &&
+        destinationPage >= 0 &&
+        destinationPage !== current
+      ) {
+        setPage(destinationPage);
+        return;
+      }
+      const target = element ?? (expanded ? (anchor ?? container) : container);
+      if (
+        (expanded && request.categoryId !== currentCategory?.id) ||
+        target.closest("[hidden], [inert]")
+      ) {
+        stableFrames = 0;
+        retryAfterCommit();
+        return;
+      }
+      if (target.tabIndex < 0 && !target.hasAttribute("tabindex"))
+        target.tabIndex = -1;
+      if (target !== focusedTarget || active !== target) {
+        target.focus({ preventScroll: true });
+        stableFrames = 0;
+      }
+      if (document.activeElement !== target) {
+        retryAfterCommit();
+        return;
+      }
+      focusedTarget = target;
+      stableFrames += 1;
+      if (stableFrames < 2) {
+        schedule();
+        return;
+      }
+      finish();
+      if (expanded)
+        target.scrollIntoView?.({ block: "start", behavior: "auto" });
+    }
+    schedule();
+    return () => {
+      cancelled = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
   }, [
     pendingNavigationFocus,
     navigation?.key,
     expanded,
     current,
     currentCategory?.id,
+    layout,
+    textLimit,
   ]);
 
   function turn(next: number) {
+    setPendingNavigationFocus(undefined);
     setExpandedCategoryId(undefined);
     setPage(next);
     requestAnimationFrame(() =>
@@ -491,6 +591,7 @@ export function PageDeck({
   }
 
   function jump(categoryId: string) {
+    setPendingNavigationFocus(undefined);
     const firstPage = layout.categoryIds.findIndex((id) => id === categoryId);
     if (firstPage >= 0) setPage(firstPage);
     if (expanded) setExpandedCategoryId(categoryId);
@@ -590,7 +691,12 @@ export function PageDeck({
           前へ
         </button>
         <span id={statusId} role="status" aria-live="polite">
-          {status}
+          {currentCategory && (
+            <span className="page-status-category">{`${currentCategory.label} · `}</span>
+          )}
+          <span className={expanded ? undefined : "page-status-pagination"}>
+            {position}
+          </span>
         </span>
         <button
           type="button"

@@ -19,7 +19,7 @@ const PREVIEW_CATEGORIES = [
 ] as const;
 const REPORT_CATEGORIES = [
   ["trend", "推移"],
-  ["causes", "変化の理由"],
+  ["causes", "変化の理由（1月目・実質GDP）"],
   ["voices", "国の声"],
   ["history", "国家史"],
   ["learning", "学習内容"],
