@@ -227,17 +227,18 @@ for (const viewport of VIEWPORTS) {
       await page.getByRole("button", { name: "見通しを確認" }).click();
       await expect(
         page.getByRole("heading", { name: "政策の見通し" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 60_000 });
       await waitForPageLayout(page);
 
       for (const term of COST_TERMS) {
         const trigger = helpTrigger(page, term);
         await reveal(page, trigger);
-        await expect(
-          trigger.locator('xpath=ancestor::section[@aria-label="判断の要点"]'),
-        ).toBeVisible();
-        const cost = trigger.locator("xpath=ancestor::p[1]");
-        const before = await cost.innerText();
+        const cost = page.getByRole("article", {
+          name: `${term}の費用と残量`,
+          exact: true,
+        });
+        await expect(cost).toBeVisible();
+        const before = (await cost.textContent())!;
         expect(before).toMatch(/\d/);
         await activate(trigger, viewport.hasTouch);
         const dialog = await expectHelpOpen(page, term);

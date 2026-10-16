@@ -10,7 +10,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ConfigSnapshot, GameState } from "@macro-nation/domain";
-import { percentRate, scorePoint, stockLevel } from "@macro-nation/domain";
+import {
+  indexLevel,
+  percentRate,
+  scorePoint,
+  stockLevel,
+} from "@macro-nation/domain";
 import {
   expertPortraitManifest,
   expertProfilesForContentVersion,
@@ -19,7 +24,11 @@ import { PreviewClient } from "../infrastructure/preview-client";
 import type { PreviewOutput } from "../application/policy-view";
 import { createGame } from "../application/game-service";
 import { learningEntriesForReport } from "../application/learning";
-import { createReservedPolicy, policyRules } from "../application/policy-view";
+import {
+  createReservedPolicy,
+  policyRules,
+  policyStateHash,
+} from "../application/policy-view";
 import {
   Home,
   PolicyForm,
@@ -132,6 +141,48 @@ function reportState(): GameState {
     history: {
       ...state.history,
       learningEntries: learningEntriesForReport(state, report),
+    },
+  };
+}
+
+function resourceValue(name: string, field: string): HTMLElement {
+  const card = screen.getByRole("article", { name: `${name}の費用と残量` });
+  const term = within(card).getByText(field, { selector: "dt" });
+  const value = term.nextElementSibling;
+  if (!(value instanceof HTMLElement) || value.tagName !== "DD") {
+    throw new Error(`Missing resource value for ${name}: ${field}`);
+  }
+  return value;
+}
+
+function stateWithResourceReservations(): GameState {
+  return {
+    ...initial,
+    resources: {
+      ...initial.resources,
+      politicalCapital: scorePoint(50),
+      implementationCapacity: scorePoint(60),
+      discretionaryBudget: stockLevel(80),
+      reservedForeignReserves: stockLevel(11),
+    },
+    economy: {
+      ...initial.economy,
+      stocks: { ...initial.economy.stocks, foreignReserves: stockLevel(70) },
+    },
+    policyAdministration: {
+      receipts: [],
+      reservations: [
+        {
+          reservationId: "resource-reservation",
+          policyId: "reserved-policy",
+          costs: {
+            politicalCapital: 5,
+            implementationCapacity: 7,
+            foreignReserves: 11,
+            immediateBudget: 13,
+          },
+        },
+      ],
     },
   };
 }
@@ -384,6 +435,7 @@ describe("game screen wording", () => {
     const onConfirm = vi.fn();
     render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
@@ -393,15 +445,17 @@ describe("game screen wording", () => {
         onConfirm={onConfirm}
       />,
     );
-    const costs = screen.getByText("費用：").closest("p")!;
     for (const [id, name] of [
       ["politicalCapital", "政治資本"],
       ["implementationCapacity", "実施能力"],
       ["foreignReserves", "外貨準備"],
     ] as const) {
-      const trigger = within(costs).getByRole("button", {
+      const card = screen.getByRole("article", { name: `${name}の費用と残量` });
+      const trigger = within(card).getByRole("button", {
         name: `${name}の説明`,
       });
+      expect(trigger.closest("h4")).toBeInTheDocument();
+      expect(within(card).getAllByRole("button")).toHaveLength(1);
       const explanation = document.getElementById(
         trigger.getAttribute("popovertarget")!,
       )!;
@@ -413,14 +467,14 @@ describe("game screen wording", () => {
         within(explanation).getByRole("button", { name: "閉じる" }),
       );
     }
-    expect(costs).toHaveTextContent(
-      `政治資本 ${output.costs.politicalCapital}`,
+    expect(resourceValue("政治資本", "この案の基本費用")).toHaveTextContent(
+      `${output.costs.politicalCapital}点`,
     );
-    expect(costs).toHaveTextContent(
-      `実施能力 ${output.costs.implementationCapacity}`,
+    expect(resourceValue("実施能力", "この案の基本費用")).toHaveTextContent(
+      `${output.costs.implementationCapacity}点`,
     );
-    expect(costs).toHaveTextContent(
-      `外貨準備 ${output.costs.foreignReserves.toFixed(1)}`,
+    expect(resourceValue("外貨準備", "この案の基本費用")).toHaveTextContent(
+      `${output.costs.foreignReserves} model unit`,
     );
     expect(
       screen.getByRole("button", { name: "政策を確定する" }),
@@ -432,6 +486,297 @@ describe("game screen wording", () => {
     ).not.toBeChecked();
     expect(onConfirm).not.toHaveBeenCalled();
     expect(output).toEqual(before);
+  });
+
+  it.each(["form", "preview"] as const)(
+    "shows current resources, reservations and the remaining amounts in the %s",
+    (view) => {
+      const state = stateWithResourceReservations();
+      const before = structuredClone(state);
+      if (view === "form") {
+        render(
+          <PolicyForm
+            state={state}
+            onPreview={vi.fn()}
+            busy={false}
+            draftState={{
+              ruleId: "fx-intervention",
+              value: 0.01,
+              quartersAhead: 1,
+              policyId: "resource-cost-draft",
+              expertIds: ["macro"],
+            }}
+          />,
+        );
+      } else {
+        render(
+          <Preview
+            state={state}
+            configSnapshot={state.configSnapshot}
+            output={{
+              ...output,
+              stateHash: policyStateHash(state),
+              costs: {
+                politicalCapital: 2,
+                implementationCapacity: 1,
+                foreignReserves: 12,
+                immediateBudget: 0,
+              },
+              previewedDraft: {
+                ...output.previewedDraft!,
+                ruleId: "fx-intervention",
+                value: 0.01,
+                quartersAhead: 1,
+              },
+            }}
+            counterfactuals={[]}
+            expertIds={["macro"]}
+            contentVersion={state.versions.contentVersion}
+            busy={false}
+            onConfirm={vi.fn()}
+          />,
+        );
+      }
+      for (const [
+        name,
+        current,
+        reserved,
+        available,
+        cost,
+        remaining,
+        unit,
+      ] of [
+        ["政治資本", 50, 5, 45, 2, 43, "点"],
+        ["実施能力", 60, 7, 53, 1, 52, "点"],
+        ["外貨準備", 70, 11, 59, 12, 47, " model unit"],
+        ["開始予算", 80, 13, 67, 0, 67, " model unit"],
+      ] as const) {
+        const card = screen.getByRole("article", {
+          name: `${name}の費用と残量`,
+        });
+        expect(resourceValue(name, "現在量")).toHaveTextContent(
+          `${current}${unit}`,
+        );
+        expect(resourceValue(name, "予約済み")).toHaveTextContent(
+          `${reserved}${unit}`,
+        );
+        expect(resourceValue(name, "使える量")).toHaveTextContent(
+          `${available}${unit}`,
+        );
+        expect(resourceValue(name, "この案の基本費用")).toHaveTextContent(
+          `${cost}${unit}`,
+        );
+        expect(resourceValue(name, "採用後に使える残量")).toHaveTextContent(
+          `${remaining}${unit}`,
+        );
+        if (unit === "点") expect(card).toHaveTextContent("0〜100点");
+      }
+      expect(state).toEqual(before);
+    },
+  );
+
+  it("updates a draft's reserve cost and usable remainder as its size changes", () => {
+    const state = stateWithResourceReservations();
+    render(<PolicyForm state={state} onPreview={vi.fn()} busy={false} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "政策の種類" }), {
+      target: { value: "fx-intervention" },
+    });
+    fireEvent.change(
+      screen.getByRole("spinbutton", {
+        name: "為替介入の規模（年間GDP比・%）",
+      }),
+      {
+        target: { value: "1" },
+      },
+    );
+    expect(resourceValue("外貨準備", "この案の基本費用")).toHaveTextContent(
+      "12 model unit",
+    );
+    fireEvent.change(
+      screen.getByRole("spinbutton", {
+        name: "為替介入の規模（年間GDP比・%）",
+      }),
+      {
+        target: { value: "2" },
+      },
+    );
+    expect(resourceValue("外貨準備", "この案の基本費用")).toHaveTextContent(
+      "24 model unit",
+    );
+    expect(resourceValue("外貨準備", "採用後に使える残量")).toHaveTextContent(
+      "35 model unit",
+    );
+    expect(resourceValue("外貨準備", "予約済み")).toHaveTextContent(
+      "11 model unit",
+    );
+  });
+
+  it("shows the required, available and missing resources and prevents confirming an unaffordable preview", () => {
+    const state: GameState = {
+      ...stateWithResourceReservations(),
+      resources: {
+        ...stateWithResourceReservations().resources,
+        politicalCapital: scorePoint(5.5),
+      },
+    };
+    const onConfirm = vi.fn();
+    render(
+      <Preview
+        state={state}
+        configSnapshot={state.configSnapshot}
+        output={{
+          ...output,
+          stateHash: policyStateHash(state),
+          costs: { ...output.costs, politicalCapital: 2 },
+        }}
+        counterfactuals={[]}
+        expertIds={["macro"]}
+        contentVersion={state.versions.contentVersion}
+        busy={false}
+        onConfirm={onConfirm}
+      />,
+    );
+    const shortage = screen.getByText(/政治資本が足りません/, {
+      selector: "p",
+    });
+    expect(shortage).toHaveTextContent("必要 2点");
+    expect(shortage).toHaveTextContent("使える量 0.5点");
+    expect(shortage).toHaveTextContent("不足量 1.5点");
+    expect(resourceValue("政治資本", "採用後に使える残量")).toHaveTextContent(
+      "-1.5点",
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    );
+    const confirm = screen.getByRole("button", { name: "政策を確定する" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("shows the latest resource amounts for a stale preview and requests a refresh before confirmation", () => {
+    const reservedState = stateWithResourceReservations();
+    const state: GameState = {
+      ...reservedState,
+      economy: {
+        ...reservedState.economy,
+        indices: { ...reservedState.economy.indices, realGdp: indexLevel(200) },
+      },
+    };
+    const onConfirm = vi.fn();
+    const onRefresh = vi.fn();
+    const props = {
+      configSnapshot: initial.configSnapshot,
+      output: {
+        ...output,
+        costs: {
+          politicalCapital: 2,
+          implementationCapacity: 1,
+          foreignReserves: 12,
+          immediateBudget: 0,
+        },
+        previewedDraft: {
+          ...output.previewedDraft!,
+          ruleId: "fx-intervention",
+          value: 0.01,
+        },
+      },
+      counterfactuals: [],
+      expertIds: ["macro"],
+      contentVersion: initial.versions.contentVersion,
+      busy: false,
+      onConfirm,
+      onRefresh,
+    };
+    const { rerender } = render(<Preview {...props} state={initial} />);
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: "政策を確定する" }),
+    ).toBeEnabled();
+    rerender(<Preview {...props} state={state} />);
+    expect(resourceValue("政治資本", "現在量")).toHaveTextContent("50点");
+    expect(resourceValue("政治資本", "予約済み")).toHaveTextContent("5点");
+    expect(resourceValue("政治資本", "使える量")).toHaveTextContent("45点");
+    expect(resourceValue("政治資本", "採用後に使える残量")).toHaveTextContent(
+      "43点",
+    );
+    expect(resourceValue("外貨準備", "この案の基本費用")).toHaveTextContent(
+      "24 model unit",
+    );
+    expect(resourceValue("外貨準備", "採用後に使える残量")).toHaveTextContent(
+      "35 model unit",
+    );
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "政策を確定する" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "資源やゲームの状態が変わりました",
+    );
+    const refresh = screen.getByRole("button", {
+      name: "最新状態で見通しを更新",
+    });
+    fireEvent.click(refresh);
+    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(onConfirm).not.toHaveBeenCalled();
+    rerender(<Preview {...props} state={state} busy />);
+    expect(
+      screen.getByRole("button", { name: "最新状態で見通しを更新" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps a small resource shortage visible and prevents confirmation", () => {
+    const state: GameState = {
+      ...initial,
+      resources: { ...initial.resources, politicalCapital: scorePoint(4.999) },
+    };
+    const onConfirm = vi.fn();
+    render(
+      <Preview
+        state={state}
+        configSnapshot={state.configSnapshot}
+        output={{
+          ...output,
+          stateHash: policyStateHash(state),
+          costs: { ...output.costs, politicalCapital: 5 },
+        }}
+        counterfactuals={[]}
+        expertIds={["macro"]}
+        contentVersion={state.versions.contentVersion}
+        busy={false}
+        onConfirm={onConfirm}
+      />,
+    );
+    expect(resourceValue("政治資本", "現在量").textContent).toBe("4.999点");
+    expect(resourceValue("政治資本", "使える量").textContent).toBe("4.999点");
+    expect(resourceValue("政治資本", "この案の基本費用").textContent).toBe(
+      "5点",
+    );
+    expect(resourceValue("政治資本", "採用後に使える残量").textContent).toBe(
+      "-0.001点",
+    );
+    expect(
+      screen.getByText(/政治資本が足りません/, { selector: "p" }),
+    ).toHaveTextContent("不足量 0.001点");
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "費用・副作用・警告を確認しました",
+      }),
+    );
+    const confirm = screen.getByRole("button", { name: "政策を確定する" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it.each(["paused", "awaitingEvent", "crisisStopped"] as const)(
@@ -508,6 +853,7 @@ describe("game screen wording", () => {
     const before = structuredClone(preview);
     const { container, rerender } = render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
@@ -546,6 +892,7 @@ describe("game screen wording", () => {
     expect(onConfirm).toHaveBeenCalledOnce();
     rerender(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
@@ -630,6 +977,7 @@ describe("game screen wording", () => {
     const before = structuredClone(preview);
     render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={preview}
         counterfactuals={[]}
@@ -653,11 +1001,18 @@ describe("game screen wording", () => {
     expect(differences).toHaveTextContent(`${label("realGdp")} +1.3`);
     expect(differences).toHaveTextContent(`${label("inflation")} +0.3%`);
     expect(differences).toHaveTextContent(`${label("unemployment")} -0.7%`);
-    const costs = within(summary).getByText("費用：").closest("p")!;
-    expect(costs).toHaveTextContent("政治資本 17");
-    expect(costs).toHaveTextContent("実施能力 23");
-    expect(costs).toHaveTextContent("外貨準備 4.5");
-    expect(costs).toHaveTextContent("開始予算 31");
+    expect(resourceValue("政治資本", "この案の基本費用")).toHaveTextContent(
+      "17点",
+    );
+    expect(resourceValue("実施能力", "この案の基本費用")).toHaveTextContent(
+      "23点",
+    );
+    expect(resourceValue("外貨準備", "この案の基本費用")).toHaveTextContent(
+      "4.5 model unit",
+    );
+    expect(resourceValue("開始予算", "この案の基本費用")).toHaveTextContent(
+      "31 model unit",
+    );
     expect(
       within(summary).getByText("副作用：").closest("p"),
     ).toHaveTextContent(label(preview.sideEffects[0]!.targetPath));
@@ -678,7 +1033,7 @@ describe("game screen wording", () => {
       "組み合わせの追加費用が足りません（政策自体は確定できます）",
     );
     expect(combination).toHaveTextContent(
-      "追加費用：政治資本 19、実施能力 11、外貨準備 3、予算 7",
+      "発動時の追加費用（基本費用・予約対象外）：政治資本 19点、実施能力 11点、外貨準備 3 model unit、予算 7 model unit",
     );
     const acknowledgement = screen.getByRole("checkbox", {
       name: "費用・副作用・警告を確認しました",
@@ -723,6 +1078,7 @@ describe("game screen wording", () => {
       const before = structuredClone(preview);
       render(
         <Preview
+          state={initial}
           configSnapshot={initial.configSnapshot}
           output={preview}
           counterfactuals={[]}
@@ -776,6 +1132,7 @@ describe("game screen wording", () => {
       const configBefore = structuredClone(configSnapshot);
       render(
         <Preview
+          state={initial}
           configSnapshot={configSnapshot}
           output={preview}
           counterfactuals={[]}
@@ -801,6 +1158,7 @@ describe("game screen wording", () => {
       const onConfirm = vi.fn();
       const onBack = vi.fn();
       const props = {
+        state: initial,
         configSnapshot: initial.configSnapshot,
         counterfactuals: [],
         expertIds: ["macro"],
@@ -827,16 +1185,27 @@ describe("game screen wording", () => {
       rerender(
         <Preview {...props} output={{ ...output, [key]: "changed-preview" }} />,
       );
-      const acknowledgement = screen.getByRole("checkbox", {
-        name: "費用・副作用・警告を確認しました",
-      });
-      expect(acknowledgement).not.toBeChecked();
-      const confirm = screen.getByRole("button", { name: "政策を確定する" });
-      expect(confirm).toBeDisabled();
-      fireEvent.click(confirm);
-      expect(onConfirm).not.toHaveBeenCalled();
-      fireEvent.click(acknowledgement);
-      expect(confirm).toBeEnabled();
+      if (key === "stateHash") {
+        expect(
+          screen.queryByRole("checkbox", {
+            name: "費用・副作用・警告を確認しました",
+          }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole("button", { name: "政策を確定する" }),
+        ).not.toBeInTheDocument();
+      } else {
+        const acknowledgement = screen.getByRole("checkbox", {
+          name: "費用・副作用・警告を確認しました",
+        });
+        expect(acknowledgement).not.toBeChecked();
+        const confirm = screen.getByRole("button", { name: "政策を確定する" });
+        expect(confirm).toBeDisabled();
+        fireEvent.click(confirm);
+        expect(onConfirm).not.toHaveBeenCalled();
+        fireEvent.click(acknowledgement);
+        expect(confirm).toBeEnabled();
+      }
       rerender(
         <Preview
           {...props}
@@ -844,11 +1213,13 @@ describe("game screen wording", () => {
           busy
         />,
       );
-      expect(
-        screen.getByRole("checkbox", {
-          name: "費用・副作用・警告を確認しました",
-        }),
-      ).toBeDisabled();
+      if (key === "draftHash") {
+        expect(
+          screen.getByRole("checkbox", {
+            name: "費用・副作用・警告を確認しました",
+          }),
+        ).toBeDisabled();
+      }
       expect(
         screen.getByRole("button", { name: "案を修正する" }),
       ).toBeDisabled();
@@ -860,6 +1231,7 @@ describe("game screen wording", () => {
   it("guides the player when no preview exists", () => {
     render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={null}
         counterfactuals={[]}
@@ -879,6 +1251,7 @@ describe("game screen wording", () => {
   it("keeps legacy expert profiles while translating indicator IDs in their explanations", () => {
     const { container } = render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
@@ -1125,6 +1498,7 @@ describe("expert identity in policy meeting and preview", () => {
     const before = structuredClone(output);
     const { container } = render(
       <Preview
+        state={initial}
         configSnapshot={initial.configSnapshot}
         output={output}
         counterfactuals={[]}
