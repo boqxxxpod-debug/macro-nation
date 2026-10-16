@@ -280,7 +280,7 @@ test("first playable reaches the 48-month ending without a policy", async ({
   await page.reload();
   await reveal(
     page,
-    page.getByRole("heading", { name: "いちばん大きな変化と理由" }).first(),
+    page.getByRole("heading", { name: "期間全体の主な変化" }).first(),
   );
 });
 

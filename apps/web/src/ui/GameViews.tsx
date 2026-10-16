@@ -468,12 +468,14 @@ export function Report({
   onReturnToReport,
   onClearEvidence,
   onSelectEvidence,
+  returnToEnding = false,
 }: {
   state: GameState;
   evidenceTarget?: MonthlyEvidenceTarget | undefined;
   onReturnToReport?(): void;
   onClearEvidence?(): void;
   onSelectEvidence?(target: MonthlyEvidenceTarget): void;
+  returnToEnding?: boolean;
 }) {
   const reports = state.history.reports ?? [];
   const latest = reports.at(-1);
@@ -1009,12 +1011,14 @@ export function Report({
             : undefined
       }
       actions={
-        evidenceTarget && (
+        (evidenceTarget || returnToEnding) && (
           <>
             {onReturnToReport && (
-              <button onClick={onReturnToReport}>ホームの報告へ戻る</button>
+              <button onClick={onReturnToReport}>
+                {returnToEnding ? "終了評価へ戻る" : "ホームの報告へ戻る"}
+              </button>
             )}
-            {onClearEvidence && (
+            {evidenceTarget && onClearEvidence && (
               <button
                 onClick={() => {
                   setSelection({
