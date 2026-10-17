@@ -356,6 +356,10 @@ test("UI completion unlocks both standard scenarios across reload and all three 
   page.on("pageerror", (error) => browserErrors.push(error.message));
   try {
     await page.goto("/");
+    // Repository loading finishes after navigation; measure the mounted deck.
+    await expect(
+      page.getByRole("region", { name: "開始設定", exact: true }),
+    ).toBeVisible();
     for (const scenario of SCENARIOS) {
       const slot = page.getByRole("button", {
         name: `保存先${scenario.slot}ではじめる`,

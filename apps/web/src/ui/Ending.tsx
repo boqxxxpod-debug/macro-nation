@@ -1,6 +1,9 @@
 import type { GameState } from "@macro-nation/domain";
 import { evaluateEnding } from "../application/game-service";
+import { selectEndingEvidence } from "../application/ending-evidence";
+import type { MonthlyEvidenceTarget } from "../application/monthly-evidence";
 import { describeCause, display, label } from "./game-format";
+import { reportIndicatorUnit, reportNumber } from "./report-format";
 import { PageDeck } from "./PageDeck";
 import {
   HISTORY_CATEGORY_LABELS,
@@ -23,26 +26,19 @@ export function Ending({
   onReport,
 }: {
   state: GameState;
-  onReport(): void;
+  onReport(target?: MonthlyEvidenceTarget): void;
 }) {
   const result = evaluateEnding(state);
   const summary = endingHistorySummary(state);
-  const first = state.history.reports?.[0];
-  const last = state.history.reports?.at(-1);
-  const changes = Object.keys(last?.values ?? {})
-    .map((id) => ({
-      id,
-      before: first?.values[id] ?? 0,
-      after: last?.values[id] ?? 0,
-    }))
-    .sort(
-      (a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before),
-    );
-  const cause = last?.topCauses[0];
+  const evidence = selectEndingEvidence(state);
+  const change = evidence.largestChange;
+  const monthly = evidence.finalMonth;
+  const cause = monthly.cause;
+  const endMonth = evidence.period.endMonthIndex;
   return (
     <PageDeck
       label="終了評価の詳細"
-      actions={<button onClick={onReport}>変化の理由を見る</button>}
+      actions={<button onClick={() => onReport()}>変化の理由を見る</button>}
     >
       <p
         className={state.runState === "failed" ? "crisis" : "notice"}
@@ -123,20 +119,87 @@ export function Ending({
           ))}
         </ol>
       </section>
-      <section className="panel">
-        <h3>いちばん大きな変化と理由</h3>
-        {changes[0] && (
+      <section
+        className="panel"
+        aria-label="期間全体の主な変化"
+        data-ending-period-start={0}
+        data-ending-period-end={endMonth}
+        data-ending-indicator={change?.indicatorId}
+      >
+        <h3>期間全体の主な変化</h3>
+        <p>
+          対象期間：{endMonth}か月全体（開始時点 → {endMonth}月目）。
+        </p>
+        {change ? (
+          <>
+            <p>
+              {label(change.indicatorId)}：開始{" "}
+              {display(change.indicatorId, change.before)} → 最終{" "}
+              {display(change.indicatorId, change.after)}。
+            </p>
+            <p>
+              期間全体の理由を示す因果記録はありません。月次の要因を期間全体の理由として結び付けません。
+            </p>
+            {change.evidenceMissing && (
+              <p>
+                {label(change.indicatorId)}
+                について表示できる月次の理由がありません。記録の欠如は、影響がなかったことを意味しません。
+              </p>
+            )}
+            <p>
+              {change.target.monthIndex}月目の{label(change.indicatorId)}
+              の保存記録を確認できます。対象はその月だけで、期間全体とは異なります。
+            </p>
+            <button onClick={() => onReport(change.target)}>
+              {label(change.indicatorId)}の月次記録を見る（
+              {change.target.monthIndex}月目）
+            </button>
+          </>
+        ) : (
           <p>
-            {label(changes[0].id)}：開始{" "}
-            {display(changes[0].id, changes[0].before)} → 最終{" "}
-            {display(changes[0].id, changes[0].after)}。
+            {evidence.missing === "initial-report"
+              ? "開始時点の記録がないため、期間全体の変化を比較できません。"
+              : evidence.missing === "final-report"
+                ? "終了時点の記録がないため、期間全体の変化を比較できません。"
+                : "開始時点と終了時点で比較できる指標の記録がありません。"}
+            レポートで保存されている月の記録を確認してください。
           </p>
         )}
+      </section>
+      <section
+        className="panel"
+        aria-label="最終月に大きく影響したこと"
+        data-ending-period-start={Math.max(0, endMonth - 1)}
+        data-ending-period-end={endMonth}
+        data-ending-indicator={
+          cause?.indicatorId ?? monthly.target?.indicatorId
+        }
+      >
+        <h3>最終月に大きく影響したこと</h3>
+        <p>
+          {endMonth > 0
+            ? `対象期間：最終月（${endMonth - 1}月目 → ${endMonth}月目の1か月）。`
+            : "月次の進行記録はありません。"}
+        </p>
         <p>
           {cause
-            ? `最終月の${label(cause.indicatorId)}には、${describeCause(cause, state)}がいちばん大きく影響しました（変化への影響 ${cause.delta.toFixed(2)}）。`
-            : "最終月には、大きな変化の理由が記録されていません。"}
+            ? `最終月の${label(cause.indicatorId)}には、${describeCause(cause, state)}が影響しました（この1か月の変化への影響 ${reportNumber(cause.delta, reportIndicatorUnit(state.configSnapshot, cause.indicatorId), true)}）。`
+            : monthly.missing === "report"
+              ? "最終月の記録が保存されていません。別の月の理由で置き換えることはできません。"
+              : "表示できる月次の理由がありません。記録の欠如は、影響がなかったことを意味しません。"}
         </p>
+        {monthly.completeness === "legacy-incomplete" && (
+          <p>
+            最終月は旧形式の記録です。保存された上位の寄与に限られ、全内訳は確認できません。
+          </p>
+        )}
+        {monthly.target && (
+          <button onClick={() => onReport(monthly.target)}>
+            {cause
+              ? "最終月の要因をレポートで見る"
+              : "最終月の記録をレポートで見る"}
+          </button>
+        )}
       </section>
     </PageDeck>
   );

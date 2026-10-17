@@ -273,6 +273,14 @@ async function inspectDeck(page: Page, deck: Locator) {
   await waitForPageLayout(page);
   const previous = deck.getByRole("button", { name: /の前のページ$/ });
   const next = deck.getByRole("button", { name: /の次のページ$/ });
+  const visibleFragments = () =>
+    deck.evaluate((element) =>
+      Array.from(
+        element.querySelectorAll<HTMLElement>(
+          ":scope > [data-page-current] > [data-page-item]",
+        ),
+      ).flatMap((item, index) => (item.hidden ? [] : [index])),
+    );
   for (
     let count = 0;
     count < MAX_PAGE_STEPS && (await previous.isEnabled());
@@ -284,20 +292,19 @@ async function inspectDeck(page: Page, deck: Locator) {
   const reached = new Set<number>();
   for (let count = 0; count < MAX_PAGE_STEPS; count++) {
     await expectViewport(page);
-    const shown = await deck.evaluate((element) =>
-      Array.from(
-        element.querySelectorAll<HTMLElement>(
-          ":scope > [data-page-current] > [data-page-item]",
-        ),
-      ).flatMap((item, index) => (item.hidden ? [] : [index])),
-    );
+    const shown = await visibleFragments();
     for (const index of shown) reached.add(index);
     if (!(await next.isEnabled())) break;
     const current = deck.locator(":scope > [data-page-current]");
-    const pageBefore = await current.getAttribute("data-page-current");
     await next.click();
     await waitForPageLayout(page);
-    await expect(current).not.toHaveAttribute("data-page-current", pageBefore!);
+    // Category labels can resize the controls and renumber preceding pages.
+    // Check the content reached by the turn, independent of its page number.
+    await expect
+      .poll(visibleFragments, {
+        message: "the next page must reveal different content fragments",
+      })
+      .not.toEqual(shown);
     await expect(current).toBeFocused();
   }
   const count = await deck

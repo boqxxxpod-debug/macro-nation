@@ -290,6 +290,9 @@ export function App({
   );
   const evidenceTarget =
     route === "report" ? parseMonthlyEvidence(locationQuery) : undefined;
+  const reportFromEnding =
+    route === "report" &&
+    new URLSearchParams(locationQuery).get("from") === "ending";
   const returnQuery = new URLSearchParams(locationQuery);
   const reportMonth = Number(returnQuery.get("reportMonth"));
   const reportRow = Number(returnQuery.get("reportRow"));
@@ -1689,19 +1692,32 @@ export function App({
                     <h2 tabIndex={-1}>経済レポート</h2>
                     <Report
                       state={state}
+                      returnToEnding={reportFromEnding}
                       evidenceTarget={evidenceTarget}
                       onSelectEvidence={(target) =>
-                        navigate("report", false, monthlyEvidenceQuery(target))
-                      }
-                      onReturnToReport={() =>
-                        evidenceTarget &&
                         navigate(
-                          "home",
+                          "report",
                           false,
-                          `reportMonth=${evidenceTarget.monthIndex}&reportRow=${evidenceTarget.row}`,
+                          `${monthlyEvidenceQuery(target)}${reportFromEnding ? "&from=ending" : ""}`,
                         )
                       }
-                      onClearEvidence={() => navigate("report", true)}
+                      onReturnToReport={() =>
+                        reportFromEnding
+                          ? navigate("ending")
+                          : evidenceTarget &&
+                            navigate(
+                              "home",
+                              false,
+                              `reportMonth=${evidenceTarget.monthIndex}&reportRow=${evidenceTarget.row}`,
+                            )
+                      }
+                      onClearEvidence={() =>
+                        navigate(
+                          "report",
+                          true,
+                          reportFromEnding ? "from=ending" : "",
+                        )
+                      }
                     />
                   </>
                 )}
@@ -1780,7 +1796,13 @@ export function App({
                     state.runState === "failed" ? (
                       <Ending
                         state={state}
-                        onReport={() => navigate("report")}
+                        onReport={(target) =>
+                          navigate(
+                            "report",
+                            false,
+                            `${target ? `${monthlyEvidenceQuery(target)}&` : ""}from=ending`,
+                          )
+                        }
                       />
                     ) : (
                       <p>
