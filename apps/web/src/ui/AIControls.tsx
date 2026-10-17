@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   AIService,
   Advice,
@@ -9,6 +9,7 @@ import type {
   NationHistory,
 } from "@macro-nation/advisor-core";
 import { ordinaryNews } from "@macro-nation/advisor-core";
+import { PageDeck, type PageDeckCategory } from "./PageDeck";
 
 const VIEWPOINT_LABELS: Record<
   NewsStory["perspectives"][number]["viewpoint"],
@@ -30,6 +31,7 @@ export function AIControls({
   finished = false,
   milestones = [],
   onCandidate,
+  pagination,
 }: {
   service: AIService;
   facts: NationFacts;
@@ -38,6 +40,11 @@ export function AIControls({
   finished?: boolean;
   milestones?: readonly { month: number; summary: string }[];
   onCandidate?: (candidate: FreePolicyResult) => void;
+  pagination?: {
+    label: string;
+    actions?: ReactNode;
+    introduction?: ReactNode;
+  };
 }) {
   const [advice, setAdvice] = useState<readonly Advice[]>([]);
   const [story, setStory] = useState<NewsStory>(() =>
@@ -63,15 +70,19 @@ export function AIControls({
       setBusy(false);
     }
   }
-  return (
-    <section aria-label="経済解説">
+  const introduction = (
+    <>
+      {pagination?.introduction}
       <p>
         AIは任意の機能です。AI連携が有効な場合、ボタンを押すと、選んだ機能に必要な指標・変化の理由・直近の出来事・専門家・国家史の節目を外部のAI提供元へ送ります。自由入力の政策は、入力文も送ります。個人情報は入力しないでください。
       </p>
       <p>
         AIが使えないときも、ゲーム内の解説で遊び続けられます。AIの説明や政策の候補だけで、経済の計算結果は変わりません。
       </p>
-      <h2>経済ニュース</h2>
+    </>
+  );
+  const news = (
+    <>
       <h3>{story.headline}</h3>
       <p>{story.explanation}</p>
       {story.perspectives.map((item, index) => (
@@ -89,8 +100,11 @@ export function AIControls({
       >
         ニュースの理由を聞く
       </button>
-      <h2>政策会議</h2>
-      <fieldset>
+    </>
+  );
+  const advisors = (
+    <>
+      <fieldset className="expert-picker">
         <legend>意見を聞きたい専門家を選ぶ（1〜3人）</legend>
         {experts.map((expert) => (
           <label key={expert.id}>
@@ -147,6 +161,10 @@ export function AIControls({
           <p>{item.caution}</p>
         </article>
       ))}
+    </>
+  );
+  const freePolicy = (
+    <>
       <label>
         政策のアイデアを入力する
         <input
@@ -175,27 +193,60 @@ export function AIControls({
             : ""}
         </p>
       )}
+    </>
+  );
+  const nationHistory = (
+    <>
+      <button
+        disabled={busy}
+        onClick={() =>
+          void run(async () =>
+            setHistory(await service.history({ ending: facts, milestones })),
+          )
+        }
+      >
+        国の歩みを文章にする
+      </button>
+      {history && (
+        <article>
+          <h3>{history.title}</h3>
+          <p>{history.narrative}</p>
+        </article>
+      )}
+    </>
+  );
+  if (pagination) {
+    // Native blocks let PageDeck measure and split the contents. This component
+    // remains the sole owner of drafts, selections and generated responses.
+    const categories: PageDeckCategory[] = [
+      { id: "intro", label: "利用案内", content: introduction },
+      { id: "news", label: "経済ニュース", content: news },
+      { id: "advisors", label: "政策会議", content: advisors },
+      { id: "free-policy", label: "政策のアイデア", content: freePolicy },
+      ...(finished
+        ? [{ id: "history", label: "国家史", content: nationHistory }]
+        : []),
+    ];
+    return (
+      <PageDeck
+        label={pagination.label}
+        categories={categories}
+        actions={pagination.actions}
+      />
+    );
+  }
+  return (
+    <section aria-label="経済解説">
+      {introduction}
+      <h2>経済ニュース</h2>
+      {news}
+      <h2>政策会議</h2>
+      {advisors}
+      {freePolicy}
       {finished && (
         <>
           <h2>国家史</h2>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void run(async () =>
-                setHistory(
-                  await service.history({ ending: facts, milestones }),
-                ),
-              )
-            }
-          >
-            国の歩みを文章にする
-          </button>
-          {history && (
-            <article>
-              <h3>{history.title}</h3>
-              <p>{history.narrative}</p>
-            </article>
-          )}
+          {nationHistory}
         </>
       )}
     </section>
