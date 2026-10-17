@@ -42,6 +42,9 @@ jobs:
       - name: PWA and accessibility E2E
         run: npm run test:e2e
 
+      - name: Development AI preview regression E2E
+        run: npm run test:e2e:dev
+
       - name: Capture mobile layout before and after
         if: always() && github.event_name == 'pull_request' && steps.playwright.outcome == 'success'
         env:
@@ -83,6 +86,20 @@ jobs:
             test-results/**/error-context.md
             test-results-pages/**/test-failed-*.png
             test-results-pages/**/error-context.md
+            test-results-dev/**/test-failed-*.png
+            test-results-dev/**/error-context.md
+          if-no-files-found: ignore
+
+      - name: Upload AI preview regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-preview-regression
+          path: |
+            test-results-dev/**/ai-preview-*.png
+            test-results-dev/**/ai-preview-*.json
+            test-results/**/ai-preview-*.png
+            test-results/**/ai-preview-*.json
           if-no-files-found: ignore
 
       - name: Upload help contrast evidence

@@ -32,7 +32,7 @@ import {
   Report,
   type PolicyFormDraftState,
 } from "./GameViews";
-import { PageDeck } from "./PageDeck";
+import { PageDeck, type PageDeckNavigation } from "./PageDeck";
 import { Ending } from "./Ending";
 import { NationView } from "./NationView";
 import { NationMenu } from "./NationMenu";
@@ -308,6 +308,8 @@ export function App({
   const hasEvidenceNavigation = !!evidenceTarget || !!evidenceReturn;
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aiPreviewOpen, setAIPreviewOpen] = useState(false);
+  const [menuNavigation, setMenuNavigation] = useState<PageDeckNavigation>();
   const [largeText, setLargeText] = useState(false);
   useLayoutEffect(() => {
     const refresh = () => {
@@ -428,6 +430,8 @@ export function App({
       setReturnReportOpen(false);
       setMessageOpen(false);
       setHelpOpen(false);
+      setAIPreviewOpen(false);
+      setMenuNavigation(undefined);
       setPolicyDraft(undefined);
       setOfflineProgress("");
       setError("");
@@ -694,7 +698,7 @@ export function App({
     };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
-  }, [menuOpen, helpOpen]);
+  }, [menuOpen, helpOpen, aiPreviewOpen]);
   useEffect(() => {
     if (messageOpen)
       document
@@ -815,8 +819,16 @@ export function App({
   }
   function openGameHelp() {
     setHelpOpen(true);
+    setAIPreviewOpen(false);
+    setMenuNavigation(undefined);
     setMenuOpen(true);
     setMessageOpen(false);
+  }
+  function closeMenu() {
+    setMenuOpen(false);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(".shell-menu")?.focus(),
+    );
   }
   async function start() {
     if (!repository)
@@ -1059,6 +1071,8 @@ export function App({
             onClick={() => {
               setMenuOpen((open) => !open);
               setHelpOpen(false);
+              setAIPreviewOpen(false);
+              setMenuNavigation(undefined);
               setMessageOpen(false);
             }}
           >
@@ -1382,58 +1396,70 @@ export function App({
               </p>
             )}
             {menuOpen ? (
-              <PageDeck
-                key={helpOpen ? "help" : "menu"}
-                label={helpOpen ? gameGuideCopy.title : "画面メニュー"}
-                actions={
-                  <>
-                    {helpOpen && (
-                      <button onClick={() => setHelpOpen(false)}>
-                        {gameGuideCopy.backToMenu}
+              import.meta.env.DEV && aiPreviewOpen ? (
+                <AIPreview
+                  onBack={() => {
+                    setAIPreviewOpen(false);
+                    setMenuNavigation({
+                      key: crypto.randomUUID(),
+                      elementId: "open-dev-ai-preview",
+                    });
+                  }}
+                  onClose={closeMenu}
+                />
+              ) : (
+                <PageDeck
+                  key={helpOpen ? "help" : "menu"}
+                  label={helpOpen ? gameGuideCopy.title : "画面メニュー"}
+                  navigation={helpOpen ? undefined : menuNavigation}
+                  actions={
+                    <>
+                      {helpOpen && (
+                        <button onClick={() => setHelpOpen(false)}>
+                          {gameGuideCopy.backToMenu}
+                        </button>
+                      )}
+                      <button onClick={closeMenu}>
+                        {helpOpen ? gameGuideCopy.close : "閉じる"}
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        requestAnimationFrame(() =>
-                          document
-                            .querySelector<HTMLElement>(".shell-menu")
-                            ?.focus(),
-                        );
-                      }}
-                    >
-                      {helpOpen ? gameGuideCopy.close : "閉じる"}
-                    </button>
-                  </>
-                }
-              >
-                {helpOpen ? (
-                  <>
-                    <h2 tabIndex={-1}>{gameGuideCopy.title}</h2>
-                    {gameGuideContent()}
-                  </>
-                ) : (
-                  <>
-                    <h2 tabIndex={-1}>画面メニュー</h2>
-                    <button
-                      onClick={() => {
-                        openSlots();
-                      }}
-                    >
-                      はじめる・続きから
-                    </button>
-                    <button onClick={openGameHelp}>
-                      {gameGuideCopy.title}
-                    </button>
-                    {import.meta.env.DEV && <AIPreview />}
-                    {Object.entries(NAV_LABELS).map(([id, text]) => (
-                      <button key={id} onClick={() => navigate(id as Route)}>
-                        {text}
+                    </>
+                  }
+                >
+                  {helpOpen ? (
+                    <>
+                      <h2 tabIndex={-1}>{gameGuideCopy.title}</h2>
+                      {gameGuideContent()}
+                    </>
+                  ) : (
+                    <>
+                      <h2 tabIndex={-1}>画面メニュー</h2>
+                      <button
+                        onClick={() => {
+                          openSlots();
+                        }}
+                      >
+                        はじめる・続きから
                       </button>
-                    ))}
-                  </>
-                )}
-              </PageDeck>
+                      <button onClick={openGameHelp}>
+                        {gameGuideCopy.title}
+                      </button>
+                      {import.meta.env.DEV && (
+                        <button
+                          id="open-dev-ai-preview"
+                          onClick={() => setAIPreviewOpen(true)}
+                        >
+                          開発用AIプレビューを開く
+                        </button>
+                      )}
+                      {Object.entries(NAV_LABELS).map(([id, text]) => (
+                        <button key={id} onClick={() => navigate(id as Route)}>
+                          {text}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </PageDeck>
+              )
             ) : (
               <>
                 {route === "home" && (

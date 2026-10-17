@@ -515,6 +515,51 @@ describe("SCN-01 user journey", () => {
     expect(memory.saved).toEqual(before);
   }, 15_000);
 
+  it("opens the development preview separately and returns to its menu entry without changing the game", async () => {
+    const memory = memoryRepository();
+    await createGame(memory.repository, "dev-preview-navigation");
+    render(<App repository={memory.repository} />);
+    await screen.findByRole("heading", { name: "国家ビュー" });
+    const before = structuredClone(memory.saved);
+    const save = vi.spyOn(memory.repository, "save");
+    const location = window.location.pathname;
+    fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
+    fireEvent.click(
+      roleOnPage("画面メニュー", "button", "開発用AIプレビューを開く"),
+    );
+    expect(
+      screen.queryByRole("region", { name: "画面メニュー" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "開発用AIプレビューのカテゴリ" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "画面メニューに戻る" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "開発用AIプレビューを開く" }),
+      ).toHaveFocus(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "開発用AIプレビューを開く" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "メニュー" })).toHaveFocus(),
+    );
+    expect(screen.getByRole("heading", { name: "国家ビュー" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "メニュー" }));
+    fireEvent.click(
+      roleOnPage("画面メニュー", "button", "開発用AIプレビューを開く"),
+    );
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "メニュー" })).toHaveFocus(),
+    );
+    expect(window.location.pathname).toBe(location);
+    expect(save).not.toHaveBeenCalled();
+    expect(memory.saved).toEqual(before);
+  });
+
   it("keeps text reflow monitoring when stylesheet fonts change after Strict Mode remount", async () => {
     const originalResizeObserver = globalThis.ResizeObserver;
     const callbacks = new Set<ResizeObserverCallback>();
