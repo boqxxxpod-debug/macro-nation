@@ -237,6 +237,24 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
+async function captureResult(
+  page: Page,
+  testInfo: TestInfo,
+  id: string,
+  pageCount: number,
+  name: string,
+) {
+  await selectCategory(page, id);
+  for (let index = 1; index < pageCount; index++) {
+    await preview(page)
+      .getByRole("button", { name: `${LABEL}の次のページ` })
+      .click();
+    await waitForPageLayout(page);
+  }
+  await expectFits(page);
+  await capture(page, testInfo, name);
+}
+
 async function readMenu(page: Page) {
   const menu = page.getByRole("region", { name: "画面メニュー", exact: true });
   const next = menu.getByRole("button", { name: "画面メニューの次のページ" });
@@ -437,8 +455,13 @@ for (const viewport of VIEWPORTS) {
       expect(advice.length).toBeGreaterThan(1);
       evidence.generatedAdvice = advice;
       evidence.reachedExperts = [...reachedExperts];
-      await selectCategory(page, "advisors");
-      await capture(page, testInfo, "generated-advice");
+      await captureResult(
+        page,
+        testInfo,
+        "advisors",
+        advice.length,
+        "generated-advice",
+      );
 
       await selectCategory(page, "free-policy");
       await reveal(page, idea, preview(page));
@@ -471,8 +494,13 @@ for (const viewport of VIEWPORTS) {
         const result = await readCategory(page, id!);
         expect(result.map((item) => item.text).join("")).toContain(expected);
         evidence[`generated-${id}`] = result;
-        await selectCategory(page, id!);
-        await capture(page, testInfo, `generated-${id}`);
+        await captureResult(
+          page,
+          testInfo,
+          id!,
+          result.length,
+          `generated-${id}`,
+        );
       }
       await selectCategory(page, "free-policy");
       await reveal(page, idea, preview(page));
